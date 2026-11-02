@@ -278,6 +278,7 @@ export interface ProjectSummary {
 /** Khóa chuẩn trong ContractorProfile.info (mục 8.3). */
 export type ContractorInfoKey =
   | 'founded_year'
+  | 'years_experience'
   | 'staff_workers'
   | 'staff_office'
   | 'rough_price'

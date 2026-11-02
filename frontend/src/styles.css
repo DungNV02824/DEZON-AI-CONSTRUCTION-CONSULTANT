@@ -42,10 +42,8 @@
   box-sizing: border-box;
 }
 
-.dz-root button,
-.dz-root input,
-.dz-root textarea,
-.dz-popover button {
+/* :where() -> specificity 0: chỉ là giá trị nền, mọi class (.dz-btn--primary, .dz-composer__input...) đều thắng. */
+:where(.dz-root, .dz-popover) :where(button, input, textarea) {
   font: inherit;
   color: inherit;
 }
@@ -512,7 +510,7 @@
 }
 
 .dz-btn--sm {
-  min-height: 36px;
+  min-height: 40px;
   padding: 6px 12px;
   font-size: 13px;
 }
@@ -573,7 +571,7 @@
 }
 
 .dz-chip-btn {
-  min-height: 38px;
+  min-height: 40px;
   padding: 7px 14px;
   border: 1px solid var(--dz-primary);
   border-radius: 999px;
@@ -726,19 +724,22 @@
   color: var(--dz-verified);
 }
 
+/* Nhãn mức phù hợp: viền + nền trắng, bảng màu riêng — không trùng 4 màu trạng thái dữ liệu (mục 4.4). */
+.dz-fit {
+  background: #fff;
+  border: 1px solid currentColor;
+}
+
 .dz-fit--high {
-  background: var(--dz-verified-bg);
-  color: var(--dz-verified);
+  color: #0f766e;
 }
 
 .dz-fit--ok {
-  background: var(--dz-on-dezon-bg);
-  color: var(--dz-on-dezon);
+  color: #4338ca;
 }
 
 .dz-fit--review {
-  background: var(--dz-reference-bg);
-  color: var(--dz-reference);
+  color: #7e22ce;
 }
 
 /* ----------------------------------------------------------- bảng */
@@ -1007,6 +1008,12 @@ thead .dz-sticky {
 .dz-srcbadges .dz-badge--full {
   font-size: 12px;
   padding: 3px 9px;
+  /* Nhãn nguồn có thể dài: xuống dòng trong khung chat thay vì tràn/cắt chữ. */
+  white-space: normal;
+  max-width: 100%;
+  text-align: left;
+  overflow-wrap: anywhere;
+  border-radius: 12px;
 }
 
 /* ----------------------------------------------------------- popover nguồn */
@@ -1292,7 +1299,7 @@ thead .dz-sticky {
 }
 
 .dz-score {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--dz-muted);
 }
 
@@ -1582,4 +1589,37 @@ thead .dz-sticky {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 16px;
   letter-spacing: 0.5px;
+}
+
+/* Đặt cuối file: media query không tăng specificity nên phải đứng sau các rule gốc. */
+@media (max-width: 639.98px) {
+  /* Vùng chạm ≥ 44px và chữ ≥ 13px trên điện thoại. */
+  .dz-btn,
+  .dz-btn--sm,
+  .dz-chip-btn {
+    min-height: 44px;
+  }
+  .dz-btn--sm {
+    font-size: 14px;
+  }
+  .dz-iconbtn {
+    width: 44px;
+    height: 44px;
+  }
+  .dz-linkbtn,
+  .dz-extlink {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 8px 0;
+  }
+  .dz-badge--dot {
+    min-width: 32px;
+    min-height: 32px;
+  }
+  .dz-pill,
+  .dz-badge,
+  .dz-small {
+    font-size: 13px;
+  }
 }

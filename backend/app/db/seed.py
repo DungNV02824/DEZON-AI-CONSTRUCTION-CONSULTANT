@@ -242,4 +242,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    # `python -m app.db.seed` chạy file này dưới tên `__main__`, còn seed_hooks đăng ký hook vào module
+    # `app.db.seed` -> phải gọi main() của module `app.db.seed` để run() đọc đúng danh sách EXTRA_SEED_HOOKS.
+    from app.db import seed as _seed_module
+
+    _seed_module.main()

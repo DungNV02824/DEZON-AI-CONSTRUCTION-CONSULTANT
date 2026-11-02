@@ -8,6 +8,7 @@ import { SafeImage } from '../common/SafeImage';
 
 const INFO_LABELS: Record<ContractorInfoKey, string> = {
   founded_year: 'Năm thành lập',
+  years_experience: 'Kinh nghiệm',
   staff_workers: 'Nhân sự thợ',
   staff_office: 'Nhân sự văn phòng',
   rough_price: 'Đơn giá xây thô',
