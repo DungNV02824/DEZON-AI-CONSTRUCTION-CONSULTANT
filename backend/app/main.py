@@ -1,7 +1,18 @@
+import importlib
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
+
+# Mỗi module khai báo biến `router` (APIRouter). Module chưa tồn tại thì bỏ qua; lỗi import bên trong thì báo.
+ROUTER_MODULES = [
+    "app.api.chat",
+    "app.api.estimates",
+    "app.api.contractors",
+    "app.api.quotes",
+    "app.api.admin",
+]
 
 
 def create_app() -> FastAPI:
@@ -17,9 +28,16 @@ def create_app() -> FastAPI:
 
     @app.get("/api/health")
     def health() -> dict:
-        return {"status": "ok"}
+        return {"status": "ok", "llm_provider": settings.resolved_llm_provider}
 
-    # Routers được đăng ký ở đây (bước 5 & 7 trong kế hoạch thực thi).
+    for name in ROUTER_MODULES:
+        try:
+            module = importlib.import_module(name)
+        except ModuleNotFoundError as exc:
+            if exc.name == name:
+                continue
+            raise
+        app.include_router(module.router)
     return app
 
 
