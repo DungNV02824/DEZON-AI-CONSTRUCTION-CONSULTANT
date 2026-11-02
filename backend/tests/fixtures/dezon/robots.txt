@@ -1,0 +1,71 @@
+# Chặn scraper SEO không mang traffic (bảo vệ tài nguyên). Giữ Google/Bing/GPTBot.
+User-agent: DataForSeoBot
+Disallow: /
+
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /
+
+User-agent: BLEXBot
+Disallow: /
+
+# ── Đo log 16/08 (8 tiếng, 2 site) ─────────────────────────────────────────────
+# SleepBot 1.085 req và Bytespider 761 req, không mang lại gì. Chặn hẳn.
+User-agent: SleepBot
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+# Bot AI: GIỮ phần chữ (đó là thứ giúp Dezon được nhắc trong câu trả lời AI),
+# nhưng CẤM tải thư viện ảnh — đo được 29–43% request của chúng là ảnh và
+# ngốn tới 435 MB (meta) / 263 MB (Amazon) / 247 MB (Perplexity) chỉ trong 8 tiếng.
+# Googlebot KHÔNG bị chặn ảnh vì còn cần cho Google Hình ảnh (nó chỉ tải 7% là ảnh).
+User-agent: meta-externalagent
+Disallow: /wp-content/uploads/
+
+User-agent: Amazonbot
+Disallow: /wp-content/uploads/
+
+User-agent: PerplexityBot
+Disallow: /wp-content/uploads/
+
+User-agent: GPTBot
+Disallow: /wp-content/uploads/
+
+User-agent: ClaudeBot
+Disallow: /wp-content/uploads/
+
+User-agent: CCBot
+Disallow: /wp-content/uploads/
+
+# START YOAST BLOCK
+# ---------------------------
+User-agent: *
+Allow:/
+Disallow: /planning/
+Disallow: /*?auto_msg=
+# Bẫy crawl: URL đăng nhập SSO chỉ 302 sang IdP, không có nội dung để index
+Disallow: /*trigger_sso=
+# Endpoint kỹ thuật, không phải nội dung — đừng phí ngân sách cào
+Disallow: /wp-json/decox/v1/project-view
+# Faceted nav: bien the loc chi sap xep lai cung mot danh sach -> trung lap,
+# dot ngan sach cao va moi to hop lai la mot URL moi. Chan ca hai vi tri
+# tham so (?x= dau chuoi va &x= giua chuoi).
+# GIU ?tl= : /phong/*?tl= co self-canonical rieng, la landing page co y.
+Disallow: /*?project_cat_filter=
+Disallow: /*&project_cat_filter=
+Disallow: /*?project_region=
+Disallow: /*&project_region=
+
+Sitemap: https://dezon.vn/sitemap_index.xml
+# ---------------------------
+# END YOAST BLOCK

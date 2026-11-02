@@ -1,0 +1,64 @@
+import type { ComparisonTableBlock, EvidenceValue } from '../../api/types';
+import { useWidget } from '../../state/context';
+import { NO_DATA } from '../../utils/format';
+import { EvidenceCell } from '../common/EvidenceCell';
+import { ExternalLink } from '../common/ExternalLink';
+import { StatusLegend } from '../common/StatusLegend';
+
+const UNAVAILABLE: EvidenceValue = { value: null, display: NO_DATA, status: 'unavailable', source: null, is_stale: false };
+
+/** Bảng so sánh ngang (mục 8.2): cột đầu cố định, cuộn ngang trên mobile, mọi ô có nội dung. */
+export function ComparisonTable({ block }: { block: ComparisonTableBlock }) {
+  const { openContractor, recordClick } = useWidget();
+  const { contractors, rows } = block.data;
+  return (
+    <section className="dz-card dz-compare" aria-label="Bảng so sánh nhà thầu">
+      <h3 className="dz-card__title">So sánh {contractors.length} nhà thầu</h3>
+      <div className="dz-table-scroll" role="region" aria-label="Bảng so sánh, cuộn ngang để xem thêm" tabIndex={0}>
+        <table className="dz-table dz-table--compare">
+          <thead>
+            <tr>
+              <th scope="col" className="dz-sticky">
+                Tiêu chí
+              </th>
+              {contractors.map((c) => (
+                <th scope="col" key={c.id}>
+                  <button
+                    type="button"
+                    className="dz-namebtn"
+                    onClick={() => {
+                      recordClick(c.id);
+                      openContractor(c.slug, c.id);
+                    }}
+                    aria-label={`Xem chi tiết ${c.name}`}
+                  >
+                    {c.name}
+                  </button>
+                  <ExternalLink href={c.profile_url} className="dz-extlink dz-small" ariaLabel={`Mở hồ sơ ${c.name} trên Dezon`}>
+                    Hồ sơ ↗
+                  </ExternalLink>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.key}>
+                <th scope="row" className="dz-sticky">
+                  {row.label_vi}
+                </th>
+                {contractors.map((c, i) => (
+                  <td key={c.id}>
+                    <EvidenceCell ev={row.cells[i] ?? UNAVAILABLE} badge="dot" title={`${row.label_vi} — ${c.name}`} />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <StatusLegend />
+      <p className="dz-muted dz-small">Bấm vào chấm màu để xem nguồn và ngày cập nhật; bấm tên nhà thầu để xem hồ sơ mở rộng.</p>
+    </section>
+  );
+}

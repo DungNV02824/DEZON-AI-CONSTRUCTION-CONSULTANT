@@ -28,6 +28,9 @@ class Message:
     tool_calls: list[ToolCall] = field(default_factory=list)  # role=assistant
     tool_call_id: str | None = None  # role=tool
     name: str | None = None  # role=tool: tên tool
+    # role=assistant: content block gốc của provider (vd Anthropic response.content, gồm cả thinking block)
+    # để gửi lại NGUYÊN VẸN trong các vòng tool-use của cùng lượt. None với lịch sử dựng lại từ DB.
+    raw: Any = None
 
 
 @dataclass

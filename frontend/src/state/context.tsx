@@ -1,0 +1,39 @@
+import { createContext, useContext } from 'react';
+import type { QuoteFormContractor } from '../api/types';
+
+/** Các thao tác mà UI block có thể gọi. Mặc định là no-op để block render được độc lập (test, storybook). */
+export interface WidgetActions {
+  isMock: boolean;
+  /** Đang chờ trả lời — khóa các nút gửi tin nhắn. */
+  busy: boolean;
+  send(text: string): void;
+  focusInput(): void;
+  openContractor(slug: string, contractorId?: number): void;
+  compare(contractorIds: number[], estimateSessionId?: string | null): void;
+  openQuoteForm(contractors: QuoteFormContractor[], estimateSessionId?: string | null): void;
+  recordClick(contractorId: number, logId?: number | null): void;
+  submitQuote: import('../api/client').ApiClient['createQuoteRequest'];
+  /** estimate_session_id gần nhất trong hội thoại (để đính kèm báo giá/so sánh). */
+  estimateSessionId: string | null;
+}
+
+const noop = () => undefined;
+
+export const defaultActions: WidgetActions = {
+  isMock: false,
+  busy: false,
+  send: noop,
+  focusInput: noop,
+  openContractor: noop,
+  compare: noop,
+  openQuoteForm: noop,
+  recordClick: noop,
+  submitQuote: () => Promise.reject(new Error('Chưa cấu hình client')),
+  estimateSessionId: null,
+};
+
+export const WidgetContext = createContext<WidgetActions>(defaultActions);
+
+export function useWidget(): WidgetActions {
+  return useContext(WidgetContext);
+}

@@ -19,6 +19,7 @@ dependencies = [
   "beautifulsoup4>=4.12",
   "openpyxl>=3.1",
   "anthropic>=0.40",
+  "openai>=1.40",
 ]
 
 [project.optional-dependencies]

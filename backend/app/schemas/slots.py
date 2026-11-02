@@ -25,6 +25,8 @@ class Slots(BaseModel):
     budget_vnd: int | None = None
     start_time: str | None = None
     confirmed: bool = False  # khách đã xác nhận bản tóm tắt trước khi khái toán
+    # Các slot đã hỏi khách (kể cả khi khách chưa trả lời) — tránh hỏi lại slot tùy chọn như budget_vnd.
+    asked: list[str] = []
 
 
 # Slot bắt buộc để khái toán (land_area_m2 được suy ra từ rộng × dài khi chuẩn hóa).

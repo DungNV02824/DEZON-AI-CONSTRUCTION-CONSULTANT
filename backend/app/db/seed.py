@@ -163,7 +163,7 @@ CONTRACTORS = [
         "projects": [
             ("france-indochine-22-ha-noi", "France Indochine 22 Hà Nội", "biet_thu", HN, None),
             ("green-pool-villa-vinh-long", "Green Pool Villa Vĩnh Long", "biet_thu", "Vĩnh Long", None),
-            ("indochine-villa-quan-7", "Indochine Villa Quận 7 Sài Gòn", "biet_thu", HCM, "Quận 7"),
+            ("indochine-villa-quan-7-sai-gon", "Indochine Villa Quận 7 Sài Gòn", "biet_thu", HCM, "Quận 7"),
         ],
     },
     {
@@ -187,7 +187,7 @@ def seed_contractors(db: Session, site: str = "https://dezon.vn") -> None:
     for c in CONTRACTORS:
         if db.scalar(select(Contractor.id).where(Contractor.slug == c["slug"])):
             continue
-        profile_url = f"{site}/nha-thau/{c['slug']}"
+        profile_url = f"{site}/nha-thau/{c['slug']}/"  # URL thật có '/' cuối (docs/DATA_MAPPING.md)
         src = get_or_create_source(db, url=profile_url, label=f"Hồ sơ nhà thầu {c['name']}",
                                    source_type="crawl_public", status="on_dezon", source_updated_at=OBSERVED)
         fields = {k: v for k, v in c.items() if k not in ("capabilities", "projects")}
@@ -200,10 +200,12 @@ def seed_contractors(db: Session, site: str = "https://dezon.vn") -> None:
             db.add(ContractorCapability(contractor_id=contractor.id, building_type=btype, province=prov,
                                         source_id=src.id))
         for i, (pslug, pname, ptype, pprov, pdist) in enumerate(c["projects"]):
-            purl = f"{site}/du-an/{pslug}"
+            # Công trình thực tế nằm dưới hồ sơ nhà thầu: /nha-thau/<slug>/<công-trình>/ (giống crawler)
+            purl = f"{profile_url}{pslug}/"
             psrc = get_or_create_source(db, url=purl, label=f"Dự án {pname}", source_type="crawl_public",
                                         status="on_dezon", source_updated_at=OBSERVED)
-            project = Project(slug=pslug, name=pname, building_type=ptype, province=pprov, district=pdist,
+            project = Project(slug=f"{c['slug']}--{pslug}", external_id=f"nha-thau/{c['slug']}/{pslug}",
+                              name=pname, building_type=ptype, province=pprov, district=pdist,
                               project_url=purl, source_id=psrc.id)
             db.add(project)
             db.flush()

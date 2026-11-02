@@ -12,6 +12,12 @@ import uuid
 from pathlib import Path
 
 import pytest
+
+# Test luôn dùng LLM giả lập + embedding cục bộ, kể cả khi máy dev có OPENAI_API_KEY trong .env.
+# Test gọi LLM thật đánh dấu live_llm và tự bật provider khi RUN_LIVE_LLM=1.
+os.environ["LLM_PROVIDER"] = "mock"
+os.environ["EMBEDDING_PROVIDER"] = "hash"
+
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session

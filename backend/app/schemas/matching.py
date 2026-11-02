@@ -133,3 +133,29 @@ class ComparisonRow(BaseModel):
 class ComparisonMatrix(BaseModel):
     contractors: list[ComparedContractor]
     rows: list[ComparisonRow]
+
+
+class OverviewContractor(BaseModel):
+    """Một nhà thầu trong câu trả lời câu hỏi tự do (mục 8.4)."""
+    card: ContractorCard
+    has_projects_of_type: bool  # có công trình loại được hỏi trong danh sách dự án trên Dezon
+    projects_of_type: list[ProjectSummary] = []  # kèm project_url để khách xem công trình thực tế
+    profile_verified: bool = False  # hồ sơ có nguồn trạng thái verified
+
+
+class ContractorOverview(BaseModel):
+    """Tổng quan nhà thầu theo khu vực + loại công trình (mục 8.4). Mọi số là EvidenceValue."""
+    province: str
+    building_type: BuildingType
+    contractor_count: EvidenceValue  # số nhà thầu phù hợp, vd "3 nhà thầu"
+    contractors_with_projects: EvidenceValue  # số nhà thầu có công trình loại đó thực tế
+    total_dezon_projects: EvidenceValue  # tổng "công trình ghi nhận trên Dezon" của các nhà thầu trên
+    rough_price_range: EvidenceValue  # khoảng đơn giá xây thô tham khảo từ hồ sơ nhà thầu
+    finish_price_range: EvidenceValue  # khoảng đơn giá hoàn thiện tham khảo
+    with_warranty_info: EvidenceValue  # vd "1/3 nhà thầu có thông tin bảo hành"
+    verified_profiles: EvidenceValue  # vd "0/3 hồ sơ đã xác minh"
+    contractors: list[OverviewContractor]
+    notes: list[str] = []
+    # Số trang dự án đúng loại công trình được hỏi (vd "1 công trình biệt thự có trang dự án trên Dezon").
+    # total_dezon_projects là tổng mọi loại công trình — không được diễn giải là số công trình loại được hỏi.
+    projects_of_type_count: EvidenceValue = Field(default_factory=EvidenceValue.unavailable)

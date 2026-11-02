@@ -1,0 +1,11 @@
+﻿code,group_name,label_vi,coefficient,base,is_default,version
+floor_standard,tang,Tầng trệt / lầu (có mái che),1.00,floor_area,true,2
+mezzanine,tang,Tầng lửng,1.00,mezzanine_area,false,2
+foundation_single,mong,Móng đơn,0.30,ground_floor_area,false,2
+foundation_strip,mong,Móng băng,0.50,ground_floor_area,true,2
+foundation_pile,mong,Móng cọc (chưa gồm ép cọc),0.40,ground_floor_area,true,2
+basement_lt_1_3,ham,"Hầm sâu < 1,3 m",1.50,basement_area,false,2
+roof_metal,mai,Mái tôn,0.30,roof_area,false,2
+roof_concrete,mai,Mái bê tông cốt thép,0.50,roof_area,true,2
+rooftop_open,san_thuong,Sân thượng không mái,0.50,rooftop_area,false,2
+yard,san,Sân trước/sau,0.50,yard_area,false,2

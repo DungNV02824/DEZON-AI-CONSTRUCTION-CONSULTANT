@@ -1,0 +1,233 @@
+import { useId } from 'react';
+import type { MatchedContractor } from '../../api/types';
+import { viNumber } from '../../utils/format';
+import { FIT_CLASS } from '../../utils/labels';
+import { EvidenceCell } from '../common/EvidenceCell';
+import { ExternalLink } from '../common/ExternalLink';
+import { SafeImage } from '../common/SafeImage';
+import { StatusBadge } from '../common/StatusBadge';
+
+export interface ContractorCardProps {
+  item: MatchedContractor;
+  selected?: boolean;
+  canSelectMore?: boolean;
+  onToggleCompare?: (id: number) => void;
+  onDetail?: () => void;
+  onQuote?: () => void;
+  /** Ghi nhận lượt bấm (recommendation_logs). */
+  onClickTrack?: () => void;
+}
+
+function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join('');
+}
+
+/** Thẻ nhà thầu (mục 8.1 / 7.4): lý do là nội dung chính, điểm số hiển thị phụ. */
+export function ContractorCardView({
+  item,
+  selected = false,
+  canSelectMore = true,
+  onToggleCompare,
+  onDetail,
+  onQuote,
+  onClickTrack,
+}: ContractorCardProps) {
+  const c = item.contractor;
+  const ev = c.evidence ?? {};
+  const covers = (c.cover_images ?? []).slice(0, 3);
+  const headingId = useId();
+  const fitCls = FIT_CLASS[item.fit_label] ?? 'review';
+
+  return (
+    <article className={`dz-ccard${selected ? ' dz-ccard--selected' : ''}`} aria-labelledby={headingId}>
+      {covers.length > 0 && (
+        <div className={`dz-ccard__covers dz-ccard__covers--${covers.length}`}>
+          {covers.map((img, i) => (
+            <SafeImage key={`${img.url}-${i}`} src={img.url} alt={img.caption ?? `Ảnh dự án của ${c.name}`} />
+          ))}
+        </div>
+      )}
+      <div className="dz-ccard__body">
+        <header className="dz-ccard__head">
+          {c.avatar_url ? (
+            <SafeImage className="dz-avatar" src={c.avatar_url} alt={`Logo ${c.name}`} />
+          ) : (
+            <span className="dz-avatar dz-avatar--initials" aria-hidden="true">
+              {initials(c.name)}
+            </span>
+          )}
+          <div className="dz-ccard__titles">
+            <h4 id={headingId} className="dz-ccard__name">
+              <button
+                type="button"
+                className="dz-namebtn"
+                onClick={() => {
+                  onClickTrack?.();
+                  onDetail?.();
+                }}
+              >
+                {c.name}
+              </button>
+            </h4>
+            <div className="dz-ccard__tags">
+              {c.badge && <span className="dz-pill dz-pill--brand">{c.badge}</span>}
+              <span className={`dz-pill dz-fit dz-fit--${fitCls}`}>{item.fit_label}</span>
+              <span className="dz-score" title="Điểm phù hợp theo tiêu chí của anh/chị (tham khảo)">
+                Điểm {item.score}/100
+              </span>
+            </div>
+          </div>
+        </header>
+
+        {item.relaxed_location && (
+          <p className="dz-note dz-note--info dz-note--inline">Nhà thầu được mở rộng tìm kiếm từ tỉnh lân cận.</p>
+        )}
+
+        {item.reasons.length > 0 && (
+          <div className="dz-ccard__section">
+            <h5>Vì sao em đề xuất</h5>
+            <ul className="dz-reasons">
+              {item.reasons.map((r, i) => {
+                const rev = ev[r.evidence];
+                return (
+                  <li key={i}>
+                    <span className="dz-reasons__icon" aria-hidden="true">
+                      ✓
+                    </span>
+                    <span>{r.text}</span>
+                    {rev && rev.status !== 'unavailable' && (
+                      <StatusBadge status={rev.status} source={rev.source} isStale={rev.is_stale} variant="dot" title={r.text} />
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+        {item.cautions.length > 0 && (
+          <div className="dz-ccard__section">
+            <h5>Điểm cần lưu ý</h5>
+            <ul className="dz-cautions">
+              {item.cautions.map((ct, i) => (
+                <li key={i}>
+                  <span className="dz-cautions__icon" aria-hidden="true">
+                    !
+                  </span>
+                  <span>{ct.text}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <dl className="dz-facts">
+          <div>
+            <dt>Công trình ghi nhận trên Dezon</dt>
+            <dd>
+              <EvidenceCell ev={ev.dezon_project_count} title="Công trình ghi nhận trên Dezon" />
+            </dd>
+          </div>
+          <div>
+            <dt>Kinh nghiệm</dt>
+            <dd>
+              <EvidenceCell ev={ev.years_experience} title="Kinh nghiệm" />
+            </dd>
+          </div>
+          <div>
+            <dt>Đơn giá xây thô</dt>
+            <dd>
+              <EvidenceCell ev={ev.rough_price} title="Đơn giá xây thô" />
+            </dd>
+          </div>
+          <div>
+            <dt>Đơn giá hoàn thiện</dt>
+            <dd>
+              <EvidenceCell ev={ev.finish_price} title="Đơn giá hoàn thiện" />
+            </dd>
+          </div>
+          <div className="dz-facts__wide">
+            <dt>Chi phí ước tính theo đơn giá nhà thầu</dt>
+            <dd>
+              <EvidenceCell ev={item.estimated_cost} title="Chi phí ước tính theo đơn giá nhà thầu" />
+            </dd>
+          </div>
+        </dl>
+
+        {item.breakdown.length > 0 && (
+          <details className="dz-breakdown">
+            <summary>Cách tính điểm</summary>
+            <table className="dz-table dz-table--grid">
+              <thead>
+                <tr>
+                  <th scope="col">Tiêu chí</th>
+                  <th scope="col" className="dz-num">
+                    Trọng số
+                  </th>
+                  <th scope="col" className="dz-num">
+                    Điểm
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {item.breakdown.map((b) => (
+                  <tr key={b.key}>
+                    <td>
+                      {b.label_vi}
+                      {b.note && <div className="dz-muted dz-small">{b.note}</div>}
+                    </td>
+                    <td className="dz-num">{viNumber(b.weight * 100, 0)}%</td>
+                    <td className="dz-num">{viNumber(b.weighted, 1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </details>
+        )}
+
+        <div className="dz-ccard__links">
+          <ExternalLink href={c.profile_url} className="dz-extlink" onClick={onClickTrack}>
+            Xem hồ sơ năng lực ↗
+          </ExternalLink>
+        </div>
+        <div className="dz-actions dz-actions--wrap">
+          <button
+            type="button"
+            className="dz-btn dz-btn--sm"
+            onClick={() => {
+              onClickTrack?.();
+              onDetail?.();
+            }}
+          >
+            Xem chi tiết
+          </button>
+          <button
+            type="button"
+            className={`dz-btn dz-btn--sm${selected ? ' dz-btn--active' : ''}`}
+            aria-pressed={selected}
+            disabled={!selected && !canSelectMore}
+            onClick={() => onToggleCompare?.(c.id)}
+            title={!selected && !canSelectMore ? 'Chỉ so sánh tối đa 5 nhà thầu' : undefined}
+          >
+            {selected ? '✓ Đã chọn so sánh' : 'So sánh'}
+          </button>
+          <button
+            type="button"
+            className="dz-btn dz-btn--sm dz-btn--primary"
+            onClick={() => {
+              onClickTrack?.();
+              onQuote?.();
+            }}
+          >
+            Yêu cầu báo giá
+          </button>
+        </div>
+      </div>
+    </article>
+  );
+}

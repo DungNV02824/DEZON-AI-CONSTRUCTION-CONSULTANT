@@ -1,0 +1,6 @@
+﻿building_type,province,work_scope,quality_tier,price_min,price_max,effective_from,effective_to
+nha_pho,*,xay_tho,trung_binh,3400000,4000000,2026-11-01,
+nha_pho,TP. Hồ Chí Minh,xay_tho,trung_binh,3550000,4200000,2026-11-01,
+nha_pho,*,tron_goi,trung_binh,5500000,6800000,2026-11-01,
+Biệt thự,*,Xây thô,Trung bình,"4,0 triệu","4,8 triệu",01/11/2026,
+biet_thu,Hà Nội,tron_goi,cao_cap,9650000,12050000,2026-11-01,

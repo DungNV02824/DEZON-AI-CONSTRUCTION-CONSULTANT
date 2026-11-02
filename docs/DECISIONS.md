@@ -23,16 +23,21 @@ Mỗi module bổ sung mục riêng khi có quyết định mới.
   "seed dev — chờ Dezon cung cấp bảng giá". Hệ số tỉnh: HCM/HN ×1,05; hệ số mức chất lượng
   tiết kiệm 0,9 · trung bình 1 · khá 1,15 · cao cấp 1,35.
 - Fixture nhà thầu: Kiến Phong (giá trị quan sát 31/10/2026 trong đặc tả), Smartcons Tech, Huy Hoàng
-  (thiếu kinh nghiệm/đơn giá). Slug/URL hồ sơ (`/nha-thau/<slug>`, `/du-an/<slug>`) là **giả định**,
-  cần thay bằng URL thật khi đồng bộ. Ảnh dự án dev là ảnh giữ chỗ (placehold.co), caption ghi "ảnh minh họa dev".
+  (thiếu kinh nghiệm/đơn giá). URL hồ sơ và công trình theo mẫu **thật** đã khảo sát trên dezon.vn
+  (`/nha-thau/<slug>/`, `/nha-thau/<slug>/<công-trình>/` — xem docs/DATA_MAPPING.md); slug dự án theo quy ước crawler
+  `<slug-nhà-thầu>--<công-trình>` để lần crawl đầu cập nhật đúng bản ghi thay vì tạo trùng. Ảnh dự án dev là ảnh giữ chỗ (placehold.co), caption ghi "ảnh minh họa dev".
 - Tỉnh lân cận dùng tên tỉnh trước sáp nhập 2025; cần cập nhật khi Dezon chuẩn hóa danh mục tỉnh mới.
 
 ## AI
 
-- `LLM_PROVIDER=mock` (mặc định): provider giả lập có kịch bản, chạy được không cần API key — dùng cho test và demo.
-  `LLM_PROVIDER=anthropic`: Claude qua Anthropic SDK (model mặc định `claude-sonnet-5-5`).
-- Embedding: `EMBEDDING_PROVIDER=hash` (băm đặc trưng cục bộ, 1536 chiều, xác định) cho dev/test;
-  `openai` khi có key. RAG chỉ dùng cho mô tả, không cho số liệu.
+- **Nhà cung cấp LLM: OpenAI `gpt-4.1-mini`** (theo yêu cầu khách hàng 02/11/2026), embedding `text-embedding-3-small`
+  (1536 chiều, khớp cột `documents.embedding vector(1536)`). Biến môi trường: `OPENAI_API_KEY`, `MODEL_NAME`,
+  `EMBEDDING_MODEL` (cũng nhận tên chung `LLM_API_KEY`, `LLM_MODEL`, `EMBEDDING_API_KEY`).
+- `LLM_PROVIDER=auto` (mặc định): có `OPENAI_API_KEY` -> `openai`; không có -> `mock` (provider giả lập có kịch bản,
+  demo chạy được không cần key). Vẫn giữ `anthropic` làm tùy chọn qua interface `LLMProvider`.
+- `EMBEDDING_PROVIDER=auto`: có key -> `openai`; không có -> `hash` (băm đặc trưng cục bộ, xác định).
+  Đổi provider embedding phải chạy lại reindex (`POST /api/admin/sync/reindex`). RAG chỉ dùng cho mô tả, không cho số liệu.
+- Test luôn ép `mock` + `hash` (tests/conftest.py) để không gọi API thật và không tốn phí.
 
 ## Cần hỏi lại Dezon (không tự đoán)
 
@@ -43,3 +48,373 @@ Mỗi module bổ sung mục riêng khi có quyết định mới.
 - Nhà cung cấp LLM và model được chọn; nhà cung cấp embedding.
 - Quy trình chuyển yêu cầu báo giá tới nhà thầu (email, Zalo, dashboard nhà thầu?).
 - Danh mục tỉnh/thành sau sáp nhập 2025 mà Dezon dùng.
+
+## Calculation Engine (khái toán)
+
+- **Engine thuần** `app/engines/estimate/` (không DB/mạng/LLM). Service `app/services/estimate_service.py` nạp hệ số/đơn giá rồi gọi engine.
+- **Hầm thiếu độ sâu** → tạm tính nhóm `basement_1_7_2_0` (k theo bộ hệ số) và ghi assumption. Ngưỡng: `< 1,3` · `1,3–1,7` (gồm 1,7) · `> 1,7–2,0` (gồm 2,0) · `> 2,0`.
+  Khách không bật `basement` nhưng có `basement_depth_m`/`basement_area_m2` → vẫn tính hầm, ghi assumption. Tương tự lửng có `mezzanine_area_m2`.
+- **Diện tích lửng / hầm mặc định** = diện tích xây dựng (theo mã giả mục 6.3), ghi assumption.
+- **Sân thượng**: diện tích mặc định = diện tích xây dựng. Sân thượng nằm trên sàn mái nên **thay cho phần mái ở cùng diện tích**:
+  khi khách không cho `roof_area_m2`, diện tích mái = diện tích xây dựng − diện tích sân thượng (≤ 0 → không tính mái). Tránh tính trùng mái BTCT + sân thượng trên cùng mặt bằng.
+- `roof_type='none'` → không có hạng mục mái. **Sân (yard)** chỉ tính khi khách cho `yard_area_m2`; nếu diện tích xây dựng < diện tích đất thì ghi assumption "Chưa tính sân trước/sau".
+- **Căn hộ (`can_ho`)**: chỉ tính sàn (các tầng của chính căn hộ + lửng), không tính móng/mái/hầm/sân thượng/sân (phần chung tòa nhà). `floors > 3` với căn hộ → warning nhắc kiểm tra (dễ nhầm với vị trí tầng).
+- **Phạm vi Nội thất (`noi_that`)**: chỉ tính diện tích sàn sử dụng (tầng + lửng) với hệ số tầng, không tính móng/mái/hầm/sân thượng/sân.
+- Phạm vi `xay_tho`/`hoan_thien`/`tron_goi`: dùng cùng bộ hệ số quy đổi (thông lệ thị trường tính đơn giá theo m² sàn quy đổi).
+- Mô tả "chi phí bao gồm gì" (mục 6.5) đặt ở **dòng đầu của `assumptions`** (không thêm trường mới vào schema).
+- **rules_status** xét các rule **thực sự dùng** trong phép tính: tất cả approved → `verified`, ngược lại `reference` + warning.
+  `cost.status` = trạng thái yếu nhất giữa đơn giá và hệ số. Đơn giá fallback `'*'` luôn `reference`.
+- Thiếu rule cho một hạng mục → bỏ hạng mục đó + warning; diện tích quy đổi = 0 → không khái toán chi phí (unavailable).
+- Đơn giá cũ hơn `STALE_DAYS` → `is_stale=true` + warning "Đơn giá cập nhật ngày dd/mm/yyyy, có thể đã cũ".
+- Disclaimer 6.6: `{nguồn, ngày cập nhật}` = `(<nhãn nguồn đơn giá>, cập nhật dd/mm/yyyy)` lấy từ `data_sources.source_updated_at` (fallback `fetched_at`); không có ngày → "ngày cập nhật: Chưa có dữ liệu"; không có đơn giá → "(Chưa có dữ liệu)".
+- **Gợi ý ngân sách**: phương án `reduce_floor`, `lower_quality`, `remove_basement`, `change_roof` (loại mái có hệ số thấp hơn liền kề), `open_rooftop`, `remove_mezzanine`, `phase_rough_first`.
+  Mỗi phương án dựng lại input từ **input gốc của khách** (trường khách chưa cho được engine áp mặc định lại — vd giảm 4→3 tầng thì móng mặc định chuyển cọc→băng, ghi trong `description`).
+  `phase_rough_first` chỉ áp cho `tron_goi` → `xay_tho` (phạm vi `hoan_thien` là chỉ phần hoàn thiện, chuyển sang xây thô không phải "chia giai đoạn").
+  Bỏ phương án không có đơn giá hoặc không tiết kiệm. Nếu không phương án đơn lẻ nào vừa ngân sách → thêm phương án `combined` (kết hợp 2 phương án tiết kiệm nhất, khác trường). Sắp xếp theo `cost_min` tăng dần.
+- **Lưu trữ**: `estimate_sessions.input` lưu **input gốc** (exclude_unset) để tính lại phương án ngân sách; cột `assumptions` (JSONB) lưu `{assumptions, exclusions, cost_drivers, warnings, snapshot}` — `snapshot` là `EstimateResult` đầy đủ để `get_estimate` trả đúng con số đã hiển thị. Bản ghi không có snapshot → tính lại với hệ số hiện hành + đơn giá theo `rate_id`.
+- So khớp tỉnh khi chọn đơn giá (`normalize_province`): không phân biệt hoa thường, dấu tiếng Việt, khoảng trắng/dấu chấm thừa, tiền tố "TP."/"Thành phố"/"Tỉnh" và bí danh phổ biến ("HCM", "TPHCM", "Sài Gòn", "SG", "HN"). Vd "HCM", "ho chi minh", "Thành phố Hồ Chí Minh" đều khớp đơn giá "TP. Hồ Chí Minh". Slot filling vẫn nên chuẩn hóa tên tỉnh trước.
+- (Review) `select_rate` kiểm tra enum `building_type`/`work_scope`/`quality_tier` bằng Python trước khi truy vấn → giá trị sai ném `ValueError` (API trả 422), tránh lỗi enum của PostgreSQL làm hỏng transaction; `quality_tier=None` → `trung_binh`.
+- (Review) Đơn giá truyền vào engine không khớp `building_type`/`work_scope`/`quality_tier` của input → warning "không khớp thông tin công trình" và trạng thái đơn giá/chi phí hạ về `reference`.
+- (Review) Căn hộ không nhắc "ép cọc" trong exclusions; phạm vi Hoàn thiện không nêu yếu tố chi phí của phần thô (đào hầm, ép cọc, gia cố móng). Tỉnh trống → văn bản dùng "khu vực của anh/chị".
+- (Review) `get_estimate` giữ nguyên con số trong snapshot nhưng tính lại cờ `is_stale` của đơn giá/chi phí theo ngày đọc (nguyên tắc 2.5) và thêm warning nếu đơn giá đã cũ. `suggest_budget_adjustments` với ngân sách ≤ 0 → `ValueError`.
+
+## Matching Engine & service nhà thầu
+
+- **Kiến trúc**: engine thuần trong `app/engines/matching/` (`criteria.py` dữ kiện + `profile_completeness`,
+  `scorer.py` 6 tiêu chí + bộ lọc cứng + xếp hạng, `reasons.py` evidence/lý do/lưu ý); service
+  `app/services/contractor_service.py` chỉ nạp DB và dựng model. Trọng số đọc từ `matching_weights` active
+  (version lớn nhất) và truyền vào engine; nếu tổng ≠ 1 thì chuẩn hóa về 1, thiếu khóa = 0.
+- **profile_completeness**: `has_warranty_info` chỉ tính khi `True` (False = không có thông tin bảo hành);
+  `dezon_project_count` chỉ tính khi > 0; chuỗi rỗng coi như thiếu. Tính lại trong `seed_hook` (chỉ flush).
+- **Tỷ lệ trường verified** (profile_quality): số trường trong 10 trường hồ sơ có giá trị **và** nguồn
+  (`field_sources` → `data_sources.status`, fallback `source_id`) là `verified`, chia cho **10** (trường trống
+  tính chưa xác minh — tránh hồ sơ 1 trường verified đạt 100%).
+- **Trường quan trọng** cho nhãn "Cần đánh giá thêm": 2 nhóm — *đơn giá* (không có bất kỳ đơn giá thô/hoàn thiện
+  nào) và *kinh nghiệm* (`years_experience`). Thiếu cả hai → "Cần đánh giá thêm" bất kể điểm.
+- **Khu vực / bộ lọc cứng**: "hoạt động tại tỉnh" = capability **hoặc** dự án tại tỉnh **hoặc** tỉnh chính trên hồ sơ
+  (`contractors.province` — là trường "Khu vực" của hồ sơ Dezon). So khớp địa danh bỏ hoa thường, khoảng trắng và
+  tiền tố "TP./Thành phố/Tỉnh/Quận/Huyện/Thị xã" ("TP. Thủ Đức" ~ "Thủ Đức"). Khách không cho quận/huyện →
+  khớp tỉnh tối đa 0,8 (đúng bảng 7.3). Nới lỏng sang tỉnh lân cận khi < 3 ứng viên tại tỉnh; chỉ thêm nhà thầu ở
+  tỉnh lân cận (điểm location 0,4, `relaxed_location=true`, có note + caution).
+- **Dự án** của nhà thầu: tính mọi vai trò trong `project_contractors` (thi_cong/thiet_ke/noi_that) cho tiêu chí
+  loại công trình và dự án tương tự (MVP; có thể giới hạn `thi_cong` khi dữ liệu đủ).
+- **budget_fit**:
+  - Đơn giá theo phạm vi: `xay_tho` → đơn giá thô; `hoan_thien`/`tron_goi` → đơn giá hoàn thiện;
+    **`noi_that` → không dùng đơn giá hồ sơ** (đơn giá thô/hoàn thiện không áp dụng cho nội thất) → trung tính 0,5,
+    không ước chi phí, kèm lưu ý "cần yêu cầu báo giá riêng". Chưa rõ phạm vi → trung tính 0,5.
+  - Thiếu một đầu min/max → dùng đầu còn lại cho cả hai. Chi phí ước làm tròn triệu.
+  - Quy tắc 1,0: khoảng chi phí giao `[0,9B; 1,1B]` và **đầu thấp ≤ B** (tức `lo ≤ B` và `hi ≥ 0,9B`).
+    Vượt (`lo > B`): `1 − (lo − B)/B / 0,4`, chặn dưới 0 (vượt ≥ 40% → 0) — tính trên đầu thấp để liên tục tại `lo = B`.
+  - **Thấp hơn nhiều so với ngân sách** (`hi < 0,9B`): 0,8 cố định + lưu ý "cần đối chiếu phạm vi và vật liệu"
+    (rẻ hơn không xấu nhưng có thể khác phạm vi/chất lượng).
+  - Không có ngân sách hoặc không có diện tích quy đổi → 0,5 + note; vẫn trả `estimated_cost` nếu có diện tích và
+    đơn giá. Không có đơn giá → 0,5 + cờ "Cần xác minh mức giá".
+- **similar_projects**: khách chưa cho số tầng → bỏ điều kiện tầng; dự án **không có số tầng tính 0,5 dự án**
+  (không loại hẳn vì dữ liệu crawl hay thiếu số tầng, không tính đủ vì chưa chắc tương tự).
+- **Tổng điểm** làm tròn nửa lên (sau khi làm tròn 6 chữ số để tránh sai số dấu phẩy động). Xếp hạng hòa điểm:
+  số công trình ghi nhận trên Dezon giảm dần, rồi tên.
+- **estimated_cost**: `EvidenceValue` value `[min, max]`, status = trạng thái nguồn đơn giá nhà thầu, nhãn nguồn ghi
+  rõ "Ước tính = diện tích quy đổi … × đơn giá … trên hồ sơ …", URL = nguồn đơn giá/hồ sơ.
+- **Lý do**: thứ tự loại công trình → khu vực → số công trình ghi nhận → đơn giá theo phạm vi → kinh nghiệm → nhân sự,
+  tối đa 5. Nhận định về loại công trình dùng "Nhận thi công …" khi chỉ có capability (không khẳng định "có kinh
+  nghiệm"). Hồ sơ quá thiếu (< 2 lý do) → thêm lý do dự phòng "Hồ sơ đầy đủ N%" (evidence `profile_completeness`,
+  status `reference`, tính tự động).
+- **Evidence `warranty`**: chỉ có dữ liệu khi `has_warranty_info = true` (display = `warranty_text` hoặc
+  "Có thông tin bảo hành"); ngược lại `unavailable`. `province` fallback danh sách tỉnh trong capability khi hồ sơ
+  không ghi tỉnh chính.
+- **So sánh**: hàng "Hồ sơ dự án" = số dự án có trang trên Dezon ("3 dự án có hồ sơ trên Dezon (3 có ảnh)"), 0 dự án →
+  "Chưa có dữ liệu". "Mức phù hợp" chấm trực tiếp bằng scorer (không áp bộ lọc cứng), status `reference`. Có thể truyền
+  `estimate_session_id` thay cho `criteria` (dựng tiêu chí từ input khái toán). Id trùng/không tồn tại → `ValueError`.
+- **Tổng quan câu hỏi tự do (8.4)**: nhà thầu phù hợp = hoạt động tại tỉnh **và** có capability hoặc dự án loại đó.
+  Sắp xếp: có công trình loại đó thực tế trước, rồi số công trình ghi nhận — không xếp hạng "tốt nhất". Không có nhà
+  thầu → mọi số `unavailable` + note. "Hồ sơ đã xác minh" = nguồn hồ sơ chính (`source_id`) có status `verified`.
+  Khoảng đơn giá tổng hợp = min các đầu thấp – max các đầu cao, status = trạng thái yếu nhất trong các nguồn.
+- **record_click** chỉ nhận nhà thầu có trong `results` của log; bấm lại không ghi trùng.
+- `chat_session_id` không tồn tại trong `chat_sessions` → log ghi NULL (tránh lỗi FK); `estimate_session_id`
+  không tồn tại → bỏ qua + note.
+- **Bổ sung sau review (Matching)**:
+  - So khớp địa danh (`norm_place`) thêm: chuẩn hóa NFC, **bỏ dấu** (đ→d), bỏ dấu câu ("Bà Rịa - Vũng Tàu" ~
+    "Ba Ria Vung Tau"), bí danh HCM/TPHCM/TP.HCM/Sài Gòn/SG → Hồ Chí Minh, HN → Hà Nội, "Q7"/"Q.7"/"quan 7" ~ "Quận 7".
+    Tiền tố có dấu cắt trên chuỗi còn dấu; tiền tố không dấu "quan"/"q" chỉ cắt khi theo sau là số (tránh "Quan Hóa").
+  - Ngân sách ≤ 0 coi như không có ngân sách (trung tính 0,5); diện tích quy đổi ≤ 0 → không ước chi phí.
+    Câu "chi phí ước phù hợp ngân sách" chỉ thêm khi điểm `budget_fit` = 1,0.
+  - Phạm vi `noi_that`: không nêu đơn giá thô/hoàn thiện làm lý do đề xuất (tránh mâu thuẫn với lưu ý "không áp dụng").
+  - Evidence `province` fallback: tỉnh chính → tỉnh trong capability → tỉnh có dự án, để mọi nhà thầu qua bộ lọc cứng
+    luôn có ≥ 2 lý do (khu vực + dự phòng). Khi tỉnh chính khác tỉnh khách nhưng có năng lực/dự án tại tỉnh khách,
+    lý do ghi rõ "có ghi nhận năng lực hoặc công trình tại …". `years_experience = 0` không dùng làm lý do.
+  - `search_contractors_simple`: `q` so khớp **không dấu** bằng SQL `translate()` (không cần extension `unaccent`),
+    cộng ILIKE có dấu, slug và `pg_trgm similarity > 0.3`. `building_type` không thuộc enum → `ValueError`
+    (tránh gửi giá trị ENUM lạ làm hỏng transaction).
+  - `ContractorOverview.total_dezon_projects` là **tổng mọi loại công trình** (display ghi rõ); thêm
+    `projects_of_type_count` = số trang dự án đúng loại được hỏi (không trùng giữa các nhà thầu, mọi tỉnh).
+
+## Output guardrail validator & fallback (`app/ai/validator.py`, `app/ai/fallback.py`)
+
+- **Chỉ trích số có đơn vị** (tiền, đơn giá, công trình/dự án, năm, nhân sự, m², nhà thầu/đơn vị, điểm, %),
+  cộng "năm thành lập/từ năm YYYY" và số lớn có ≥ 2 dấu phân cách nghìn (`2.058.000.000`). Số đứng một mình
+  (số thứ tự `1.`, `bước 2`, `tầng 1`, `4 tầng`, `Quận 7`) không bị trích để tránh báo nhầm. URL, email, ngày
+  (`31/10/2026`, ISO), giờ được che trước khi trích. "tháng 6 năm 2027" không bị coi là "6 năm".
+- **Định dạng**: `4,3`/`4.3`; một dấu phân cách + đúng 3 chữ số (`2.058`, `2,058`) là mơ hồ → thử cả hai cách
+  hiểu; khoảng `a–b`, `a-b`, `a ~ b`, `từ a đến b` (số đầu thừa hưởng đơn vị số sau); `1 tỷ 8` = 1,8 tỷ;
+  `1 tỷ rưỡi`; `2 tỷ 58 triệu`; `4,3 tr/m2`, `4.300.000 đ/m²`. Sai lệch cho phép ±1% so với giá trị nguồn.
+- **Tập số được phép**: duyệt đệ quy JSON tool (pydantic → `model_dump(mode="json")`). Bỏ qua khóa nội bộ
+  (`id`, `*_id`, `ids`, `rank`, `*version*`, `limit`, `sort_order`, `chunk_index`) và chuỗi URL/slug/code; số
+  dưới khóa `score/weight/coefficient` chỉ dùng cho claim điểm/phần trăm. Số khách tự nói (`user_texts`):
+  số CÓ đơn vị ("2 tỷ", "100 m²", "5 người") được gom theo đúng loại; số trần và tích `5x20` → 100 chỉ dùng cho
+  tiền/đơn giá/diện tích/số lớn/năm (xem mục review bên dưới).
+- **Loại số đếm đối chiếu theo loại** (`project_count`, `contractor_count`, `staff`, `years`, `area`): chỉ khớp
+  với giá trị cùng loại — suy ra từ đơn vị trong chuỗi (`"7 công trình"`), từ đường dẫn khóa JSON
+  (`dezon_project_count`, `staff*`, `years*/experience/warranty`, `*area*/*m2*`, `total_candidates`) hoặc độ dài
+  danh sách (`results`, `contractors`, `projects`, `ids`). Lý do: nếu so với mọi số trong JSON, "4 nhà thầu" sẽ
+  khớp nhầm `floors=4`. Hệ quả: tool của module khác nên đặt tên khóa/chuỗi display có đơn vị như trên; nếu
+  không, câu trả lời đúng có thể bị chặn (an toàn: rơi về fallback).
+- **`search_knowledge` không phải nguồn số liệu** (mục 9.2): khi `tool_results` truyền dạng cặp
+  `(tool_name, result)`, số trong kết quả `search_knowledge` không được tính là được phép. Fallback của
+  `search_knowledge` bỏ mọi câu có số liệu trong đoạn trích.
+- **Cụm cấm**: `best_claim` ("tốt nhất", "uy tín nhất", "giỏi nhất", "chất lượng nhất", "đáng tin cậy nhất",
+  "là/nhà thầu… số 1", "top 1") — bỏ qua khi câu có phủ định trước cụm ("không thể khẳng định", "chưa có dữ
+  liệu để kết luận", "không phải"…) và thành ngữ "tốt nhất anh/chị nên…"; "phù hợp nhất" luôn hợp lệ.
+  `project_count_label`: số + công trình/dự án kèm "đã hoàn thành/thi công xong/bàn giao/hoàn tất" (trong 5 từ),
+  trừ khi có "không/chưa". `estimate_as_quote`: "đây/khái toán… là báo giá", "chi phí chính xác là…", "khái
+  toán này chính xác", "cam kết chi phí/giá" — trừ ngữ cảnh phủ định hoặc "yêu cầu báo giá… để có con số chính xác".
+- **Vòng sinh lại**: `run_guarded` gọi `generate(None)`, nếu vi phạm gọi `generate(retry_message)` (tối đa 2 lần);
+  vẫn sai → `build_fallback_text`; nếu chính fallback không qua validator (không nên xảy ra) → câu xin lỗi
+  chung không có số. `record_violations` chỉ `add` + `flush`, caller commit.
+- **Fallback** chỉ chép chuỗi `display`/văn bản engine, không tự định dạng số mới (kể cả diện tích quy đổi —
+  đã có trong bảng UI). Ngày cập nhật nguồn hiển thị dd/mm/yyyy, kèm "dữ liệu có thể đã cũ" khi `is_stale`.
+  Giả định hình dạng dict: `update_project_requirements` → `{slots, missing_required}`; `get_reference_rates`
+  → `{rate, rate_data}`; `search_knowledge` → `{chunks: [{content, source: {label, url}}]}`;
+  `create_quote_request` → `{ids, code}`; `get_contractor_projects` → list `ProjectSummary` hoặc `{projects}`.
+- **Bổ sung sau review**:
+  - Số trần khách nói ("5x20", "1 trệt 3 lầu") KHÔNG làm hợp lệ số đếm/số năm/điểm/% ("5 năm kinh nghiệm",
+    "3 kỹ sư", "1 nhà thầu" bị chặn). Điểm và % là loại chặt: chỉ khớp khóa score/weight/coefficient, chuỗi có
+    đơn vị điểm/%, khóa `*percent*/*pct*` hoặc phân số 0–1 × 100 — không khớp số bất kỳ trong JSON.
+  - Nhận đơn vị **không dấu** (ty, trieu, nghin, dong, tr/m2, cong trinh, du an, nha thau, tho, ky su, nguoi,
+    diem, phan tram, "nam" viết thường) và **số bằng chữ** hai…mười trước công trình/dự án/nhân sự/năm (không gồm
+    "một" và "tư"; không áp cho số nhà thầu vì "hai đơn vị này", "cả ba nhà thầu" là cách nói tham chiếu; số ghép
+    "mười lăm", "hai mươi" chưa hỗ trợ).
+  - Phân số số đếm "2/3 nhà thầu", "0/3 hồ sơ" không bị che như ngày: tử số và mẫu số đều được đối chiếu
+    (khóa `contractors_with_projects`, `with_warranty_info`, `verified_profiles`, `total_dezon_projects` của
+    `ContractorOverview` được gắn loại số đếm).
+  - Phủ định chỉ có hiệu lực trong cùng mệnh đề (cắt tại `:`, `;`, ngoặc, "nhưng", "tuy nhiên", ", em/thì/còn/và");
+    "không phải" chỉ tính là phủ định khi đứng ngay trước cụm (≤ 3 từ chen giữa) — "Không phải ngẫu nhiên mà X là
+    nhà thầu tốt nhất" bị chặn. Ngữ cảnh hợp lệ "yêu cầu/gửi/để có …" chỉ tính khi cách cụm ≤ 2 từ, không qua dấu phẩy.
+  - Thêm cụm cấm: "nhà thầu/đơn vị/công ty … hàng đầu", "xuất sắc/chuyên nghiệp/đáng chọn nhất"; "ưu tiên hàng
+    đầu" vẫn hợp lệ. Thêm `estimate_as_quote` khi gắn nhãn "báo giá" cho con số ("Báo giá cho công trình … là 2 tỷ",
+    "Báo giá sơ bộ: …"); tối đa một vi phạm `estimate_as_quote` mỗi câu.
+  - `collect_allowed` tự suy tên tool khi không truyền cặp (name, result): `list[KnowledgeChunk]` → bỏ khỏi nguồn số.
+  - Fallback: nhận tuple `(EvidenceValue, RateData|None)` của `estimate_service.get_reference_rates`,
+    `list[KnowledgeChunk]` của `knowledge_service.search_knowledge`, thêm template `get_contractor_overview`
+    (`ContractorOverview`, mục 8.4); tên tool lạ → suy theo hình dạng kết quả; lỗi template bất kỳ → bỏ qua
+    (log warning), không làm hỏng lượt chat; ngày nguồn không phải ISO → bỏ phần "cập nhật".
+
+## Slot filling + chuẩn hóa + hỏi tiếp (`app/ai/normalize.py`, `slot_filling.py`, `dialog.py`)
+
+- **So khớp không dấu**: mọi quy tắc chạy trên chuỗi "gập" (bỏ dấu, đ→d, ×→x, ²→2, gạch dài→"-"), giữ nguyên độ dài
+  để cắt lại văn bản gốc. Alias dễ trùng cụm từ thường ("Gia Lai" ~ "giá lại", "Nhà Bè" ~ "nhà bé", "Huế", "Long An",
+  "Sơn La", "Hà Nam", "Thủ đô") chỉ nhận khi văn bản gốc viết hoa chữ đầu.
+- **Kích thước**: "a x b" = ngang a × dài b; diện tích đất = a × b do code tính. "N m²" mặc định là đất, trừ khi
+  từ khóa gần nhất phía trước là "xây dựng/sàn/mỗi tầng" (→ `building_area_m2`). Đơn giá "triệu/m²" không bị hiểu là diện tích.
+- **Số tầng**: "1 trệt N lầu" = N+1; **"N lầu" (không nói trệt) = N+1** (cách nói phía Nam); "N tầng" = N; "1 trệt"/
+  "nhà cấp 4" = 1; tầng lửng/hầm không tính vào tầng nổi. Chữ số bằng chữ ("một trệt hai lầu") chỉ đổi khi đứng ngay
+  trước từ chỉ tầng.
+- **Kết cấu**: "sân thượng" không nói rõ → `open` (không mái); "mái ngói" không nói rõ → `roof_tile_on_concrete`
+  (mái ngói kèo thép phải nói "kèo thép/sắt"). Đều hiện trong tóm tắt để khách sửa.
+- **Ngân sách** (giá trị = ngân sách tối đa khách nêu): "Dưới X" → X; khoảng "X–Y" → **Y (cận trên)**; "Trên X" → X
+  (cận dưới). "1 tỷ 8" → 1,8 tỷ; "1 tỷ 25" → 1,25 tỷ; "1 tỷ 800 (triệu)" → 1,8 tỷ; "1 tỷ rưỡi" → 1,5 tỷ. Chỉ nhận số tiền
+  có đơn vị tỷ/tỉ/triệu/tr/đồng — trừ khi câu có "ngân sách" hoặc đang hỏi ngân sách: số trần < 100 → tỷ, 100–99.999
+  → triệu. Giới hạn hợp lệ 10 triệu – 1.000 tỷ. Tóm tắt hiển thị đúng giá trị đã lưu (vd "2,5 tỷ" cho "1,5–2,5 tỷ").
+- **Vị trí**: tỉnh dùng tên trước sáp nhập 2025 (khớp seed); quận nội thành HCM/HN/ĐN và một số TP trực thuộc tỉnh
+  (Biên Hòa, Thủ Dầu Một, Dĩ An, Thuận An, Nha Trang, Đà Lạt, Hạ Long, Quy Nhơn, Buôn Ma Thuột, Phú Quốc) suy ra tỉnh.
+  "Quận 1–12"/"Q7" → TP.HCM. Tên quận lưu dạng ngắn ("Bình Thạnh", "Quận 7"), riêng "TP. Thủ Đức". Đổi tỉnh mà không
+  nói quận → xóa quận cũ nếu không thuộc tỉnh mới. Khi đang hỏi tỉnh và khách gõ tên lạ (≤ 5 từ, không số) → lưu
+  nguyên văn.
+- **Ý định**: thứ tự edit (gồm "không đúng/chưa đúng") > confirm > out_of_scope (từ khóa ngoài chủ đề và không có từ
+  khóa xây dựng) > question. Tin nhắn có thông tin mới → `provide_info`, hoặc `edit` nếu ghi đè giá trị đã có / có
+  từ "sửa/đổi". Câu hỏi kèm thông tin ("nhà phố 5x20 hết bao nhiêu?") → `provide_info` (thông tin vẫn được lưu;
+  orchestrator dựa vào `missing_required`). "sửa nhà/sửa chữa" không phải ý định sửa thông tin.
+- **Xác nhận**: `confirmed=True` chỉ khi intent confirm và đủ slot bắt buộc; bất kỳ slot nào đổi hoặc intent edit
+  → `confirmed=False`. Lặp lại giá trị cũ không bỏ xác nhận.
+- **LLM**: chỉ gọi khi provider khác `mock`. Schema chặt sinh từ Pydantic (`additionalProperties: false`, mọi trường
+  required, nullable). LLM trả giá trị THÔ (`floors_text`, `budget_text` nguyên văn) → code chuẩn hóa; ngân sách chỉ
+  nhận qua `budget_text` parse được. Chống bịa: số (ngang/dài/diện tích/tầng) phải xuất hiện trong tin nhắn; chuỗi tự
+  do (tỉnh/quận lạ, thời gian) phải là chuỗi con của tin nhắn. Quy tắc luôn thắng LLM; LLM chỉ bổ sung trường thiếu.
+  Intent LLM chỉ dùng khi quy tắc không nhận ra.
+- **Câu trả lời ngắn** (theo `expected_slots`): "4" khi hỏi số tầng → floors; khi hỏi chung đất + tầng: số ≤ 10 → tầng,
+  ≥ 10 → m² (số 10 hiểu là 10 tầng); "5 20" → 5×20; "Khác" khi hỏi loại công trình → `khac`, khi hỏi tỉnh → không
+  điền (chờ khách gõ); "thô" → xây thô.
+- **Slots.asked** (trường mới, mặc định `[]`): `extract` ghi các `expected_slots` đã hỏi để `budget_question` không
+  hỏi lại ngân sách khi khách chưa trả lời con số. Không ảnh hưởng `to_estimate_input` (EstimateInput bỏ trường thừa).
+- **Hỏi tiếp**: chỉ hỏi slot bắt buộc theo thứ tự 5.2; diện tích đất + số tầng hỏi chung một lượt nếu cùng thiếu.
+  Không hỏi `quality_tier` trước khái toán (mặc định "Trung bình (mặc định)" trong tóm tắt); ngân sách hỏi sau khái
+  toán qua `budget_question`. Quick replies loại công trình có thêm "Khác" (5.4) bên cạnh 5 loại của 5.2; "Nhập thông
+  tin khác" = `allow_free_text=True`. Tóm tắt luôn liệt kê giả định mặc định mục 6.2 (diện tích xây dựng = đất, móng
+  băng/cọc theo số tầng, mái BTCT, không hầm, không lửng, mức trung bình).
+- (Review) **Chống LLM bịa, siết thêm**: `budget_text`/`floors_text` chỉ nhận khi mọi chữ số trong đó có trong tin nhắn
+  (số viết bằng chữ có dấu như "hai", "hai mươi" được tính; so khớp trên chuỗi có dấu để "tầm"/"sau"/"tư" không thành
+  số). Tỉnh/quận LLM trả về phải xuất hiện trong tin nhắn (bỏ tiền tố TP./Tỉnh/Quận, không phân biệt dấu). Hầm, lửng,
+  mái, sân thượng, móng chỉ nhận khi tin nhắn có từ khóa tương ứng (hầm / lửng, gác / mái, ngói, tôn / sân thượng, tum /
+  móng, cọc). `building_type="khac"` từ LLM chỉ nhận khi đang hỏi loại công trình hoặc khách nói "khác".
+  `work_scope`/`quality_tier` từ LLM chưa có kiểm tra từ khóa (giá trị ngữ nghĩa, vd "xịn" → cao cấp).
+- (Review) Nút "Khác" của loại công trình gửi value **"Công trình khác"** (hiểu được không cần `expected_slots`);
+  `dialog.GREETING_EXPECTED_SLOTS = ["building_type"]` để orchestrator truyền vào `extract` ở lượt ngay sau lời chào.
+- (Review) Trả lời trống "không"/"chưa"/"sai" → intent `edit` (thường là đáp câu hỏi xác nhận tóm tắt). "Đổi ..." đầu
+  câu chỉ là edit khi viết "đổi"/"doi" (không nhầm "đợi"). Đơn vị tỷ dính số ("1ty5", "1tỷ5") được hiểu là 1,5 tỷ.
+- (Review) Câu trả lời ngắn giữ dấu thập phân ("1,5" khi hỏi ngân sách → 1,5 tỷ; "62,5" khi hỏi đất → 62,5 m², không
+  thành 62×5). Khi hỏi tỉnh/thời gian, câu có từ như "tôi/anh/chưa/để/biết/nhà..." không bị lưu nguyên văn làm địa danh
+  hay thời gian ("tôi chưa chọn được", "để tôi suy nghĩ").
+
+## Ingestion, RAG & background jobs (`app/ingestion/`, `app/rag/`, `app/jobs.py`, `app/worker.py`)
+
+- **Khảo sát trang thật 02/11/2026** (9 request, DezonAIBot, delay ≥ 2 giây): dezon.vn render phía server → parser
+  BeautifulSoup trên HTML tĩnh, Playwright chỉ là tùy chọn (import lười, chưa cài). Fixture HTML THẬT (đã lược
+  script/style/header/footer) ở `backend/tests/fixtures/dezon/`. Mẫu URL thật và ánh xạ trường: `docs/DATA_MAPPING.md`.
+  Slug thật `kien-phong`, `smartcons-tech`, `huy-hoang` trùng seed; URL thật có `/` cuối; dự án mẫu của Kiến Phong
+  nằm ở `/nha-thau/kien-phong/<công-trình>/` (vd `indochine-villa-quan-7-sai-gon`), không phải `/du-an/<slug>`.
+- **robots.txt**: `urllib.robotparser` là "khớp đầu tiên" và không hiểu wildcard → với robots.txt của dezon.vn
+  (`Allow:/` trước `Disallow: /planning/`) nó cho phép `/planning/`. Fetcher đánh giá thêm theo RFC 9309 (khớp dài nhất,
+  `*`, `$`, hòa → Allow) và chỉ tải khi CẢ HAI cho phép; tôn trọng `Crawl-delay` nếu > 2 giây; robots.txt lỗi mạng →
+  coi như chặn, 401/403 → chặn, 404 → cho phép. `/planning/` (khái toán) không được crawl → đơn giá/hệ số đi qua CSV.
+- Trang danh sách có hộp "Đăng nhập để xem tiếp" hiển thị bằng JS; nội dung hồ sơ vẫn có trong HTML công khai và
+  robots.txt cho phép. **Cần Dezon xác nhận** được dùng dữ liệu này (hoặc cấp API) trước khi bật crawl định kỳ trên production.
+- **raw_hash** = sha256 HTML đã chuẩn hóa (bỏ script/style/noscript/svg/comment/header/footer/bộ đếm lượt xem/nonce,
+  ưu tiên vùng `<main>`), để lượt xem hay menu đổi không gây "updated" giả.
+- **data_sources**: một bản ghi cho mỗi URL (unique). Hash không đổi → chỉ cập nhật `fetched_at` (= lần kiểm tra lại
+  gần nhất, dữ liệu vẫn đúng tới thời điểm đó). Hash đổi → trạng thái về mặc định theo `source_type` và xóa
+  `verified_by/at` (xác minh cũ không còn áp dụng cho nội dung mới). Cùng URL chỉ nâng `source_type` lên ưu tiên cao hơn.
+  `source_updated_at` lấy từ `article:modified_time` của trang.
+- **Ưu tiên nguồn khi upsert**: theo `contractors.field_sources`; nguồn ưu tiên thấp hơn chỉ điền trường đang trống.
+  Cùng mức ưu tiên → nguồn mới ghi đè (dữ liệu crawl thật thay seed dev cùng loại `crawl_public`). Giá trị `None` chỉ
+  xóa trường khi chính nguồn đó trước đây đã cung cấp. `projects` không có field_sources → xét theo `projects.source_id`;
+  `None` không bao giờ xóa trường dự án. Năng lực (`contractor_capabilities`) của nguồn ưu tiên cao hơn được giữ.
+  Thẻ trong trang danh sách (`primary=False`) không thành `contractors.source_id` và chỉ tạo năng lực khi chưa có
+  (tránh giành qua lại với trang hồ sơ).
+- **Không suy diễn số liệu khi parse**: khoảng giá trị cho cột một giá trị ("Quy mô dự án 7 – 15 tỷ", "100 - 300 người")
+  → `None` (khoảng lưu ở `extra`, không ghi DB); số không có đơn vị tiền → `None`; "0 năm" trên thẻ danh sách = chưa
+  khai báo → không ghi. Dấu phẩy là thập phân ("2,058 tỷ" = 2,058 tỷ); dấu chấm là nghìn khi theo sau đúng nhóm 3 số.
+- `projects.building_type` của công trình nằm dưới hồ sơ nhà thầu suy từ **tên** khi có từ khóa rõ (Villa/Biệt thự →
+  biệt thự, Duplex/Penthouse/Căn hộ → căn hộ, Nhà phố/House → nhà phố); không có từ khóa → `None`. Đây là thuộc tính
+  phân loại, không phải số liệu. "DIỆN TÍCH" trên trang `/du-an/` lưu vào `floor_area_m2` (**giả định**, trang không
+  nói rõ đất hay sàn — cần Dezon xác nhận). "NĂM HOÀN THIỆN" → `status='completed'`, không đặt `end_date` (chỉ có năm).
+- Slug dự án dưới hồ sơ nhà thầu = `<slug-nhà-thầu>--<slug-công-trình>`, `external_id` = đường dẫn URL — tránh trùng với
+  `/du-an/<slug>`. Nhà thầu trong trang dự án chưa có trong DB: crawler bỏ qua liên kết (lần sau sẽ nối);
+  API sync được phép tạo bản ghi tối thiểu (tên + URL hồ sơ, không có số liệu).
+- `contractor_capabilities.work_scope` để trống khi crawl (trang không có trường phạm vi chuẩn hóa).
+- **CSV/XLSX**: nhập từng dòng hợp lệ, dòng lỗi liệt kê trong báo cáo (số dòng, cột, thông báo tiếng Việt). Mỗi lần nhập
+  1 `data_sources` (`csv_import` → `reference`, url NULL, hash file; nhập lại cùng file → `unchanged`). Không ghi đè bản ghi
+  cùng khóa từ nguồn ưu tiên cao hơn (vd đơn giá seed `dezon_editorial`) trừ khi `force=True` (admin) — quy trình
+  chuẩn là nhập bảng giá mới với `effective_from` mới. Hệ số nhập vào luôn `approved=false` (cột approved bị bỏ qua).
+  Tỉnh không nhận diện được → lỗi dòng (dùng `*` cho toàn quốc). Số liệu trong file mẫu chép từ seed dev.
+- **API sync** là skeleton với ánh xạ trường giả định (DATA_MAPPING mục 3). `data_sources.url` của bản ghi API = URL tài
+  nguyên API (URL hồ sơ công khai đã thuộc bản ghi crawl). Cờ verified từ API không tự nâng `status`.
+- **seed_snapshot** mặc định không làm gì; `SEED_SNAPSHOT=1` nạp `app/db/seed_data/dezon_snapshot.json` (chưa tạo file
+  này trong repo — chạy runner `--snapshot` khi Dezon đồng ý dùng dữ liệu crawl).
+- **RAG**: document gồm tên, nhãn, khu vực, loại công trình, phạm vi, mô tả, tên các công trình ghi nhận (và với dự án:
+  loại, địa điểm, nhà thầu, trạng thái, mô tả). **Không đưa trường số liệu có cấu trúc** (đơn giá, số công trình,
+  nhân sự, năm thành lập/kinh nghiệm, quy mô, diện tích, số tầng) và **che cụm "số + đơn vị"** trong mô tả tự do
+  ("12 nhân sự" → "…", "năm 2018" → "năm …"); số trong tên riêng không kèm đơn vị ("Quận 7") giữ nguyên. Mỗi
+  `KnowledgeChunk` có `usage_note` "Chỉ dùng cho mô tả, không dùng làm nguồn số liệu".
+- `HashEmbedder`: feature hashing có dấu (blake2b) trên từ, cặp từ, 3-gram ký tự (đã gấp dấu), bỏ từ dừng, mở rộng đồng
+  nghĩa (villa ↔ biệt thự, Indochine ↔ Đông Dương, Sài Gòn/HCM ↔ Hồ Chí Minh, Q7 → quận 7…), chuẩn hóa L2. Văn bản rỗng →
+  vector đơn vị cố định (tránh NaN với cosine). `OpenAIEmbedder` gửi `dimensions=1536`; `EMBEDDING_API_BASE` tùy chọn.
+  `EMBEDDING_PROVIDER=auto` dùng `Settings.resolved_embedding_provider`.
+- Chunk ~800 ký tự theo đoạn/câu, overlap ~150 ký tự theo ranh giới câu; chunk thứ 2 trở đi có tiền tố
+  "Nhà thầu X:" / "Dự án Y:". Re-index chỉ embed lại chunk có nội dung đổi; nhà thầu ngừng hoạt động → xóa document.
+- **Retrieve hybrid**: điểm = 0,6 × cosine (pgvector `<=>`) + 0,4 × max(`word_similarity` pg_trgm, tỉ lệ từ khóa không dấu
+  xuất hiện). Ứng viên = hợp top vector và top từ khóa (ILIKE / `<%`); mỗi thực thể giữ 1 chunk tốt nhất; bỏ điểm < 0,05.
+  `url` = profile_url/project_url hiện tại; `source` = data_sources của document (fallback nguồn của thực thể).
+- **Jobs**: `job_crawl`, `job_api_sync`, `job_import_csv(path, kind)`, `job_reindex_all`, `job_after_sync`,
+  `job_daily_sync`; sau đồng bộ chỉ re-embed thực thể thay đổi (kèm nhà thầu/dự án liên quan) và gọi
+  `contractor_service.recompute_profile_completeness(db)` (import lười). `enqueue(name, **kwargs)` dùng queue `default`.
+- **Worker**: `python -m app.worker` = RQ worker + luồng lập lịch 02:00 Asia/Ho_Chi_Minh (zoneinfo) xếp `daily_sync`
+  (API nếu có `DEZON_API_BASE_URL`, ngược lại crawl); khóa Redis `dezon:daily_sync:<ngày>` (SET NX) chống xếp trùng khi
+  nhiều worker. Redis chưa sẵn sàng → thử lại backoff 1→60 giây. Windows dùng `SimpleWorker` (không có fork) chỉ để dev.
+- Quan sát lệch đặc tả: hồ sơ thật Huy Hoàng (02/11/2026) đã có kinh nghiệm/đơn giá và 7 công trình; seed vẫn giữ theo
+  bảng 11.3 vì là fixture cho trường hợp thiếu dữ liệu.
+- **Sau review (02/11/2026)**:
+  - Parse tiền: viết tắt "3tr5" = 3,5 triệu, "1ty2" = 1,2 tỷ (chữ số dính liền sau đơn vị là phần thập phân). Hai số
+    chỉ được ghép thành khoảng khi nối bằng `-`, `~`, "đến", "tới"; không có dấu nối thì lấy số đầu, và số không đơn vị
+    không mượn đơn vị của số sau. Giá trị 0 ("0 đ") coi là chưa khai báo → `None`.
+  - Thẻ trong trang danh sách (`primary=False`) chỉ điền trường đang trống hoặc trường do chính trang danh sách cung cấp.
+    Nó không ghi đè trường đang thuộc nguồn khác cùng mức ưu tiên, ví dụ trang hồ sơ. Lý do: khi trang danh sách đổi
+    còn trang hồ sơ thì không, giá trị của hồ sơ sẽ bị thay và `field_sources` bị đổi nguồn, mà không có lần cập nhật
+    nào sửa lại.
+  - CSV: đơn giá không có đơn vị và nhỏ hơn 100.000 ("4,3", "4.3", ô số 4.3 trong XLSX) bị báo lỗi dòng, không đoán
+    là triệu. Trước đây "4.3" bị đọc thành 43 đồng và "4300000.0" thành 43 triệu. `force=True` áp lại file kể cả khi
+    hash không đổi. Nhập lại hệ số có nội dung giống hệt thì không bỏ cờ `approved`; chỉ bỏ khi hệ số, nhãn, nhóm
+    hoặc cơ sở thay đổi.
+  - robots.txt trả 5xx thì coi như chặn toàn bộ (RFC 9309, "unreachable"). Trước đây trường hợp này bị coi như cho phép.
+  - Runner: parser hoặc ghi DB lỗi ở một trang chỉ làm tăng `errors` và hoàn tác trang đó (savepoint), không dừng
+    cả lượt crawl.
+  - RAG còn che thêm: số có phân cách hàng nghìn ("4.300.000"), "…/m²", năm đứng riêng ("thành lập 2018"), và các
+    đơn vị tháng/ngày/căn/phòng/kỹ sư/sao… ("bảo hành 12 tháng").
+  - `job_daily_sync`: khi có `DEZON_API_BASE_URL` nhưng api_sync trả `skipped` (thiếu token) thì chuyển sang crawl.
+    `enqueue` dùng `enqueue_call(kwargs=...)` để tham số job không bị RQ hiểu nhầm là tùy chọn của RQ.
+    `recompute_profile_completeness` lỗi không còn chặn bước re-embed.
+  - API sync bỏ qua bản ghi không có `id`/`slug` (trước đây tạo nhà thầu slug "None"). Bản ghi ánh xạ lỗi chỉ tăng
+    `errors`, không làm hỏng cả lượt đồng bộ.
+
+## Frontend
+
+- **Bundle**: Vite chế độ thư viện, định dạng IIFE → một file `frontend/dist/dezon-widget.js` (~74 kB gzip, gồm React).
+  CSS import `?inline`, chèn vào **Shadow DOM** (`mode: open`) gắn trên `<div id="dezon-ai-widget">` ở cuối `body`.
+  Chỉ dùng đơn vị px (rem sẽ theo cỡ chữ gốc của dezon.vn). `useDefineForClassFields=false` để esbuild không sinh helper
+  nằm ngoài IIFE (rò biến toàn cục lên trang chủ).
+- **Cấu hình**: `document.currentScript` được lưu ngay khi script chạy → `data-api-base` → fallback
+  `VITE_API_BASE_URL` lúc build → rỗng = **cùng origin** (`/api/...`). **Không tự bật mock khi thiếu apiBase**, để không
+  bao giờ hiển thị dữ liệu giả như thật; mock chỉ bật bằng `data-mock="true"` hoặc `?dezon_mock=1`, và header hiện nhãn
+  "Chế độ giả lập". Thêm `data-open="true"` / `?dezon_open=1`; API toàn cục `window.DezonWidget.open/close/toggle()`.
+- **Trang demo**: dùng chung `frontend/index.html` cho dev server và nginx: khi build, plugin `demoPagePlugin` thay đoạn
+  giữa `<!-- dezon-widget:start/end -->` bằng thẻ nhúng thật (`data-api-base` = `VITE_API_BASE_URL`, hoặc
+  `data-mock="true"` khi biến rỗng). Trang demo cố tình có CSS "gây nhiễu" để kiểm tra cô lập style.
+- **Phiên**: `session_id` lưu `localStorage["dezon_ai_session_id"]` (mock: `dezon_ai_mock_session_id`); phiên chỉ được
+  tạo/khôi phục khi khách **mở** khung chat (không gọi API trên mọi trang). `getSession` lỗi (hết hạn/404) → tạo phiên mới.
+  Trạng thái đóng/mở giữ trong `sessionStorage` của tab.
+- **Tin nhắn cục bộ**: "Xem chi tiết", "So sánh", "Yêu cầu báo giá" gọi REST (`getContractor`, `compare`) hoặc mở form và
+  thêm khối `contractor_detail` / `comparison_table` / `quote_request_form` như tin nhắn trợ lý **chỉ ở trình duyệt**
+  (không lưu server) → mất khi tải lại trang. Nếu cần lưu, backend có thể thêm endpoint ghi tin nhắn hệ thống.
+- **Nút tương tác**: quick replies chỉ hiện ở tin nhắn trợ lý (từ server) mới nhất; nút của `summary_confirm` cũ bị vô
+  hiệu hóa. Lỗi SSE/mạng → bong bóng lỗi + nút "Thử lại" (gửi lại đúng nội dung). Luồng đóng mà không có `done`/`error`
+  → coi là lỗi "Kết nối bị gián đoạn".
+- **recordClick**: gọi khi bấm tên nhà thầu, "Xem chi tiết", "Xem hồ sơ năng lực ↗", "Yêu cầu báo giá" trên thẻ. Từ bảng
+  so sánh: dùng `recommendation_log_id` của `contractor_list` gần nhất nếu nhà thầu nằm trong kết quả đó; không có
+  log thì bỏ qua (không bịa log id). Lỗi recordClick bị nuốt (không ảnh hưởng UI).
+- **Định dạng số**: EvidenceValue luôn hiển thị `display`. Riêng các trường số thuần **không có display** trong schema —
+  diện tích (`land_area_m2`, `A_i`, `converted_area_m2`), hệ số `k_i`, `saving_min` của phương án ngân sách, trọng số/điểm
+  breakdown — được định dạng bằng bản chuyển ngữ 1-1 của `app/formatting.py` (`viNumber`, `formatM2`, `formatVnd`) trong
+  `src/utils/format.ts`. Nếu muốn bỏ hẳn định dạng phía client, backend có thể THÊM `BudgetOption.saving: EvidenceValue`.
+- **"Chưa có dữ liệu"**: EvidenceCell coi `status=unavailable`, `null/undefined` hoặc `display` rỗng là thiếu dữ liệu và
+  hiển thị chữ xám đúng chuỗi này (không badge). Bảng so sánh tự điền ô thiếu nếu `cells` ngắn hơn số nhà thầu; hồ sơ mở
+  rộng luôn hiện đủ 8 dòng thông tin mục 8.3 (khóa thiếu → "Chưa có dữ liệu"). Không có công trình → "Chưa có dữ liệu".
+- **Badge**: dạng nhãn chữ trong bảng khái toán/thẻ; dạng **chấm màu** (vùng chạm 24 px) trong bảng so sánh + chú thích
+  màu bên dưới, để vừa màn hình 360 px. Tooltip nguồn: một popover `position: fixed` dùng chung (không bị cắt trong vùng
+  cuộn ngang), hover/focus hiện tạm, bấm (tap) để ghim, Esc / bấm ra ngoài để đóng. `is_stale` → "Dữ liệu cập nhật ngày
+  dd/mm/yyyy, có thể đã cũ" (ngày định dạng từ chuỗi ISO, không qua `Date` để tránh lệch múi giờ).
+- **Miễn trừ**: nếu `EstimateResult.disclaimer` rỗng, frontend dựng câu mục 6.6 kèm nhãn + ngày nguồn đơn giá — bảng
+  khái toán không bao giờ thiếu miễn trừ.
+- **Mức phù hợp**: màu theo nhãn backend (`Phù hợp cao` xanh lá, `Phù hợp` xanh dương, `Cần đánh giá thêm` cam); điểm
+  hiển thị phụ (chữ nhỏ "Điểm N/100"), lý do là nội dung chính; mỗi lý do có chấm trạng thái của evidence nó trỏ tới.
+  Tiêu đề danh sách: "N nhà thầu phù hợp nhất với tiêu chí của anh/chị".
+- **Form báo giá**: SĐT Việt Nam hợp lệ = di động `0[35789]xxxxxxxx` hoặc cố định `02xxxxxxxxx`, chấp nhận `+84`/`84`,
+  bỏ khoảng trắng/chấm/gạch; gửi lên dạng đã chuẩn hóa. Email tùy chọn. Khách có thể bỏ chọn nhà thầu (tối thiểu 1).
+- **Mock**: fixture bám seed (Kiến Phong đủ dữ liệu; Smartcons Tech, Huy Hoàng thiếu kinh nghiệm/đơn giá) và ca nghiệm
+  thu 490 m² · 2,058–2,352 tỷ; kịch bản hội thoại 5.4 dựa trên từ khóa. Bảng khái toán mock **luôn là ca 490 m²** dù khách
+  nhập số khác; điểm/breakdown mock là số minh họa. Hồ sơ Huy Hoàng trong mock có ngày cập nhật 15/03/2026 (`is_stale`)
+  chỉ để minh họa cảnh báo dữ liệu cũ — khác seed. Ảnh dùng placehold.co như seed.
+- **Lỗi đã sửa khi kiểm tra trực quan**: popover nguồn dùng `setState(prev => ({...}))` bị React áp lại updater khi rebase
+  lane (mouseenter/focus khác độ ưu tiên) → object mới mỗi lần render → vòng lặp layout effect (React #185) làm sập
+  widget. Đã chuyển sang tính state từ ref + `setState(giá_trị)`, có test hồi quy; thêm `BlockBoundary` cô lập lỗi từng block.
+- **Docker**: `node:22-alpine` build (ARG `VITE_API_BASE_URL`) → `nginx:alpine` cổng 80; `dezon-widget.js` cache 5 phút
+  (tên file cố định) + `Access-Control-Allow-Origin: *`; trang demo `no-cache`.
+
+### Frontend — bổ sung sau review
+- **Khôi phục phiên**: chỉ bỏ `session_id` đã lưu khi `GET /api/chat/sessions/{id}` trả 4xx (phiên không còn). Lỗi
+  mạng/5xx → giữ `session_id`, hiện "Thử lại" (trước đây mọi lỗi đều xóa phiên và tạo phiên mới → mất hội thoại khi mạng chập chờn).
+- **Chống gửi trùng**: khóa đồng bộ bằng ref trong `useChat.send` (bấm quick reply/Enter 2 lần trước khi `busy` kịp render).
+- **`data-api-base` rỗng** → fallback `VITE_API_BASE_URL` (trước đây chuỗi rỗng chặn fallback). Nếu `document.currentScript`
+  null (script chèn qua trình quản lý thẻ) → tìm thẻ `script[src*="dezon-widget"]`.
+- **SĐT báo giá** gửi lên ở dạng trong nước `0xxxxxxxxx` (`+84 912 345 678` → `0912345678`) để lưu thống nhất.
+- **Form báo giá**: tối đa 5 nhà thầu (hợp đồng API); form không có nhà thầu nào → hiện lỗi rõ ràng thay vì im lặng.
+- **Bảng khái toán**: dòng "Đơn giá tham chiếu" hiện nguồn kèm "cập nhật dd/mm/yyyy" ngay trong bảng (mục 13), không chỉ trong tooltip.
+- **Phương án ngân sách**: `saving_min` = `current.cost_min − option.cost_min` → nhãn "Tiết kiệm khoảng X so với khái toán hiện tại".
+- `types.ts` thêm `Slots.asked`, `OverviewContractor`, `ContractorOverview` cho khớp `schemas/slots.py`, `schemas/matching.py`.

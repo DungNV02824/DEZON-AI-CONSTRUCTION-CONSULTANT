@@ -1,21 +1,27 @@
 from functools import lru_cache
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    # Đọc .env ở gốc repo (khi chạy từ backend/) và .env cạnh tiến trình; biến môi trường thật luôn ưu tiên.
+    model_config = SettingsConfigDict(env_file=("../.env", ".env"), extra="ignore")
 
     database_url: str = "postgresql+psycopg://dezon:dezon@localhost:5433/dezon"
     redis_url: str = "redis://localhost:6379/0"
 
-    llm_provider: str = "mock"  # mock | anthropic
-    llm_api_key: str = ""
-    llm_model: str = "claude-sonnet-5-5"
+    # auto: có API key OpenAI -> openai, không có -> mock (demo chạy được không cần key)
+    llm_provider: str = "auto"  # auto | mock | openai | anthropic
+    llm_api_key: str = Field(default="", validation_alias=AliasChoices("LLM_API_KEY", "OPENAI_API_KEY"))
+    llm_model: str = Field(default="gpt-4.1-mini", validation_alias=AliasChoices("LLM_MODEL", "MODEL_NAME"))
+    llm_base_url: str = ""  # tùy chọn: endpoint tương thích OpenAI khác
 
-    embedding_provider: str = "hash"  # hash | openai
+    # auto: có API key -> openai, không có -> hash (cục bộ, xác định)
+    embedding_provider: str = "auto"  # auto | hash | openai
     embedding_model: str = "text-embedding-3-small"
-    embedding_api_key: str = ""
+    embedding_api_key: str = Field(default="",
+                                   validation_alias=AliasChoices("EMBEDDING_API_KEY", "OPENAI_API_KEY"))
     embedding_dim: int = 1536
 
     dezon_api_base_url: str = ""
@@ -36,6 +42,18 @@ class Settings(BaseSettings):
     @property
     def allowed_origins_list(self) -> list[str]:
         return [o.strip() for o in self.allowed_origins.split(",") if o.strip()]
+
+    @property
+    def resolved_llm_provider(self) -> str:
+        if self.llm_provider != "auto":
+            return self.llm_provider
+        return "openai" if self.llm_api_key else "mock"
+
+    @property
+    def resolved_embedding_provider(self) -> str:
+        if self.embedding_provider != "auto":
+            return self.embedding_provider
+        return "openai" if self.embedding_api_key else "hash"
 
 
 @lru_cache
