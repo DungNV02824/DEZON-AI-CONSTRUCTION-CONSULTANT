@@ -110,7 +110,8 @@ def _to_option(cand: _Candidate, result: EstimateResult, current: EstimateResult
         description=cand.description + _derived_note(current, result),
         changes=cand.changes, converted_area_m2=result.converted_area_m2,
         cost_min=result.cost_min, cost_max=result.cost_max, cost=result.cost, saving_min=saving,
-        fits_budget=result.cost_min is not None and result.cost_min <= target_budget_vnd,
+        # "Vừa ngân sách" chỉ khi CẢ khoảng chi phí (kể cả cận trên) không vượt ngân sách khách nêu.
+        fits_budget=result.cost_max is not None and result.cost_max <= target_budget_vnd,
     )
 
 

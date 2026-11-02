@@ -366,3 +366,16 @@ def test_run_crawl_survives_parser_error(db, monkeypatch):
                       list_paths=("/nha-thau/tiem-nang/",), max_contractors=1, include_project_pages=False)
     assert stats["pages"] == 2 and stats["errors"] == 1  # trang hồ sơ lỗi parse được đếm, không làm dừng job
     assert stats["unchanged"] + stats["created"] + stats["updated"] == 41  # thẻ danh sách vẫn được ghi
+
+
+def test_work_location_prefers_project_name_over_page_meta():
+    """Dòng meta trang công trình ghi khu vực nhà thầu; địa danh trong tên công trình được ưu tiên."""
+    from app.ingestion.crawler.parsers import apply_location_from_name
+
+    rec = apply_location_from_name({"name": "France Indochine 22 Hà Nội", "province": "TP. Hồ Chí Minh",
+                                    "district": None, "extra": {}})
+    assert rec["province"] == "Hà Nội" and rec["extra"]["location_source"] == "project_name"
+    rec = apply_location_from_name({"name": "Indochine Villa Quận 7 Sài gòn", "province": None, "extra": {}})
+    assert (rec["province"], rec["district"]) == ("TP. Hồ Chí Minh", "Quận 7")
+    rec = apply_location_from_name({"name": "The Opera Duplex", "province": "TP. Hồ Chí Minh", "extra": {}})
+    assert rec["province"] == "TP. Hồ Chí Minh" and rec["extra"]["location_source"] == "page_meta"

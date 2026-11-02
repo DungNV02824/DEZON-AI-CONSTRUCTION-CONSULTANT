@@ -341,6 +341,20 @@ def work_project_slug(contractor_slug: str, work_slug: str) -> str:
     return f"{contractor_slug}--{work_slug}"
 
 
+def apply_location_from_name(rec: dict[str, Any]) -> dict[str, Any]:
+    """Ghi đè tỉnh/quận của công trình bằng địa danh trong tên (nếu tên có), ghi lại nguồn suy luận."""
+    from app.ai.normalize import parse_location  # hàm thuần, dùng chung bảng bí danh tỉnh/quận
+
+    loc = parse_location(rec.get("name") or "")
+    if loc.get("province"):
+        rec["province"] = loc["province"]
+        rec["district"] = loc.get("district") or rec.get("district")
+        rec.setdefault("extra", {})["location_source"] = "project_name"
+    elif rec.get("province"):
+        rec.setdefault("extra", {})["location_source"] = "page_meta"
+    return rec
+
+
 def parse_contractor_work(html: str, url: str) -> dict[str, Any]:
     """Trang `/nha-thau/<slug>/<công-trình>/` -> dict dự án (role thi_cong)."""
     soup = _soup(html)
@@ -375,6 +389,9 @@ def parse_contractor_work(html: str, url: str) -> dict[str, Any]:
             if cslug:
                 rec["contractors"].append({"slug": cslug, "name": _text(a), "profile_url": _abs(a.get("href")),
                                            "role": role})
+    # Dòng meta của trang công trình ghi khu vực của NHÀ THẦU, không phải của công trình
+    # ("France Indochine 22 Hà Nội" vẫn hiện "TP. HCM"). Địa danh trong tên công trình được ưu tiên.
+    apply_location_from_name(rec)
     if not rec["contractors"] and contractor_slug:
         rec["contractors"].append({"slug": contractor_slug, "name": None,
                                    "profile_url": f"{SITE}/nha-thau/{contractor_slug}/", "role": "thi_cong"})

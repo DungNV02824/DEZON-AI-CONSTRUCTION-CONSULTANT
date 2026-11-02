@@ -45,7 +45,7 @@ def test_typical_case_has_at_least_two_options_each_computed_by_engine():
             expected.cost_min, expected.cost_max, expected.converted_area_m2)
         assert o.cost.display == expected.cost.display
         assert o.saving_min == current.cost_min - o.cost_min > 0
-        assert o.fits_budget is (o.cost_min <= 1_200_000_000)
+        assert o.fits_budget is (o.cost_max <= 1_200_000_000)
     mins = [o.cost_min for o in options if o.code != "combined"]
     assert mins == sorted(mins)
     codes = by_code(options)
@@ -92,7 +92,7 @@ def test_quality_tier_names_lowercase_mid_sentence():
 
 
 def test_fits_budget_true_when_target_is_close():
-    _, options = run(make_input(), 1_600_000_000)
+    _, options = run(make_input(), 1_700_000_000)  # giảm 1 tầng 1,42–1,68 tỷ vừa trọn
     assert any(o.fits_budget for o in options)
     assert "combined" not in by_code(options)
 
@@ -145,3 +145,10 @@ def test_apply_changes_revalidates():
     assert new.floors == 2 and new.quality_tier == "kha"
     assert "quality_tier" in new.model_fields_set
     assert new.foundation_type is None  # mặc định để engine tính lại
+
+
+def test_fits_budget_requires_upper_bound_within_budget():
+    """Phương án 1,28–1,52 tỷ KHÔNG được gắn "Vừa ngân sách" với ngân sách 1,3 tỷ (cận trên vượt)."""
+    _, options = run(make_input(), 1_300_000_000)
+    for o in options:
+        assert o.fits_budget is (o.cost_max is not None and o.cost_max <= 1_300_000_000)

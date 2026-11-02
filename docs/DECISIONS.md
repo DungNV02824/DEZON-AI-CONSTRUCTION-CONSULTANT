@@ -762,3 +762,11 @@ Test hồi quy chính: `tests/test_chat_fixes.py` (luồng thật qua orchestrat
   phải lỗi mã.
 - Mã báo giá DZ-… chỉ lưu localStorage (W-F8). Chưa ghi tin nhắn báo giá vào lịch sử chat phía server: để sau MVP.
 
+
+## Nghiệm thu MVP — sửa sau nghiệm thu cuối
+
+- `BudgetOption.fits_budget` ("Vừa ngân sách") chỉ đúng khi **cận trên** chi phí ≤ ngân sách khách nêu. Trước đây so
+  cận dưới nên phương án 1,28–1,52 tỷ bị báo "nằm trong ngân sách 1,3 tỷ".
+- Crawler: tỉnh/quận của công trình ưu tiên địa danh trong tên công trình (`apply_location_from_name`), vì dòng meta
+  trang công trình trên dezon.vn ghi khu vực của nhà thầu. `extra.location_source` = `project_name` | `page_meta`.
+  Snapshot `dezon_snapshot.json` đã chạy lại bước này (8 công trình được sửa tỉnh/quận).
