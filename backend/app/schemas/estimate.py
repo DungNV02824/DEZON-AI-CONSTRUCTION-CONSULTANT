@@ -42,7 +42,7 @@ class EstimateInput(BaseModel):
             if self.land_width_m and self.land_length_m:
                 self.land_area_m2 = round(self.land_width_m * self.land_length_m, 2)
             else:
-                raise ValueError("Cần land_area_m2 hoặc land_width_m + land_length_m")
+                raise ValueError("Cần diện tích đất hoặc chiều rộng × chiều dài khu đất")
         return self
 
 

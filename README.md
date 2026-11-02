@@ -61,7 +61,10 @@ Xem [.env.example](.env.example). Quan trọng:
 | `OPENAI_API_KEY` | — | Key OpenAI (không commit file `.env`) |
 | `MODEL_NAME` | `gpt-4.1-mini` | Model hội thoại |
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | Model embedding (1536 chiều) |
-| `ADMIN_TOKEN` | `change-me` | Token cho `/api/admin/*` — **đổi trên production** |
+| `APP_ENV` | `development` | `production`: trang quản trị bị khóa nếu `ADMIN_TOKEN` còn mặc định |
+| `ADMIN_TOKEN` | `change-me` | Token cho `/api/admin/*` — **bắt buộc đổi trên production** |
+| `IMPORT_DIR` | `data/imports` | Thư mục duy nhất admin được nhập CSV/XLSX theo đường dẫn (ngoài ra có thể tải file lên) |
+| `FORWARDED_ALLOW_IPS` | `127.0.0.1` | IP reverse proxy được tin cho `X-Forwarded-For` (rate limit theo IP thật) |
 | `ALLOWED_ORIGINS` | `https://dezon.vn,...` | CORS (chỉ dezon.vn + môi trường dev) |
 | `STALE_DAYS` | `180` | Dữ liệu cũ hơn số ngày này hiển thị cảnh báo |
 | `CHAT_RATE_LIMIT_PER_MIN` | `20` | Giới hạn tin nhắn / phút / IP |

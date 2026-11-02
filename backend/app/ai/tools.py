@@ -294,7 +294,9 @@ def _cache_key(name: str, data: Any) -> str:
 # Handlers
 # =============================================================================================
 def _update_requirements(ctx: ToolContext, inp: UpdateProjectRequirementsIn) -> dict[str, Any]:
-    u = slot_filling.update_slots(ctx.slots, inp.model_dump(exclude_none=True))
+    # Đối chiếu với lời khách để LLM không đưa được số bịa vào slot (slot được validator coi là nguồn hợp lệ).
+    u = slot_filling.update_slots(ctx.slots, inp.model_dump(exclude_none=True),
+                                  message="\n".join(ctx.user_texts) or None)
     ctx.slots = u.slots
     return {"slots": u.slots.model_dump(mode="json", exclude={"asked"}), "missing_required": u.missing_required,
             "changed": u.changed}

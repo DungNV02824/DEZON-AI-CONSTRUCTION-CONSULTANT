@@ -605,3 +605,15 @@ Mỗi module bổ sung mục riêng khi có quyết định mới.
     số viết bằng chữ, và bản tóm tắt vẫn bắt khách xác nhận.
   - Validator coi slot là nguồn hợp lệ. Vì vậy nếu LLM tự điền một con số vào slot, con số đó sẽ qua validator, nhưng
     vẫn hiện trong bản tóm tắt để khách sửa.
+
+## Nghiệm thu MVP — xử lý vấn đề đã biết (K1–K3, K5)
+
+- K1 (guardrail): tool `update_project_requirements` đối chiếu giá trị LLM đưa vào với toàn bộ tin nhắn khách của phiên
+  (`update_slots(..., message=...)` → bộ lọc chống bịa của `normalize_raw_slots`). Số/địa danh không có trong lời khách
+  bị loại, vì slot là nguồn hợp lệ của validator.
+- K2: thêm `APP_ENV`. Khi `production` mà `ADMIN_TOKEN` rỗng hoặc `change-me` → mọi `/api/admin/*` trả 503.
+- K3: nhập file theo đường dẫn chỉ trong `IMPORT_DIR` (mặc định `data/imports`), chặn path traversal; thông báo lỗi giống
+  nhau dù file có tồn tại hay không.
+- K5: thông báo lỗi thiếu diện tích bằng tiếng Việt, không lộ tên trường.
+- docker-compose: healthcheck Postgres qua TCP (sửa lỗi backend sập ở lần khởi động đầu), `restart: unless-stopped`,
+  uvicorn `--proxy-headers` với `FORWARDED_ALLOW_IPS` mặc định `127.0.0.1` (không tin `X-Forwarded-For` giả).

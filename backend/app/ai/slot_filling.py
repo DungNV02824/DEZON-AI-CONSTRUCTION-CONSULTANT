@@ -463,9 +463,13 @@ def extract(message: str, current: Slots, provider: LLMProvider | None = None,
                       llm_used=llm_used)
 
 
-def update_slots(current: Slots, partial: dict[str, Any]) -> SlotUpdate:
-    """Gộp slot từ tham số tool `update_project_requirements` (giá trị thô, được chuẩn hóa bằng code)."""
-    found = normalize_raw_slots(partial, message=None)
+def update_slots(current: Slots, partial: dict[str, Any], message: str | None = None) -> SlotUpdate:
+    """Gộp slot từ tham số tool `update_project_requirements` (giá trị thô, được chuẩn hóa bằng code).
+
+    `message`: văn bản khách đã nói trong phiên. Khi có, áp bộ lọc chống bịa của normalize_raw_slots —
+    số/địa danh LLM đưa vào phải xuất hiện trong lời khách (guardrail 2.1: slot là nguồn hợp lệ cho validator).
+    """
+    found = normalize_raw_slots(partial, message=message)
     new_slots, changed = _merge(current or Slots(), found)
     confirmed = (current.confirmed if current else False) and not changed
     new_slots = new_slots.model_copy(update={"confirmed": confirmed})

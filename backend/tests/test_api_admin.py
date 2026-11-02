@@ -311,7 +311,7 @@ def test_sync_invalid_source(client):
     assert r.status_code == 422
 
 
-def test_sync_csv_upload_and_path(client, db):
+def test_sync_csv_upload_and_path(monkeypatch, client, db):
     content = (SAMPLES / "construction_rates.csv").read_bytes()
     r = client.post("/api/admin/sync/csv", headers=H, data={"kind": "rates"},
                     files={"file": ("construction_rates.csv", content, "text/csv")})
@@ -319,6 +319,7 @@ def test_sync_csv_upload_and_path(client, db):
     report = r.json()["report"]
     assert r.json()["status"] == "done" and report["kind"] == "rates"
     assert report["status"] in ("ok", "partial") and report["inserted"] + report["updated"] > 0
+    monkeypatch.setattr(get_settings(), "import_dir", str(SAMPLES))  # K3: chỉ đọc trong IMPORT_DIR
     r = client.post("/api/admin/sync/csv", headers=H,
                     json={"kind": "rules", "path": str(SAMPLES / "estimate_rules.csv"), "dry_run": True})
     assert r.status_code == 200 and r.json()["report"]["dry_run"] is True
@@ -393,3 +394,29 @@ def test_rule_non_finite_coefficient_vietnamese(client):
     r = client.post("/api/admin/rules", headers=H, json={"code": "foundation_pile", "coefficient": "NaN"})
     assert r.status_code == 422 and "hệ số" in r.json()["detail"]
     assert "Input should" not in r.json()["detail"]
+
+
+def test_sync_csv_path_restricted_to_import_dir(monkeypatch, client, tmp_path):
+    """K3: không đọc được file ngoài IMPORT_DIR, kể cả qua '..'; lỗi không tiết lộ file có tồn tại."""
+    monkeypatch.setattr(get_settings(), "import_dir", str(SAMPLES))
+    ok = client.post("/api/admin/sync/csv", headers=H, json={"kind": "rules", "path": "estimate_rules.csv",
+                                                             "dry_run": True})
+    assert ok.status_code == 200, ok.text
+    outside = tmp_path / "secret.csv"
+    outside.write_text("a,b\n1,2\n", encoding="utf-8")
+    for path in (str(outside), "../samples/../../README.md.csv", str(SAMPLES / ".." / "DECISIONS.csv")):
+        r = client.post("/api/admin/sync/csv", headers=H, json={"kind": "rates", "path": path})
+        assert r.status_code == 422 and "IMPORT_DIR" in r.json()["detail"]
+    missing = client.post("/api/admin/sync/csv", headers=H, json={"kind": "rates", "path": "khong-co.csv"})
+    assert missing.json()["detail"] == r.json()["detail"]  # cùng thông báo -> không dò được file tồn tại
+
+
+def test_admin_default_token_locked_in_production(monkeypatch, client):
+    """K2: APP_ENV=production + ADMIN_TOKEN mặc định -> khóa trang quản trị."""
+    s = get_settings()
+    monkeypatch.setattr(s, "app_env", "production")
+    monkeypatch.setattr(s, "admin_token", "change-me")
+    r = client.get("/api/admin/metrics", headers={"X-Admin-Token": "change-me"})
+    assert r.status_code == 503 and "ADMIN_TOKEN" in r.json()["detail"]
+    monkeypatch.setattr(s, "admin_token", "a-strong-secret-token")
+    assert client.get("/api/admin/metrics", headers={"X-Admin-Token": "a-strong-secret-token"}).status_code == 200

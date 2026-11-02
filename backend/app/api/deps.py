@@ -32,7 +32,11 @@ MAX_BIGINT = 2**63 - 1
 # ------------------------------------------------------------------ quyền admin
 def require_admin(x_admin_token: str | None = Header(default=None, alias=ADMIN_HEADER)) -> str:
     """Dependency cho /api/admin/*: thiếu hoặc sai token -> 401. So sánh bằng hmac.compare_digest."""
-    expected = get_settings().admin_token or ""
+    settings = get_settings()
+    if settings.app_env == "production" and settings.admin_token_is_default:
+        raise HTTPException(status_code=503, detail="Chưa cấu hình ADMIN_TOKEN an toàn cho môi trường production; "
+                                                    "trang quản trị bị khóa.")
+    expected = settings.admin_token or ""
     given = x_admin_token or ""
     if not expected or not given or not hmac.compare_digest(given.encode("utf-8"), expected.encode("utf-8")):
         raise HTTPException(status_code=401, detail="Thiếu hoặc sai mã quản trị (header X-Admin-Token).",

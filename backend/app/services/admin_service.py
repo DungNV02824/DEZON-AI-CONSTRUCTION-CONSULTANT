@@ -612,11 +612,17 @@ def import_upload(db: Session, content: bytes, filename: str, kind: str, *, dry_
 
 def import_path(db: Session, path: str, kind: str, *, dry_run: bool = False, force: bool = False
                 ) -> dict[str, Any]:
-    p = Path(path)
+    """Nhập file theo đường dẫn — CHỈ trong thư mục IMPORT_DIR (chặn đọc file tùy ý trên máy chủ / path traversal).
+
+    Đường dẫn tương đối được hiểu là tương đối với IMPORT_DIR. Thông báo lỗi không tiết lộ file có tồn tại hay không.
+    """
+    base = Path(get_settings().import_dir).resolve()
+    raw = Path(path)
+    p = (raw if raw.is_absolute() else base / raw).resolve()
     if p.suffix.lower() not in UPLOAD_EXTENSIONS:
         raise AdminError(422, "Chỉ nhận file .csv, .xlsx hoặc .xlsm.")
-    if not p.is_file():
-        raise AdminError(422, f"Không tìm thấy file trên máy chủ: {p.name}")
+    if not p.is_relative_to(base) or not p.is_file():
+        raise AdminError(422, "Không đọc được file: đường dẫn phải là file nằm trong thư mục import (IMPORT_DIR).")
     return import_upload(db, p.read_bytes(), p.name, kind, dry_run=dry_run, force=force)
 
 

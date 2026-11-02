@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     dezon_api_token: str = ""
     dezon_site_url: str = "https://dezon.vn"
 
+    app_env: str = "development"  # development | production
+    import_dir: str = "data/imports"  # thư mục duy nhất admin được nhập file theo đường dẫn (K3)
+
     stale_days: int = 180
     allowed_origins: str = "https://dezon.vn,http://localhost:5173,http://localhost:8080"
     admin_token: str = "change-me"
@@ -42,6 +45,10 @@ class Settings(BaseSettings):
     @property
     def allowed_origins_list(self) -> list[str]:
         return [o.strip() for o in self.allowed_origins.split(",") if o.strip()]
+
+    @property
+    def admin_token_is_default(self) -> bool:
+        return self.admin_token.strip() in ("", "change-me")
 
     @property
     def resolved_llm_provider(self) -> str:

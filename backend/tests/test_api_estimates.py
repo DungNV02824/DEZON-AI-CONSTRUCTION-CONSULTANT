@@ -56,7 +56,7 @@ def test_create_estimate_validation_errors_vietnamese(client):
     data = {k: v for k, v in ACCEPTANCE.items() if k != "land_area_m2"}
     r = client.post("/api/estimates", json=data)
     assert r.status_code == 422
-    assert "land_area_m2" in r.json()["detail"] and "Dữ liệu không hợp lệ" in r.json()["detail"]
+    assert "diện tích đất" in r.json()["detail"] and "land_area_m2" not in r.json()["detail"] and "Dữ liệu không hợp lệ" in r.json()["detail"]
     r = client.post("/api/estimates", json={**ACCEPTANCE, "floors": 0})
     assert r.status_code == 422 and "số tầng" in r.json()["detail"]
     r = client.post("/api/estimates", json={**ACCEPTANCE, "building_type": "lau_dai"})
