@@ -1,0 +1,26 @@
+# Stack thử nghiệm tích hợp trên cổng riêng (không đụng stack dev ở 5433/6379/8000/8080):
+#   docker compose -p dezon-e2e -f docker-compose.yml -f docker-compose.e2e.yml up -d --build
+services:
+  db:
+    ports: !override
+      - "5435:5432"
+  redis:
+    ports: !override
+      - "6380:6379"
+  backend:
+    ports: !override
+      - "8001:8000"
+    environment:
+      ALLOWED_ORIGINS: http://localhost:8081
+      LLM_PROVIDER: mock
+      EMBEDDING_PROVIDER: hash
+  worker:
+    environment:
+      LLM_PROVIDER: mock
+      EMBEDDING_PROVIDER: hash
+  frontend:
+    build:
+      args:
+        VITE_API_BASE_URL: http://localhost:8001
+    ports: !override
+      - "8081:80"

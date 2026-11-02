@@ -418,3 +418,190 @@ Mỗi module bổ sung mục riêng khi có quyết định mới.
 - **Bảng khái toán**: dòng "Đơn giá tham chiếu" hiện nguồn kèm "cập nhật dd/mm/yyyy" ngay trong bảng (mục 13), không chỉ trong tooltip.
 - **Phương án ngân sách**: `saving_min` = `current.cost_min − option.cost_min` → nhãn "Tiết kiệm khoảng X so với khái toán hiện tại".
 - `types.ts` thêm `Slots.asked`, `OverviewContractor`, `ContractorOverview` cho khớp `schemas/slots.py`, `schemas/matching.py`.
+
+## REST API (trừ chat), Admin tối thiểu & đo lường (`app/api/{estimates,contractors,quotes,admin,deps}.py`, `app/services/{admin_service,metrics_service}.py`)
+
+- **Lỗi validation 422 tiếng Việt**: FastAPI không cho đăng ký exception handler ở cấp router và không được sửa `main.py`,
+  nên các router dùng `route_class=VietnameseRoute` (deps.py) để bắt `RequestValidationError` → `{"detail": "<chuỗi tiếng
+  Việt>", "errors": [{loc, field, message, type}]}`. `detail` là **chuỗi** để widget (client.ts) hiển thị thẳng. Lỗi nghiệp vụ
+  (ValueError, QuoteRequestError…) → 422/404/409 với thông báo tiếng Việt; không trả stack trace.
+- **Wrapper response** (`{items,total}`, `{rate,rate_data}`, `{ids,code}`, `{ok}`) khai báo ngay trong module API (chỉ gói lại
+  kiểu của `app/schemas`), không thêm file schema dùng chung.
+- **`chat_session_id` không tồn tại** ở `POST /api/estimates` → bỏ qua (lưu NULL) thay vì lỗi khóa ngoại — giống
+  `match_contractors`. Khóa id lớn hơn BIGINT trong path/body → 404/422 thay vì lỗi DB.
+- **Compare với `estimate_session_id` không tồn tại** → vẫn trả ma trận, hàng "Mức phù hợp" = "Chưa có dữ liệu" (không chặn
+  khách so sánh vì một phiên khái toán cũ). Không có bộ trọng số active → 503 (match/compare).
+- **`POST /api/quote-requests` trả 201** `{ids, code}` (đúng hợp đồng; không thêm trường).
+- **Token admin**: `X-Admin-Token` so với `ADMIN_TOKEN` bằng `hmac.compare_digest`; token rỗng luôn bị từ chối. Mặc định
+  `change-me` trong config — **phải đổi trên production**. Chưa có danh tính từng quản trị viên: `verified_by` lấy từ body
+  (mặc định "admin"). `GET /admin` (trang tĩnh `app/static/admin.html`) không cần token; trang hỏi token, lưu ở
+  `sessionStorage` và gửi qua header; mọi nội dung động render bằng `textContent` (chống XSS từ chi tiết vi phạm/nhãn nguồn).
+- **"Duyệt" đơn giá = xác minh nguồn**: `construction_rates` không có cột `approved`; trạng thái hiển thị lấy từ
+  `data_sources.status` (mục 4.4). `POST /api/admin/rates/{id}/approve` đặt nguồn của đơn giá thành `verified` → mọi đơn giá
+  cùng nguồn (vd cả một file CSV) được duyệt theo; response trả `affected_rates`. Đơn giá tạo qua admin (không truyền
+  `source_id`) có nguồn `dezon_editorial` riêng (`reference`, hoặc `verified` nếu `approved=true`).
+- **Đơn giá đã dùng trong khái toán** (`estimate_sessions.rate_id`): không xóa, không sửa giá/tỉnh/mức/ngày hiệu lực (409) —
+  chỉ đặt `effective_to` rồi tạo đơn giá mới, để giữ dấu vết.
+- **Hệ số**: `POST /api/admin/rules` tạo phiên bản mới (version = max + 1 theo `code`; nhóm/nhãn/cơ sở kế thừa bản mới nhất
+  nếu bỏ trống; mã mới phải đủ). `PUT` chỉ đổi `label_vi`, `is_default`, `approved`; đổi hệ số/nhóm/cơ sở → 422 "hãy tạo phiên
+  bản mới". Không xóa hệ số đang duyệt (409). Khái toán tự dùng bản đã duyệt mới nhất (estimate_service.load_ruleset).
+- **Trọng số**: đúng 6 khóa `CRITERIA_KEYS`, mỗi giá trị 0..1, tổng = 1 ± 0,001. Tạo/kích hoạt chạy dưới
+  `pg_advisory_xact_lock` để luôn đúng 1 bản active; không cho tắt bản active duy nhất (422), không xóa bản active hoặc bản đã
+  có `recommendation_logs` (409, giữ để so sánh A/B). Nội dung trọng số của một version là bất biến.
+- **Đồng bộ** `POST /api/admin/sync/{source}`: `api|crawl|reindex|after_sync` → `app.jobs.enqueue` (`api_sync`, `crawl`,
+  `reindex_all`, `after_sync`), kết nối Redis có timeout 2 s + `ping()`; lỗi → 503 kèm hướng dẫn (REDIS_URL, `python -m
+  app.worker`). `max_pages` (1..1000) cho api/crawl. `csv` chạy **đồng bộ** `import_table` (file multipart trường `file`, thân
+  request thô kèm `?filename=`, hoặc `path` trên máy chủ) với `kind=rates|rules`, trả báo cáo. `path` chỉ nhận .csv/.xlsx/.xlsm
+  và chỉ admin có token gọi được. `POST /api/admin/import/{kind}` tương tự (tham số `dry_run`, `force`); giới hạn 5 MB (413).
+- **python-multipart**: thêm vào `pyproject.toml` (cần cho upload). Endpoint upload đọc form bằng `request.form()` lúc chạy
+  (không khai báo `File()`), nên app vẫn khởi động được nếu môi trường thiếu thư viện này — chỉ upload multipart báo 422.
+- **Analytics**: `estimate_created` (POST /api/estimates, props estimate_session_id/converted_area/cost), `contractor_clicked`
+  (props recommendation_log_id, contractor_id, rank, weights_version; session_id = phiên chat của log). `quote_request_created`
+  do quote_service ghi. `slots_completed` (props.turns) do orchestrator ghi — chưa có thì chỉ số tương ứng = null.
+- **Chỉ số mục 12** (`GET /api/admin/metrics`, mỗi chỉ số `{key, label_vi, value, unit, numerator, denominator, sample_size,
+  note, breakdown}`; thiếu dữ liệu → `value=null` + ghi chú "Chưa có dữ liệu để tính: …"):
+  - Hoàn thành khái toán = số phiên chat có ≥ 1 `estimate_sessions` / số phiên chat (khái toán gọi thẳng API không có phiên
+    chat không tính vào tử số).
+  - Số lượt hỏi trung bình = trung bình `props.turns` của sự kiện `slots_completed`.
+  - Độ chính xác khái toán: chỉ dùng `contractor_quotes.total_amount` có gắn khái toán qua `quote_requests` (báo giá chỉ có
+    đơn giá/m² bị bỏ qua và ghi số lượng trong note); tách 2 chỉ số: % nằm trong `[cost_min, cost_max]` và sai số trung vị
+    `(quote − midpoint)/midpoint` (dương = báo giá cao hơn).
+  - Chọn nhà thầu theo thứ hạng: value = lượt bấm / lượt hiển thị; breakdown theo rank gồm `clicked`, `quoted`. Yêu cầu báo
+    giá được gắn với **một** lượt đề xuất (gần nhất trước lúc gửi, chứa nhà thầu đó) qua `estimate_session_id` chung hoặc sự kiện
+    `quote_request_created` cùng phiên chat.
+  - Tỷ lệ gửi yêu cầu báo giá = số "phiên có matching" đã gửi ≥ 1 yêu cầu / số phiên có matching (phiên = phiên chat, nếu
+    không có thì phiên khái toán, nếu không có nữa thì từng log) — đúng định nghĩa mục 12; breakdown kèm tỷ lệ thô
+    `quote_requests / recommendation_logs`.
+  - Vi phạm guardrail = số dòng `guardrail_violations` / số `chat_messages` role=assistant (một câu có thể nhiều vi phạm,
+    kể cả lần sinh lại) + breakdown theo rule.
+  - Độ phủ: nhà thầu đang hoạt động; "có đơn giá" = có `rough_price_min` hoặc `finish_price_min`; "trường verified" = trường
+    hồ sơ có giá trị mà nguồn (`field_sources[field]`, mặc định `source_id`) có `data_sources.status = verified`.
+
+## AI Orchestrator, tools, providers & Chat API/SSE (`app/ai/{orchestrator,tools,blocks,state}.py`, `app/ai/providers/*`, `app/services/chat_service.py`, `app/api/chat.py`)
+
+- **Trạng thái phiên**: lưu trong `chat_sessions.slots` dưới khóa nội bộ `_state` (`app/ai/state.py` `SessionState`:
+  `expected_slots` của câu hỏi trước, `user_turns`, cờ đã ghi `slots_completed`, khái toán hiện tại `{id, cost_min,
+  cost_max, cost_display, slots_hash}`, `budget_checked_for`, `matched_for`, `recommendation_log_id`, danh sách nhà thầu
+  vừa đề xuất `{id, name, slug}`, cờ `presented`). Không cần migration; `_state` luôn bị loại khỏi slots trả frontend
+  (POST/GET session, event `done`). Lượt đầu dùng `GREETING_EXPECTED_SLOTS` (phiên tạo qua API đã lưu sẵn).
+- **Luồng chính do code bảo đảm, không phụ thuộc LLM nhớ gọi tool**: thiếu slot bắt buộc → câu hỏi `dialog.next_question`
+  kèm quick replies; đủ slot mà chưa xác nhận → `build_summary` + `summary_confirm`; đã xác nhận mà chưa có khái toán cho
+  đúng bộ slot (so `slots_hash`) → orchestrator TỰ gọi `calculate_estimate`; ngân sách < `cost_min` → tự gọi
+  `suggest_budget_adjustments`; có khái toán mà chưa matching cho cặp (khái toán, ngân sách) → tự gọi `search_contractors`
+  (kèm `estimate_session_id`), rồi hỏi ngân sách nếu chưa có (`budget_question`; câu chữ riêng vì nhà thầu đã được đề xuất
+  ngay lượt đó). Khi có ngân sách mới, matching chạy lại với ngân sách. Tool tự gọi chạy TRƯỚC khi gọi LLM và được đưa vào
+  hội thoại dưới dạng lượt assistant tool_calls (id `auto_*`) + tool result, để LLM chỉ cần giải thích.
+- **Câu hỏi/tóm tắt do code nối vào cuối văn bản**: LLM được báo qua khối trạng thái (`he_thong_se_tu_them`) để không hỏi
+  lại. Nhờ vậy việc hỏi đúng slot thiếu được bảo đảm bằng code. Nếu LLM gọi `update_project_requirements` làm đổi slot giữa
+  lượt, câu hỏi/tóm tắt được dựng lại theo slot mới.
+- **Giữ xác nhận khi chỉ đổi ngân sách/thời gian khởi công** (`NON_ESTIMATE_SLOTS`): `slot_filling.extract` đặt
+  `confirmed=False` khi có slot đổi; orchestrator khôi phục `confirmed=True` nếu mọi slot đổi đều không ảnh hưởng con số
+  khái toán. Đổi slot khái toán → hủy khái toán/matching hiện tại và tóm tắt lại để xác nhận. "Tôi muốn sửa lại" (không đổi
+  slot) → hiện lại tóm tắt.
+- **Guardrail trong tool (bằng code)**: `calculate_estimate` do LLM gọi bị từ chối khi khách chưa xác nhận tóm tắt. Tham số
+  truyền vào ghi đè slots (phương án "nếu… thì sao"); chỉ khái toán tính đúng theo slots mới thành "khái toán hiện tại".
+  Khái toán trùng trong một lượt được khử trùng lặp (không tạo thêm `estimate_sessions`). `create_quote_request` chỉ nhận
+  SĐT/tên có xuất hiện trong tin nhắn của khách (chống LLM bịa thông tin liên hệ); bỏ trống `contractor_ids` /
+  `estimate_session_id` = nhà thầu vừa đề xuất (tối đa 5) / khái toán hiện tại. `get_contractor_profile` và
+  `get_contractor_projects` nhận id, slug hoặc **tên** (ưu tiên nhà thầu vừa đề xuất, sau đó lấy kết quả đầu của
+  `search_contractors_simple(q=tên)`). Có thêm tool `get_contractor_overview` (mục 8.4).
+- **Validator**: `tool_results` = mọi kết quả tool thành công trong lượt (kể cả tool tự gọi) + `("session_context",
+  {"slots": ...})` + kết quả gần nhất của từng tool ở các lượt trước, bọc thành `("context:<tool>", {"previous": ...})`
+  (để LLM nhắc lại được con số đã hiển thị, nhưng câu dự phòng không lặp lại kết quả cũ). `user_texts` = mọi tin nhắn
+  khách trong phiên. Validator kiểm tra phần văn bản do LLM viết. Phần code nối thêm (câu hỏi, tóm tắt, "Chi phí sơ bộ dự
+  kiến: <display>", ghi chú "không phải báo giá", "chưa có phương án nào… trong ngân sách") dựng từ chuỗi `display`/dialog
+  nên được tin cậy. Mỗi lần bị chặn đều gọi `record_violations` + commit. Câu dự phòng chung (GENERIC_APOLOGY) bị bỏ nếu
+  lượt đã có câu hỏi/tóm tắt do code dựng.
+- **Bảo đảm nội dung bắt buộc**: lượt có khái toán mà văn bản LLM không chứa nguyên `cost.display` → code thêm câu "Chi
+  phí sơ bộ dự kiến: …"; không nhắc "báo giá" → thêm "Đây là khái toán sơ bộ, không phải báo giá thi công."
+- **Kết quả tool gửi LLM**: JSON `{"ok": true, "result": <rút gọn>}` hoặc `{"is_error": true, "error": "<tiếng Việt>"}`.
+  Rút gọn: bỏ ảnh/avatar/breakdown, cắt danh sách dự án còn 5, cắt chuỗi > 500 ký tự; GIỮ `value/display/status/source/
+  is_stale`. Validator, UI block và DB dùng kết quả ĐẦY ĐỦ (`chat_messages.tool_payload = {arguments, result, is_error,
+  error, forced}`).
+- **UI block** (`blocks.py`), theo thứ tự: estimate_table → budget_options → contractor_list → comparison_table →
+  contractor_detail (kèm `estimate_session_id`) → quote_request_form → source_badges → summary_confirm → quick_replies.
+  `source_badges`: nguồn của mọi EvidenceValue có giá trị trong kết quả tool của lượt, khử trùng lặp theo (label, url,
+  ngày); bỏ nguồn "Ngân sách do anh/chị cung cấp" và nguồn không có cả url lẫn ngày; tối đa 8 chip. `quote_request_form`
+  hiện khi tin nhắn khách có "báo giá" (code phát hiện) và lượt đó chưa tạo yêu cầu; danh sách nhà thầu = nhà thầu vừa đề
+  xuất (hoặc nhà thầu vừa xem hồ sơ). Sau `contractor_list`, nếu không cần hỏi ngân sách, có quick replies "So sánh các
+  nhà thầu" / "Yêu cầu báo giá".
+- **Stage**: `collect` (thiếu slot) → `estimate` (đủ slot: đang tóm tắt hoặc đã khái toán) → `match` (đã đề xuất nhà
+  thầu) → `present` (đã so sánh / xem hồ sơ / gửi báo giá). Đổi slot khái toán đưa về bước tóm tắt (`estimate`).
+- **Analytics**: `session_started` (tạo phiên); `slots_completed {turns}` (lần đầu đủ slot bắt buộc; turns = số tin nhắn
+  khách tới lúc đó); `estimate_created {estimate_session_id, from_slots, has_cost}`; `quote_request_created` do
+  quote_service ghi.
+- **Lỗi LLM**: provider ném `LLMError` (hoặc lỗi bất ngờ) thì không trả 500: tool tự gọi vẫn chạy, văn bản = câu dự phòng
+  từ kết quả tool + câu hỏi/tóm tắt do code; không có gì thì trả "hệ thống tư vấn đang bận…". Lỗi khi sinh lại → câu dự
+  phòng. Giới hạn `settings.max_tool_rounds` (6) vòng tool do LLM gọi mỗi lượt (tool tự gọi không tính); hết vòng thì lấy
+  văn bản của lần gọi kế tiếp và bỏ qua tool call thừa.
+- **SSE**: cả lượt (gồm validator và sinh lại) được tính xong rồi mới phát sự kiện, vì hợp đồng chỉ cho stream văn bản đã
+  duyệt. Văn bản chia thành mảnh ≤ 48 ký tự theo từ; thứ tự text… ui_block… done. Lỗi bất ngờ trong lượt → rollback + một
+  event `error` (HTTP 200). Phiên không tồn tại hoặc id sai định dạng → 404 JSON trước khi stream. Nội dung 1..2000 ký tự
+  sau khi strip, rỗng → 422. Tin nhắn khách được commit ngay đầu lượt.
+- **Rate limit** 20 tin/phút/IP (`chat_rate_limit_per_min`): Redis cửa sổ cố định theo phút (`INCR` + `EXPIRE`, khóa
+  `dezon:rl:chat:<ip>:<phút>`). Không kết nối được Redis lúc khởi tạo, hoặc Redis lỗi khi đếm → cửa sổ trượt 60 giây trong
+  bộ nhớ tiến trình. Vượt → 429 JSON `{"detail": "<tiếng Việt>"}` + `Retry-After`. Rate limit được kiểm tra trước khi tra
+  phiên. IP = `request.client.host`; sau proxy cần chạy uvicorn `--proxy-headers --forwarded-allow-ips` để không bị giả
+  `X-Forwarded-For`.
+- **Providers**: `get_provider()` chọn theo `resolved_llm_provider`. OpenAI (chính, `gpt-4.1-mini`): Chat Completions,
+  `tool_choice="auto"`, temperature 0.2 (extract: 0), timeout 60 giây, `max_retries=2`; extract bằng `response_format`
+  json_schema `strict: true`; lỗi SDK → `LLMError(kind=rate_limit|timeout|connection|auth|bad_request|server|unknown)`.
+  Anthropic (tùy chọn): `max_tokens=16000`, `output_config={"effort": "low"}`, không gửi temperature/top_p/thinking/
+  tool_choice; nếu `LLM_MODEL` vẫn là model OpenAI (`gpt-*`) thì dùng `claude-opus-5-5`. `response.content` được giữ ở
+  `raw` và gửi lại nguyên vẹn trong các vòng tool; nhiều tool_result gộp vào MỘT user message; cờ `is_error` của
+  tool_result suy từ JSON `{"is_error": true}`. Chưa bật tham số `fallbacks` phía máy chủ (beta) cho `refusal`: refusal
+  hiện trả văn bản rỗng và orchestrator dùng câu dự phòng.
+- **MockProvider** (demo không cần key): chọn tool theo từ khóa trong tin nhắn cuối. "so sánh" → compare (tìm nhà thầu
+  trước nếu chưa có); "đơn giá/hồ sơ của <Tên>" → get_contractor_profile; "<Tên> … dự án" → get_contractor_projects;
+  "tốt nhất/uy tín/nhà thầu nào/thi công … tốt" → get_contractor_overview; "báo giá" + SĐT + "tên tôi là …" →
+  create_quote_request; "tìm/đề xuất nhà thầu" → search_contractors; "đơn giá" → get_reference_rates; câu hỏi khác ngoài
+  giai đoạn thu thập → search_knowledge. Văn bản chỉ ghép chuỗi `display`/văn bản engine. `MockProvider(lie_text=…)` dùng
+  cho test guardrail. Tên nhà thầu được nhận diện bằng cụm Viết Hoa sau "của/nhà thầu/hồ sơ/đơn vị/công ty/về"; khách gõ
+  tên không viết hoa chỉ được nhận nếu nhà thầu đó vừa được đề xuất trong phiên.
+
+## REST API — kết quả review (giới hạn đầu vào, bảo mật trang admin)
+
+- `POST /api/estimates` (`EstimateCreateIn`, chỉ nằm trong router, KHÔNG sửa `EstimateInput` dùng chung): tỉnh/thành
+  không được rỗng hoặc chỉ có khoảng trắng; chiều rộng/dài ≤ 5.000 m; các diện tích ≤ 200.000 m²; độ sâu hầm ≤ 100 m.
+  Diện tích suy ra từ rộng × dài mà vượt giới hạn → 422. Lưu khái toán bị tràn cột số (`DataError`, ví dụ đơn giá admin
+  nhập cực lớn × diện tích lớn) → rollback + 422 "Quy mô công trình vượt giới hạn tính toán…" thay vì 500.
+- `budget-adjustments`: `target_budget_vnd` ≤ 10^15 VND (1 triệu tỷ). Trước khi sửa, 10^30 vẫn trả 200 và hiển thị
+  "1.000.000.000.000.000.000.000 tỷ".
+- `POST /api/contractors/match` (`MatchIn`): tỉnh không rỗng, `budget_vnd` trong (0, 10^15], `floors` trong 1..50,
+  `converted_area_m2` trong (0, 10^8]. Trước khi sửa, số âm hoặc tỉnh rỗng vẫn chạy matching và ghi `recommendation_logs`.
+- `GET /api/rates`: tỉnh chỉ có khoảng trắng → 422.
+- `POST /api/quote-requests`: họ tên chỉ có khoảng trắng → 422 (trước khi sửa: lưu họ tên rỗng).
+- Lỗi 422 có thêm nhãn tiếng Việt cho tham số đường dẫn/admin (log_id, slug, source, kind, version…). Lỗi
+  `finite_number` (NaN/Infinity) cũng có thông báo tiếng Việt.
+- Trang `/admin`: URL nguồn chỉ thành link khi bắt đầu bằng http(s). Mục đích: chặn `javascript:` từ dữ liệu crawl/API.
+  Đã kiểm tra trên trình duyệt thật (Playwright, uvicorn tạm trên DB dev): nhập mã, cả 7 tab đều tải được dữ liệu, console
+  không có lỗi JS.
+
+## AI Orchestrator & Chat API/SSE — kết quả review
+
+- **Câu hỏi không ghi đè thông tin công trình.** Khi khách đã cung cấp đủ slot bắt buộc, câu hỏi (`detect_intent` =
+  question) không được đổi các slot ảnh hưởng khái toán. Ví dụ "Nhà thầu nào thi công biệt thự tốt tại TP.HCM?" trước
+  đây đổi `building_type` sang biệt thự; "đơn giá hoàn thiện ở HCM?" đổi `work_scope`. Cả hai làm mất khái toán đã xác
+  nhận và hiện lại tóm tắt. Giờ chỉ nhận ngân sách và thời gian từ câu hỏi. Khách muốn đổi thì nói rõ ("đổi sang
+  biệt thự", "sửa lại thành 3 tầng"), khi đó intent là edit. Câu "nếu ... thì sao" để LLM gọi `calculate_estimate` với
+  tham số giả định.
+- **Lượt thu thập: chỉ code được hỏi.** Khi code nối câu hỏi slot hoặc bản tóm tắt vào cuối, mọi câu hỏi (câu kết thúc
+  bằng "?") trong phần LLM viết đều bị bỏ, trừ khi khách đang hỏi. Như vậy quy tắc "không hỏi lại slot đã có / không
+  hỏi trùng" được code bảo đảm, không chỉ dựa vào prompt. Chữ viết tắt "TP." không bị coi là hết câu.
+- **"Sửa lại" mà chưa có thông tin mới:** trả lời bằng câu "anh/chị muốn sửa thông tin nào ạ?…", rồi mới hiện bản tóm
+  tắt và summary_confirm. Trước đây chỉ lặp lại bản tóm tắt.
+- **Ghi chú "không phải báo giá" cho khái toán:** chỉ coi là đã có khi văn bản chứa cụm "không phải (là) báo giá". Trước
+  đây chỉ cần chữ "báo giá" xuất hiện là đủ, nên câu "gửi yêu cầu báo giá" cũng làm mất ghi chú.
+- Sự kiện `slots_completed` được commit ngay, để tool lỗi hệ thống (`db.rollback()`) không làm mất sự kiện.
+- MockProvider:
+  - Chưa có nhà thầu đề xuất thì không nhắc tới "form bên dưới", vì khi đó hệ thống không hiện form.
+  - `get_reference_rates` lấy phạm vi, loại công trình và khu vực trong câu hỏi.
+  - Không gọi tổng quan nhà thầu khi hệ thống vừa chạy `search_contractors` trong cùng lượt.
+- OpenAIProvider: timeout 30 giây mỗi lần thử, tối đa 2 lần thử lại. Khách đang chờ SSE nên không để 60 giây × 3.
+- AnthropicProvider: bỏ các tin assistant chỉ có văn bản ở đầu lịch sử (lời chào), để hội thoại gửi API bắt đầu bằng
+  lượt user.
+- Còn mở:
+  - Tham số `update_project_requirements` của LLM không bị đối chiếu với tin nhắn khách. Lý do giữ nguyên: cần để hiểu
+    số viết bằng chữ, và bản tóm tắt vẫn bắt khách xác nhận.
+  - Validator coi slot là nguồn hợp lệ. Vì vậy nếu LLM tự điền một con số vào slot, con số đó sẽ qua validator, nhưng
+    vẫn hiện trong bản tóm tắt để khách sửa.

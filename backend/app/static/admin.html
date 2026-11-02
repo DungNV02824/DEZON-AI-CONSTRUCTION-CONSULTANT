@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Dezon AI Consultant — Quản trị</title>
+<style>
+  :root { --c: #1554c0; --bg: #f5f7fb; --line: #dde3ee; --muted: #667085; --ok: #157f3b; --warn: #b54708; --err: #b42318; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #1d2433; background: var(--bg); }
+  header { background: #fff; border-bottom: 1px solid var(--line); padding: 12px 20px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  header h1 { font-size: 17px; margin: 0; color: var(--c); }
+  header .auth { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  nav { display: flex; gap: 4px; padding: 8px 20px 0; flex-wrap: wrap; }
+  nav button { border: 1px solid var(--line); border-bottom: none; background: #eef2f9; padding: 8px 14px; border-radius: 8px 8px 0 0; cursor: pointer; font: inherit; }
+  nav button.active { background: #fff; color: var(--c); font-weight: 600; }
+  main { background: #fff; margin: 0 20px 20px; border: 1px solid var(--line); border-radius: 0 8px 8px 8px; padding: 16px 20px; min-height: 60vh; }
+  section { display: none; } section.active { display: block; }
+  h2 { font-size: 16px; margin: 4px 0 12px; } h3 { font-size: 14px; margin: 18px 0 8px; }
+  input, select, textarea { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+  input[type=number] { width: 110px; } input[type=checkbox] { width: auto; }
+  button.btn { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--c); background: var(--c); color: #fff; cursor: pointer; }
+  button.btn.secondary { background: #fff; color: var(--c); } button.btn.danger { background: #fff; color: var(--err); border-color: var(--err); }
+  button.btn:disabled { opacity: .5; cursor: default; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 13px; }
+  th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background: #f8fafc; font-weight: 600; position: sticky; top: 0; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin: 8px 0; }
+  .row label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+  .card { border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+  .card .v { font-size: 24px; font-weight: 700; color: var(--c); margin: 4px 0; }
+  .card .v.na { color: var(--muted); font-size: 16px; font-weight: 500; }
+  .card .t { font-weight: 600; } .muted { color: var(--muted); font-size: 12px; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; background: #eef2f9; }
+  .badge.verified { background: #dcfae6; color: var(--ok); } .badge.on_dezon { background: #dbeafe; color: #1e40af; }
+  .badge.reference { background: #fef0c7; color: var(--warn); } .badge.unavailable { background: #eaecf0; color: var(--muted); }
+  .badge.active { background: #dcfae6; color: var(--ok); }
+  #toast { position: fixed; right: 16px; bottom: 16px; max-width: 460px; padding: 10px 14px; border-radius: 8px; color: #fff; display: none; white-space: pre-wrap; z-index: 9; }
+  #toast.ok { background: var(--ok); } #toast.err { background: var(--err); }
+  pre { background: #f8fafc; border: 1px solid var(--line); border-radius: 6px; padding: 10px; overflow: auto; max-height: 360px; font-size: 12px; }
+  .scroll { max-height: 560px; overflow: auto; }
+  .sum.bad { color: var(--err); font-weight: 600; } .sum.good { color: var(--ok); font-weight: 600; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Dezon AI Consultant — Quản trị</h1>
+  <span class="muted">Dữ liệu đơn giá, hệ số, trọng số, nguồn và chỉ số đo lường (mục 11–12)</span>
+  <div class="auth">
+    <input id="token" type="password" placeholder="Mã quản trị (X-Admin-Token)" autocomplete="off" size="28">
+    <button class="btn" id="saveToken">Lưu mã</button>
+    <button class="btn secondary" id="clearToken">Xóa</button>
+  </div>
+</header>
+<nav id="tabs">
+  <button data-tab="metrics" class="active">Chỉ số</button>
+  <button data-tab="violations">Vi phạm guardrail</button>
+  <button data-tab="rates">Đơn giá</button>
+  <button data-tab="rules">Hệ số khái toán</button>
+  <button data-tab="weights">Trọng số matching</button>
+  <button data-tab="sources">Nguồn dữ liệu</button>
+  <button data-tab="sync">Đồng bộ &amp; nhập file</button>
+</nav>
+<main>
+  <section id="tab-metrics" class="active">
+    <div class="row"><h2 style="margin:0">Chỉ số đo lường sau MVP</h2><button class="btn secondary" id="reloadMetrics">Tải lại</button></div>
+    <p class="muted" id="metricsTime"></p>
+    <div class="cards" id="metricCards"></div>
+    <h3>Tỷ lệ chọn nhà thầu theo thứ hạng</h3>
+    <table id="rankTable"><thead><tr><th>Thứ hạng</th><th>Lượt hiển thị</th><th>Lượt bấm</th><th>Tỷ lệ bấm</th><th>Yêu cầu báo giá</th><th>Tỷ lệ gửi báo giá</th></tr></thead><tbody></tbody></table>
+    <h3>Vi phạm theo quy tắc</h3>
+    <table id="ruleTable"><thead><tr><th>Quy tắc</th><th>Số lần</th></tr></thead><tbody></tbody></table>
+    <h3>Tổng số bản ghi</h3>
+    <table id="totalsTable"><tbody></tbody></table>
+  </section>
+
+  <section id="tab-violations">
+    <div class="row">
+      <h2 style="margin:0">Vi phạm guardrail</h2>
+      <label>Quy tắc<input id="vRule" placeholder="vd untraceable_number"></label>
+      <label>Số dòng<select id="vLimit"><option>50</option><option>100</option><option>200</option></select></label>
+      <button class="btn secondary" id="reloadViolations">Tải</button>
+      <span class="muted" id="vTotal"></span>
+    </div>
+    <div class="scroll"><table id="vTable"><thead><tr><th>#</th><th>Thời điểm</th><th>Quy tắc</th><th>Phiên</th><th>Đoạn vi phạm</th><th>Chi tiết</th><th>Lần sinh</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section id="tab-rates">
+    <div class="row">
+      <h2 style="margin:0">Đơn giá tham chiếu</h2>
+      <label>Loại công trình<select id="rBt" class="sel-bt" data-any="1"></select></label>
+      <label>Phạm vi<select id="rWs" class="sel-ws" data-any="1"></select></label>
+      <label>Tỉnh/thành<input id="rProv" placeholder="vd TP. Hồ Chí Minh hoặc *"></label>
+      <button class="btn secondary" id="reloadRates">Lọc</button>
+      <span class="muted" id="rTotal"></span>
+    </div>
+    <p class="muted">"Duyệt" một đơn giá = xác minh nguồn của nó (trạng thái nguồn → Đã xác minh); mọi đơn giá cùng nguồn được duyệt theo.</p>
+    <div class="scroll"><table id="rTable"><thead><tr><th>#</th><th>Loại</th><th>Tỉnh</th><th>Phạm vi</th><th>Mức</th><th>Đơn giá (VND/m²)</th><th>Hiệu lực</th><th>Nguồn</th><th></th></tr></thead><tbody></tbody></table></div>
+    <h3>Thêm đơn giá</h3>
+    <form id="rateForm" class="row">
+      <label>Loại công trình<select name="building_type" class="sel-bt"></select></label>
+      <label>Tỉnh/thành<input name="province" required placeholder="* = toàn quốc"></label>
+      <label>Phạm vi<select name="work_scope" class="sel-ws"></select></label>
+      <label>Mức chất lượng<select name="quality_tier" class="sel-qt"></select></label>
+      <label>Giá thấp nhất<input name="price_min" type="number" min="100000" step="50000" required></label>
+      <label>Giá cao nhất<input name="price_max" type="number" min="100000" step="50000" required></label>
+      <label>Hiệu lực từ<input name="effective_from" type="date" required></label>
+      <label>Hiệu lực đến<input name="effective_to" type="date"></label>
+      <label>Đã duyệt<input name="approved" type="checkbox"></label>
+      <button class="btn" type="submit">Thêm</button>
+    </form>
+  </section>
+
+  <section id="tab-rules">
+    <div class="row">
+      <h2 style="margin:0">Hệ số khái toán</h2>
+      <label>Hiển thị<select id="ruLatest"><option value="1">Phiên bản mới nhất mỗi mã</option><option value="0">Tất cả phiên bản</option></select></label>
+      <button class="btn secondary" id="reloadRules">Tải</button>
+    </div>
+    <p class="muted">Khái toán dùng phiên bản đã duyệt mới nhất của mỗi mã; chưa có bản duyệt thì dùng bản mới nhất và cảnh báo "Hệ số khái toán chưa được Dezon phê duyệt chính thức".</p>
+    <div class="scroll"><table id="ruTable"><thead><tr><th>Mã</th><th>Nhóm</th><th>Nhãn</th><th>Hệ số</th><th>Cơ sở</th><th>Mặc định</th><th>Phiên bản</th><th>Trạng thái</th><th></th></tr></thead><tbody></tbody></table></div>
+    <h3>Tạo phiên bản hệ số mới</h3>
+    <form id="ruleForm" class="row">
+      <label>Mã<input name="code" required placeholder="vd foundation_pile"></label>
+      <label>Hệ số<input name="coefficient" type="number" step="0.001" min="0.001" required></label>
+      <label>Nhãn (bỏ trống = giữ nhãn cũ)<input name="label_vi"></label>
+      <label>Nhóm (mã mới)<input name="group_name" placeholder="mong|tang|ham|mai|san_thuong|ban_cong|san"></label>
+      <label>Cơ sở tính (mã mới)<input name="base" placeholder="vd ground_floor_area"></label>
+      <label>Duyệt ngay<input name="approved" type="checkbox"></label>
+      <button class="btn" type="submit">Tạo phiên bản</button>
+    </form>
+  </section>
+
+  <section id="tab-weights">
+    <div class="row"><h2 style="margin:0">Trọng số matching</h2><button class="btn secondary" id="reloadWeights">Tải</button></div>
+    <p class="muted">Mỗi phiên bản bất biến để so sánh A/B qua weights_version; chỉ một phiên bản đang hoạt động.</p>
+    <table id="wTable"><thead><tr><th>Phiên bản</th><th>Trọng số</th><th>Ghi chú</th><th>Lượt đề xuất</th><th>Trạng thái</th><th></th></tr></thead><tbody></tbody></table>
+    <h3>Tạo phiên bản trọng số mới</h3>
+    <form id="weightsForm">
+      <div class="row" id="weightInputs"></div>
+      <div class="row">
+        <span>Tổng: <span class="sum" id="wSum">0</span> (phải bằng 1)</span>
+        <label>Ghi chú<input name="note" size="40"></label>
+        <label>Kích hoạt ngay<input name="activate" type="checkbox" checked></label>
+        <button class="btn" type="submit">Tạo phiên bản</button>
+      </div>
+    </form>
+  </section>
+
+  <section id="tab-sources">
+    <div class="row">
+      <h2 style="margin:0">Nguồn dữ liệu</h2>
+      <label>Trạng thái<select id="sStatus"><option value="">Tất cả</option><option value="on_dezon">Có dữ liệu trên Dezon</option><option value="reference">Dữ liệu tham khảo</option><option value="verified">Đã xác minh</option><option value="unavailable">Chưa có dữ liệu</option></select></label>
+      <label>Người xác minh<input id="sBy" placeholder="tên hoặc email" value="admin"></label>
+      <button class="btn secondary" id="reloadSources">Tải</button>
+      <span class="muted" id="sTotal"></span>
+    </div>
+    <div class="scroll"><table id="sTable"><thead><tr><th>#</th><th>Loại nguồn</th><th>Nhãn</th><th>URL</th><th>Cập nhật</th><th>Trạng thái</th><th>Xác minh</th><th></th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section id="tab-sync">
+    <h2>Kích hoạt đồng bộ</h2>
+    <p class="muted">Job chạy nền qua hàng đợi RQ (cần Redis và tiến trình worker). Đồng bộ chỉ đọc dữ liệu có cấu trúc, không crawl khi khách hỏi.</p>
+    <form id="syncForm" class="row">
+      <label>Nguồn<select name="source">
+        <option value="api">API Dezon (api_sync)</option>
+        <option value="crawl">Crawl trang công khai</option>
+        <option value="reindex">Tạo lại embedding (reindex)</option>
+        <option value="after_sync">Tính lại hồ sơ + re-embed (after_sync)</option>
+      </select></label>
+      <label>Số trang tối đa (api/crawl)<input name="max_pages" type="number" min="1" max="1000" placeholder="mặc định"></label>
+      <button class="btn" type="submit">Kích hoạt</button>
+    </form>
+    <h2>Nhập đơn giá / hệ số từ CSV, XLSX</h2>
+    <form id="uploadForm" class="row">
+      <label>Loại dữ liệu<select name="kind"><option value="rates">Đơn giá (construction_rates)</option><option value="rules">Hệ số (estimate_rules)</option></select></label>
+      <label>File<input name="file" type="file" accept=".csv,.xlsx,.xlsm" required></label>
+      <label>Chạy thử (không ghi)<input name="dry_run" type="checkbox"></label>
+      <label>Ghi đè nguồn ưu tiên cao<input name="force" type="checkbox"></label>
+      <button class="btn" type="submit">Tải lên</button>
+    </form>
+    <p class="muted">Cột đơn giá: building_type, province, work_scope, quality_tier, price_min, price_max, effective_from, effective_to. Cột hệ số: code, group_name, label_vi, coefficient, base, is_default, version. Hệ số nhập vào luôn chưa duyệt.</p>
+    <h3>Kết quả</h3>
+    <pre id="syncResult">—</pre>
+  </section>
+</main>
+<div id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+  var BT = { nha_pho: 'Nhà phố', biet_thu: 'Biệt thự', can_ho: 'Căn hộ', van_phong: 'Văn phòng', khach_san: 'Khách sạn', khac: 'Khác' };
+  var WS = { xay_tho: 'Xây thô', hoan_thien: 'Hoàn thiện', tron_goi: 'Trọn gói', noi_that: 'Nội thất' };
+  var QT = { tiet_kiem: 'Tiết kiệm', trung_binh: 'Trung bình', kha: 'Khá', cao_cap: 'Cao cấp' };
+  var ST = { verified: 'Đã xác minh', on_dezon: 'Có dữ liệu trên Dezon', reference: 'Dữ liệu tham khảo', unavailable: 'Chưa có dữ liệu' };
+  var WKEYS = [['location', 'Khu vực hoạt động'], ['building_type', 'Loại công trình'], ['budget_fit', 'Phù hợp ngân sách'],
+               ['experience', 'Kinh nghiệm & năng lực'], ['similar_projects', 'Dự án tương tự'], ['profile_quality', 'Hồ sơ đầy đủ & xác minh']];
+  var TOTALS = { chat_sessions: 'Phiên chat', assistant_messages: 'Câu trả lời của trợ lý', estimate_sessions: 'Khái toán',
+                 recommendation_logs: 'Lượt đề xuất nhà thầu', quote_requests: 'Yêu cầu báo giá', contractor_quotes: 'Báo giá thực tế',
+                 guardrail_violations: 'Vi phạm guardrail', active_contractors: 'Nhà thầu đang hoạt động' };
+  var $ = function (id) { return document.getElementById(id); };
+  var tokenInput = $('token');
+  tokenInput.value = sessionStorage.getItem('dezonAdminToken') || '';
+
+  function el(tag, attrs, children) {
+    var e = document.createElement(tag);
+    if (attrs) Object.keys(attrs).forEach(function (k) {
+      if (k === 'text') e.textContent = attrs[k];
+      else if (k === 'class') e.className = attrs[k];
+      else if (k.slice(0, 2) === 'on') e.addEventListener(k.slice(2), attrs[k]);
+      else e.setAttribute(k, attrs[k]);
+    });
+    (children || []).forEach(function (c) { if (c != null) e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
+    return e;
+  }
+  function td(content) { return el('td', null, [content == null ? '—' : (typeof content === 'object' ? content : String(content))]); }
+  function badge(status) { return el('span', { class: 'badge ' + status, text: ST[status] || status }); }
+  function toast(msg, ok) {
+    var t = $('toast'); t.textContent = msg; t.className = ok ? 'ok' : 'err'; t.style.display = 'block';
+    clearTimeout(toast._t); toast._t = setTimeout(function () { t.style.display = 'none'; }, 5000);
+  }
+  function fmtInt(n) { return n == null ? '—' : Number(n).toLocaleString('vi-VN'); }
+  function fmtDate(s) { if (!s) return '—'; var d = new Date(s); return isNaN(d) ? s : d.toLocaleString('vi-VN'); }
+  function pct(v) { return v == null ? null : (v * 100).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + '%'; }
+
+  async function api(path, opts) {
+    opts = opts || {};
+    var token = tokenInput.value.trim();
+    if (!token) { toast('Vui lòng nhập mã quản trị (X-Admin-Token).', false); throw new Error('no token'); }
+    var headers = Object.assign({ 'X-Admin-Token': token }, opts.headers || {});
+    if (opts.json !== undefined) { headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(opts.json); }
+    var res = await fetch(path, { method: opts.method || 'GET', headers: headers, body: opts.body });
+    var data = null;
+    try { data = await res.json(); } catch (e) { data = null; }
+    if (!res.ok) {
+      var msg = (data && data.detail) ? (typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)) : ('HTTP ' + res.status);
+      if (res.status === 401) msg = 'Sai hoặc thiếu mã quản trị. ' + msg;
+      toast(msg, false);
+      throw new Error(msg);
+    }
+    return data;
+  }
+
+  function fillSelect(sel, map, any) {
+    sel.innerHTML = '';
+    if (any) sel.appendChild(el('option', { value: '', text: 'Tất cả' }));
+    Object.keys(map).forEach(function (k) { sel.appendChild(el('option', { value: k, text: map[k] })); });
+  }
+  document.querySelectorAll('.sel-bt').forEach(function (s) { fillSelect(s, BT, s.dataset.any); });
+  document.querySelectorAll('.sel-ws').forEach(function (s) { fillSelect(s, WS, s.dataset.any); });
+  document.querySelectorAll('.sel-qt').forEach(function (s) { fillSelect(s, QT); s.value = 'trung_binh'; });
+
+  // ---------------------------------------------------------------- tabs
+  var loaders = {};
+  $('tabs').addEventListener('click', function (ev) {
+    var b = ev.target.closest('button'); if (!b) return;
+    document.querySelectorAll('#tabs button').forEach(function (x) { x.classList.toggle('active', x === b); });
+    document.querySelectorAll('main section').forEach(function (s) { s.classList.toggle('active', s.id === 'tab-' + b.dataset.tab); });
+    if (loaders[b.dataset.tab] && tokenInput.value.trim()) loaders[b.dataset.tab]().catch(function () {});
+  });
+  $('saveToken').addEventListener('click', function () {
+    sessionStorage.setItem('dezonAdminToken', tokenInput.value.trim());
+    var active = document.querySelector('#tabs button.active').dataset.tab;
+    if (loaders[active]) loaders[active]().then(function () { toast('Đã lưu mã cho phiên làm việc này.', true); }).catch(function () {});
+  });
+  $('clearToken').addEventListener('click', function () { sessionStorage.removeItem('dezonAdminToken'); tokenInput.value = ''; });
+
+  // ---------------------------------------------------------------- metrics
+  function metricValue(m) {
+    if (m.value == null) return null;
+    if (m.unit === 'ratio') return pct(m.value);
+    if (m.unit === 'relative_error') return (m.value > 0 ? '+' : '') + pct(m.value);
+    if (m.unit === 'turns') return m.value.toLocaleString('vi-VN') + ' lượt';
+    return m.value.toLocaleString('vi-VN');
+  }
+  loaders.metrics = async function () {
+    var data = await api('/api/admin/metrics');
+    $('metricsTime').textContent = 'Tính lúc ' + fmtDate(data.generated_at);
+    var cards = $('metricCards'); cards.innerHTML = '';
+    Object.keys(data.metrics).forEach(function (k) {
+      var m = data.metrics[k]; var v = metricValue(m);
+      var sub = (m.denominator != null && m.value != null) ? fmtInt(m.numerator) + ' / ' + fmtInt(m.denominator) : 'Mẫu: ' + fmtInt(m.sample_size);
+      cards.appendChild(el('div', { class: 'card' }, [
+        el('div', { class: 't', text: m.label_vi }),
+        el('div', { class: 'v' + (v == null ? ' na' : ''), text: v == null ? 'Chưa có dữ liệu' : v }),
+        el('div', { class: 'muted', text: sub }),
+        el('div', { class: 'muted', text: m.note })
+      ]));
+    });
+    var rank = (data.metrics.contractor_selection_by_rank || {}).breakdown || [];
+    var tb = $('rankTable').tBodies[0]; tb.innerHTML = '';
+    if (!rank.length) tb.appendChild(el('tr', null, [el('td', { colspan: 6, class: 'muted', text: 'Chưa có dữ liệu' })]));
+    rank.forEach(function (r) { tb.appendChild(el('tr', null, [td('#' + r.rank), td(fmtInt(r.shown)), td(fmtInt(r.clicked)), td(pct(r.click_rate)), td(fmtInt(r.quoted)), td(pct(r.quote_rate))])); });
+    var rules = (data.metrics.guardrail_violation_rate || {}).breakdown || [];
+    tb = $('ruleTable').tBodies[0]; tb.innerHTML = '';
+    if (!rules.length) tb.appendChild(el('tr', null, [el('td', { colspan: 2, class: 'muted', text: 'Chưa có vi phạm nào' })]));
+    rules.forEach(function (r) { tb.appendChild(el('tr', null, [td(r.rule), td(fmtInt(r.count))])); });
+    tb = $('totalsTable').tBodies[0]; tb.innerHTML = '';
+    Object.keys(data.totals).forEach(function (k) { tb.appendChild(el('tr', null, [el('th', { text: TOTALS[k] || k }), td(fmtInt(data.totals[k]))])); });
+  };
+  $('reloadMetrics').addEventListener('click', function () { loaders.metrics().catch(function () {}); });
+
+  // ---------------------------------------------------------------- violations
+  loaders.violations = async function () {
+    var q = new URLSearchParams({ limit: $('vLimit').value });
+    if ($('vRule').value.trim()) q.set('rule', $('vRule').value.trim());
+    var data = await api('/api/admin/guardrail-violations?' + q);
+    $('vTotal').textContent = 'Tổng: ' + fmtInt(data.total);
+    var tb = $('vTable').tBodies[0]; tb.innerHTML = '';
+    if (!data.items.length) tb.appendChild(el('tr', null, [el('td', { colspan: 7, class: 'muted', text: 'Chưa có vi phạm nào' })]));
+    data.items.forEach(function (v) {
+      var d = v.detail || {};
+      tb.appendChild(el('tr', null, [td(v.id), td(fmtDate(v.created_at)), td(v.rule), td(v.session_id ? v.session_id.slice(0, 8) + '…' : '—'),
+        td(d.text), td(d.detail || (d.answer ? String(d.answer).slice(0, 200) : null)), td(d.attempt)]));
+    });
+  };
+  $('reloadViolations').addEventListener('click', function () { loaders.violations().catch(function () {}); });
+
+  // ---------------------------------------------------------------- rates
+  loaders.rates = async function () {
+    var q = new URLSearchParams({ limit: '500' });
+    if ($('rBt').value) q.set('building_type', $('rBt').value);
+    if ($('rWs').value) q.set('work_scope', $('rWs').value);
+    if ($('rProv').value.trim()) q.set('province', $('rProv').value.trim());
+    var data = await api('/api/admin/rates?' + q);
+    $('rTotal').textContent = 'Tổng: ' + fmtInt(data.total);
+    var tb = $('rTable').tBodies[0]; tb.innerHTML = '';
+    data.items.forEach(function (r) {
+      var actions = el('td', null, [
+        r.approved ? el('span', { class: 'muted', text: 'Đã duyệt' }) : el('button', { class: 'btn', text: 'Duyệt', onclick: async function () {
+          var res = await api('/api/admin/rates/' + r.id + '/approve', { method: 'POST', json: { verified_by: $('sBy').value || 'admin' } });
+          toast('Đã duyệt nguồn — áp dụng cho ' + res.affected_rates + ' đơn giá cùng nguồn.', true); loaders.rates();
+        } }), ' ',
+        el('button', { class: 'btn danger', text: 'Xóa', onclick: async function () {
+          if (!confirm('Xóa đơn giá #' + r.id + '?')) return;
+          await api('/api/admin/rates/' + r.id, { method: 'DELETE' }); toast('Đã xóa.', true); loaders.rates();
+        } })
+      ]);
+      tb.appendChild(el('tr', null, [td(r.id), td(BT[r.building_type] || r.building_type), td(r.province), td(WS[r.work_scope] || r.work_scope),
+        td(QT[r.quality_tier] || r.quality_tier), td(fmtInt(r.price_min) + ' – ' + fmtInt(r.price_max)),
+        td(r.effective_from + (r.effective_to ? ' → ' + r.effective_to : '')),
+        el('td', null, [badge(r.source_status || 'unavailable'), el('div', { class: 'muted', text: r.source_label || '' })]), actions]));
+    });
+  };
+  $('reloadRates').addEventListener('click', function () { loaders.rates().catch(function () {}); });
+  $('rateForm').addEventListener('submit', async function (ev) {
+    ev.preventDefault(); var f = ev.target;
+    var body = { building_type: f.building_type.value, province: f.province.value.trim(), work_scope: f.work_scope.value,
+                 quality_tier: f.quality_tier.value, price_min: Number(f.price_min.value), price_max: Number(f.price_max.value),
+                 effective_from: f.effective_from.value, effective_to: f.effective_to.value || null, approved: f.approved.checked };
+    try { var r = await api('/api/admin/rates', { method: 'POST', json: body }); toast('Đã thêm đơn giá #' + r.id + '.', true); f.reset(); loaders.rates(); } catch (e) {}
+  });
+
+  // ---------------------------------------------------------------- rules
+  loaders.rules = async function () {
+    var data = await api('/api/admin/rules?latest_only=' + ($('ruLatest').value === '1'));
+    var tb = $('ruTable').tBodies[0]; tb.innerHTML = '';
+    data.items.forEach(function (r) {
+      var btn = el('button', { class: r.approved ? 'btn secondary' : 'btn', text: r.approved ? 'Bỏ duyệt' : 'Duyệt', onclick: async function () {
+        await api('/api/admin/rules/' + r.id, { method: 'PUT', json: { approved: !r.approved } });
+        toast(r.approved ? 'Đã bỏ duyệt.' : 'Đã duyệt hệ số ' + r.code + ' v' + r.version + '.', true); loaders.rules();
+      } });
+      tb.appendChild(el('tr', null, [td(r.code), td(r.group_name), td(r.label_vi), td(r.coefficient.toLocaleString('vi-VN', { maximumFractionDigits: 3 })),
+        td(r.base), td(r.is_default ? 'Có' : ''), td('v' + r.version), el('td', null, [badge(r.approved ? 'verified' : 'reference')]), el('td', null, [btn])]));
+    });
+  };
+  $('reloadRules').addEventListener('click', function () { loaders.rules().catch(function () {}); });
+  $('ruleForm').addEventListener('submit', async function (ev) {
+    ev.preventDefault(); var f = ev.target;
+    var body = { code: f.code.value.trim(), coefficient: Number(f.coefficient.value), approved: f.approved.checked };
+    ['label_vi', 'group_name', 'base'].forEach(function (k) { if (f[k].value.trim()) body[k] = f[k].value.trim(); });
+    try { var r = await api('/api/admin/rules', { method: 'POST', json: body }); toast('Đã tạo ' + r.code + ' v' + r.version + '.', true); f.reset(); loaders.rules(); } catch (e) {}
+  });
+
+  // ---------------------------------------------------------------- weights
+  var wBox = $('weightInputs');
+  WKEYS.forEach(function (k) { wBox.appendChild(el('label', null, [k[1] + ' (' + k[0] + ')', el('input', { name: 'w_' + k[0], type: 'number', step: '0.01', min: '0', max: '1', required: 'required' })])); });
+  function weightSum() {
+    var s = 0; WKEYS.forEach(function (k) { s += Number($('weightsForm')['w_' + k[0]].value || 0); });
+    var e = $('wSum'); e.textContent = s.toLocaleString('vi-VN', { maximumFractionDigits: 4 });
+    e.className = 'sum ' + (Math.abs(s - 1) <= 0.001 ? 'good' : 'bad'); return s;
+  }
+  $('weightsForm').addEventListener('input', weightSum);
+  loaders.weights = async function () {
+    var data = await api('/api/admin/weights');
+    var tb = $('wTable').tBodies[0]; tb.innerHTML = '';
+    data.items.forEach(function (w) {
+      var txt = WKEYS.map(function (k) { return k[0] + ' ' + (w.weights[k[0]] != null ? w.weights[k[0]] : '—'); }).join(' · ');
+      tb.appendChild(el('tr', null, [td('v' + w.version), td(txt), td(w.note), td(fmtInt(w.recommendation_count)),
+        el('td', null, [w.is_active ? el('span', { class: 'badge active', text: 'Đang hoạt động' }) : el('span', { class: 'muted', text: 'Không hoạt động' })]),
+        el('td', null, [w.is_active ? null : el('button', { class: 'btn secondary', text: 'Kích hoạt', onclick: async function () {
+          await api('/api/admin/weights/' + w.version + '/activate', { method: 'POST' }); toast('Đã kích hoạt v' + w.version + '.', true); loaders.weights();
+        } })])]));
+      if (w.is_active) WKEYS.forEach(function (k) { $('weightsForm')['w_' + k[0]].value = w.weights[k[0]]; });
+    });
+    weightSum();
+  };
+  $('reloadWeights').addEventListener('click', function () { loaders.weights().catch(function () {}); });
+  $('weightsForm').addEventListener('submit', async function (ev) {
+    ev.preventDefault(); var f = ev.target;
+    if (Math.abs(weightSum() - 1) > 0.001) { toast('Tổng trọng số phải bằng 1.', false); return; }
+    var weights = {}; WKEYS.forEach(function (k) { weights[k[0]] = Number(f['w_' + k[0]].value); });
+    try { var w = await api('/api/admin/weights', { method: 'POST', json: { weights: weights, note: f.note.value || null, activate: f.activate.checked } });
+      toast('Đã tạo trọng số v' + w.version + (w.is_active ? ' (đang hoạt động)' : '') + '.', true); loaders.weights(); } catch (e) {}
+  });
+
+  // ---------------------------------------------------------------- sources
+  loaders.sources = async function () {
+    var q = new URLSearchParams({ limit: '500' }); if ($('sStatus').value) q.set('status', $('sStatus').value);
+    var data = await api('/api/admin/sources?' + q);
+    $('sTotal').textContent = 'Tổng: ' + fmtInt(data.total);
+    var tb = $('sTable').tBodies[0]; tb.innerHTML = '';
+    data.items.forEach(function (s) {
+      // Chỉ tạo link cho URL http(s) — URL nguồn đến từ crawl/API, không để lọt "javascript:".
+      var link = !s.url ? '—' : !/^https?:\/\//i.test(s.url) ? s.url : el('a', { href: s.url, target: '_blank', rel: 'noopener noreferrer', text: s.url });
+      tb.appendChild(el('tr', null, [td(s.id), td(s.source_type), td(s.label), td(link), td(fmtDate(s.source_updated_at || s.fetched_at)),
+        el('td', null, [badge(s.status)]), td(s.verified_at ? (s.verified_by || '') + ' · ' + fmtDate(s.verified_at) : null),
+        el('td', null, [s.status === 'verified' ? null : el('button', { class: 'btn', text: 'Xác minh', onclick: async function () {
+          await api('/api/admin/sources/' + s.id + '/verify', { method: 'POST', json: { verified_by: $('sBy').value || 'admin' } });
+          toast('Đã xác minh nguồn #' + s.id + '.', true); loaders.sources();
+        } })])]));
+    });
+  };
+  $('reloadSources').addEventListener('click', function () { loaders.sources().catch(function () {}); });
+
+  // ---------------------------------------------------------------- sync & upload
+  $('syncForm').addEventListener('submit', async function (ev) {
+    ev.preventDefault(); var f = ev.target;
+    var q = f.max_pages.value ? '?max_pages=' + encodeURIComponent(f.max_pages.value) : '';
+    try { var r = await api('/api/admin/sync/' + f.source.value + q, { method: 'POST' }); $('syncResult').textContent = JSON.stringify(r, null, 2);
+      toast('Đã xếp job ' + r.job + (r.job_id ? ' (' + r.job_id + ')' : '') + '.', true); }
+    catch (e) { $('syncResult').textContent = String(e.message || e); }
+  });
+  $('uploadForm').addEventListener('submit', async function (ev) {
+    ev.preventDefault(); var f = ev.target;
+    if (!f.file.files.length) { toast('Chọn file trước.', false); return; }
+    var fd = new FormData(); fd.append('file', f.file.files[0]);
+    fd.append('dry_run', f.dry_run.checked ? 'true' : 'false'); fd.append('force', f.force.checked ? 'true' : 'false');
+    try { var r = await api('/api/admin/import/' + f.kind.value, { method: 'POST', body: fd }); $('syncResult').textContent = JSON.stringify(r, null, 2);
+      toast('Nhập xong: ' + r.status + ' — thêm ' + r.inserted + ', cập nhật ' + r.updated + ', lỗi ' + r.error_count + '.', r.status !== 'failed'); }
+    catch (e) { $('syncResult').textContent = String(e.message || e); }
+  });
+
+  if (tokenInput.value.trim()) loaders.metrics().catch(function () {});
+})();
+</script>
+</body>
+</html>
