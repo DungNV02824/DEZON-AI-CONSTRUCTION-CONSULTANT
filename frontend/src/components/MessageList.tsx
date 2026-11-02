@@ -17,10 +17,13 @@ export function MessageList({
   messages,
   busy,
   onRetry,
+  variant = 'panel',
 }: {
   messages: UIMessage[];
   busy: boolean;
   onRetry: (key: string) => void;
+  /** page: câu hỏi kèm lựa chọn nhanh hiển thị thành một thẻ (giao diện mở rộng). */
+  variant?: 'panel' | 'page';
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const nearBottom = useRef(true);
@@ -72,6 +75,29 @@ export function MessageList({
     <div className="dz-messages" ref={scrollRef} onScroll={onScroll} role="log" aria-live="polite" aria-relevant="additions">
       {messages.map((m) => {
         const active = m.key === activeKey && !busy && !m.pending;
+        // Giao diện mở rộng: lượt hỏi chỉ gồm câu hỏi + lựa chọn nhanh -> một thẻ (câu hỏi ở đầu, nút dạng lưới).
+        const askCard =
+          variant === 'page' &&
+          active &&
+          m.role === 'assistant' &&
+          !!m.content &&
+          !m.error &&
+          m.blocks.length === 1 &&
+          m.blocks[0]!.type === 'quick_replies';
+        if (askCard) {
+          return (
+            <div key={m.key} data-key={m.key} className="dz-msg dz-msg--assistant">
+              <div className="dz-askcard">
+                <p className="dz-askcard__q">{m.content}</p>
+                <div className="dz-askcard__body">
+                  <BlockBoundary>
+                    <BlockRenderer block={m.blocks[0]!} active={active} />
+                  </BlockBoundary>
+                </div>
+              </div>
+            </div>
+          );
+        }
         return (
           <div key={m.key} data-key={m.key} className={`dz-msg dz-msg--${m.role}`}>
             {m.role === 'user' ? (

@@ -5,6 +5,7 @@ import { WidgetContext, type WidgetActions } from '../state/context';
 import { useChat } from '../state/useChat';
 import { Composer } from './Composer';
 import { MessageList } from './MessageList';
+import { PlanningLayout } from './PlanningLayout';
 import { SourcePopoverProvider } from './common/SourcePopover';
 
 const OPEN_KEY = 'dezon_ai_open';
@@ -23,11 +24,17 @@ export interface AppProps {
   client: ApiClient;
   initiallyOpen?: boolean;
   /** Đăng ký hàm mở/đóng cho API toàn cục window.DezonWidget. */
-  registerControls?: (c: { open(): void; close(): void; toggle(): void }) => void;
+  registerControls?: (c: { open(): void; close(): void; toggle(): void; expand(): void }) => void;
+  /** widget: nút nổi + khung chat (có nút "Mở rộng"); page: giao diện đầy đủ AI for Planning. */
+  mode?: 'widget' | 'page';
+  /** Link "Đăng nhập / Đăng ký" ở thanh bên giao diện mở rộng; rỗng -> ẩn. */
+  loginUrl?: string;
 }
 
-export function App({ client, initiallyOpen = false, registerControls }: AppProps) {
-  const [open, setOpen] = useState<boolean>(() => initiallyOpen || sessionFlag(true));
+export function App({ client, initiallyOpen = false, registerControls, mode = 'widget', loginUrl = '' }: AppProps) {
+  const isPage = mode === 'page';
+  const [open, setOpen] = useState<boolean>(() => isPage || initiallyOpen || sessionFlag(true));
+  const [expanded, setExpanded] = useState(false);
   const chat = useChat(client);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const launcherRef = useRef<HTMLButtonElement | null>(null);
@@ -35,17 +42,28 @@ export function App({ client, initiallyOpen = false, registerControls }: AppProp
 
   const { ensureSession } = chat;
   useEffect(() => {
-    sessionFlag(false, open);
+    if (!isPage) sessionFlag(false, open);
     if (open) {
       void ensureSession();
       // Đưa focus vào ô nhập khi mở (không ép trên thiết bị cảm ứng để tránh bật bàn phím).
       const coarse = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
       if (!coarse) setTimeout(() => inputRef.current?.focus(), 50);
     }
-  }, [open, ensureSession]);
+  }, [open, ensureSession, isPage]);
 
   useEffect(() => {
-    registerControls?.({ open: () => setOpen(true), close: () => setOpen(false), toggle: () => setOpen((v) => !v) });
+    registerControls?.({
+      open: () => setOpen(true),
+      close: () => {
+        setExpanded(false);
+        setOpen(false);
+      },
+      toggle: () => setOpen((v) => !v),
+      expand: () => {
+        setOpen(true);
+        setExpanded(true);
+      },
+    });
   }, [registerControls]);
 
   const close = useCallback(() => {
@@ -109,11 +127,43 @@ export function App({ client, initiallyOpen = false, registerControls }: AppProp
     }
   };
 
+  if (isPage) {
+    return (
+      <WidgetContext.Provider value={actions}>
+        <SourcePopoverProvider>
+          <div className="dz-root dz-root--page">
+            <PlanningLayout chat={chat} isMock={client.isMock} loginUrl={loginUrl} inputRef={inputRef} />
+          </div>
+        </SourcePopoverProvider>
+      </WidgetContext.Provider>
+    );
+  }
+
   return (
     <WidgetContext.Provider value={actions}>
       <SourcePopoverProvider>
         <div className="dz-root">
-          {open && (
+          {open && expanded && (
+            <div
+              className="dz-root--page dz-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Dezon AI for Planning"
+              onKeyDown={(e) => {
+                const root = (e.currentTarget.getRootNode() as Document | ShadowRoot | undefined) ?? null;
+                if (e.key === 'Escape' && !e.defaultPrevented && !root?.querySelector('.dz-popover')) setExpanded(false);
+              }}
+            >
+              <PlanningLayout
+                chat={chat}
+                isMock={client.isMock}
+                loginUrl={loginUrl}
+                inputRef={inputRef}
+                onMinimize={() => setExpanded(false)}
+              />
+            </div>
+          )}
+          {open && !expanded && (
             <div
               ref={panelRef}
               className="dz-panel"
@@ -133,6 +183,17 @@ export function App({ client, initiallyOpen = false, registerControls }: AppProp
                     {client.isMock && <span className="dz-mock-tag">Chế độ giả lập</span>}
                   </p>
                 </div>
+                <button
+                  type="button"
+                  className="dz-iconbtn"
+                  onClick={() => setExpanded(true)}
+                  aria-label="Mở rộng: giao diện AI for Planning"
+                  title="Mở rộng"
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                    <path fill="currentColor" d="M7 14H5v5h5v-2H7zm-2-4h2V7h3V5H5zm12 7h-3v2h5v-5h-2zM14 5v2h3v3h2V5z" />
+                  </svg>
+                </button>
                 <button
                   type="button"
                   className="dz-iconbtn"
@@ -180,6 +241,7 @@ export function App({ client, initiallyOpen = false, registerControls }: AppProp
             </div>
           )}
 
+          {!expanded && (
           <button
             ref={launcherRef}
             type="button"
@@ -202,6 +264,7 @@ export function App({ client, initiallyOpen = false, registerControls }: AppProp
             )}
             {!open && <span className="dz-launcher__label">Tư vấn AI</span>}
           </button>
+          )}
         </div>
       </SourcePopoverProvider>
     </WidgetContext.Provider>

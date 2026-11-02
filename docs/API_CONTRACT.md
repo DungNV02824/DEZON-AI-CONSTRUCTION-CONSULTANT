@@ -116,3 +116,14 @@ Lỗi trả `{detail: string}` tiếng Việt. Trang HTML: `GET /admin` (không 
 
 Widget tự gắn nút chat nổi góc phải dưới; mở ra khung chat (toàn màn hình khi viewport < 640 px,
 hỗ trợ tối thiểu 360 px). CSS được cô lập (Shadow DOM) để không ảnh hưởng trang dezon.vn.
+
+### Giao diện mở rộng (trang đầy đủ)
+
+```html
+<div id="dezon-planning" style="height: 100vh"></div>
+<script src="https://<host>/dezon-widget.js" data-mode="page" data-api-base="https://<api-host>"
+        data-login-url="https://dezon.vn/<trang-đăng-nhập>/" defer></script>
+```
+
+Dùng cùng các endpoint chat ở trên; "Recent chats" là danh sách `session_id` lưu ở localStorage của trình duyệt,
+mở lại bằng `GET /api/chat/sessions/{id}` (404 → tự xóa khỏi danh sách).

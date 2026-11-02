@@ -7,7 +7,18 @@ export interface WidgetConfig {
   open: boolean;
   /** Dùng client giả lập (không gọi backend). */
   mock: boolean;
+  /**
+   * widget: nút chat nổi + khung chat (có nút "Mở rộng").
+   * page: giao diện đầy đủ (thanh bên + khung chat rộng) gắn vào phần tử `target`, vd trang /planning/.
+   */
+  mode: 'widget' | 'page';
+  /** CSS selector phần tử chứa giao diện page (mặc định #dezon-planning). */
+  target: string;
+  /** Link nút "Đăng nhập / Đăng ký" ở thanh bên; rỗng -> ẩn nút. */
+  loginUrl: string;
 }
+
+export const DEFAULT_PAGE_TARGET = '#dezon-planning';
 
 function truthy(v: string | null | undefined): boolean {
   if (v == null) return false;
@@ -27,7 +38,21 @@ export function readConfig(
   // Không tự bật mock khi thiếu apiBase (tránh hiển thị dữ liệu giả như thật): apiBase rỗng = cùng origin.
   const mock = (ds.mock !== undefined && truthy(ds.mock)) || (mockParam !== null && truthy(mockParam));
   const open = (ds.open !== undefined && truthy(ds.open)) || params.get('dezon_open') === '1';
-  return { apiBase, open, mock };
+  const target = ds.target?.trim() || DEFAULT_PAGE_TARGET;
+  const modeRaw = (ds.mode ?? params.get('dezon_mode') ?? '').trim().toLowerCase();
+  // Không khai báo mode: trang có sẵn phần tử #dezon-planning -> tự dùng giao diện đầy đủ.
+  const hasTarget = typeof document !== 'undefined' && !!safeQuery(target);
+  const mode: WidgetConfig['mode'] = modeRaw === 'page' || (!modeRaw && hasTarget) ? 'page' : 'widget';
+  const loginUrl = ds.loginUrl?.trim() ?? '';
+  return { apiBase, open, mock, mode, target, loginUrl };
+}
+
+function safeQuery(selector: string): Element | null {
+  try {
+    return document.querySelector(selector);
+  } catch {
+    return null; // selector không hợp lệ
+  }
 }
 
 /**

@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, type ApiClient } from '../api/client';
 import type { ChatMessageOut, ChatRole, MatchResult, QuoteRequestFormBlock, UIBlock } from '../api/types';
+import { loadHistory, saveHistory, upsertHistory, type ChatHistoryItem } from './history';
 
 export interface UIMessage {
   key: string;
@@ -135,6 +136,31 @@ export function useChat(client: ApiClient, storage: Storage | null = defaultStor
   // Khóa đồng bộ chống gửi trùng (Enter/bấm nút 2 lần trước khi state `busy` kịp render lại).
   const busyRef = useRef(false);
   const initRef = useRef<Promise<void> | null>(null);
+  const [history, setHistory] = useState<ChatHistoryItem[]>(() => loadHistory(storage, storageKey));
+
+  /** Ghi/cập nhật cuộc trò chuyện vào "Recent chats" (tiêu đề = câu hỏi đầu tiên của khách). */
+  const recordHistory = useCallback(
+    (id: string, title: string) => {
+      setHistory((prev) => {
+        const next = upsertHistory(prev, id, title, Date.now());
+        saveHistory(storage, storageKey, next);
+        return next;
+      });
+    },
+    [storage, storageKey],
+  );
+
+  const forgetHistory = useCallback(
+    (id: string) => {
+      setHistory((prev) => {
+        const next = prev.filter((h) => h.id !== id);
+        saveHistory(storage, storageKey, next);
+        return next;
+      });
+      storageSet(storage, localMessagesKey(storageKey, id), null);
+    },
+    [storage, storageKey],
+  );
 
   const patch = useCallback((key: string, fn: (m: UIMessage) => UIMessage) => {
     setMessages((prev) => prev.map((m) => (m.key === key ? fn(m) : m)));
@@ -142,8 +168,7 @@ export function useChat(client: ApiClient, storage: Storage | null = defaultStor
 
   const startNew = useCallback(async () => {
     const s = await client.createSession();
-    const prev = storageGet(storage, storageKey);
-    if (prev && prev !== s.session_id) storageSet(storage, localMessagesKey(storageKey, prev), null);
+    // Không xóa tin nhắn cục bộ của phiên trước: phiên cũ vẫn mở lại được từ "Recent chats".
     storageSet(storage, storageKey, s.session_id);
     setSessionId(s.session_id);
     setStage(s.stage);
@@ -163,6 +188,10 @@ export function useChat(client: ApiClient, storage: Storage | null = defaultStor
           setStage(s.stage);
           // Khôi phục cả tin nhắn chỉ có ở trình duyệt (hồ sơ, so sánh, mã yêu cầu báo giá).
           setMessages(mergeLocals(s.messages.map(fromServer), loadLocals(storage, localMessagesKey(storageKey, s.session_id))));
+          const firstUser = s.messages.find((m) => m.role === 'user' && m.content);
+          if (firstUser && !loadHistory(storage, storageKey).some((h) => h.id === s.session_id)) {
+            recordHistory(s.session_id, firstUser.content ?? '');
+          }
           setStatus('ready');
           return;
         } catch (e) {
@@ -189,13 +218,14 @@ export function useChat(client: ApiClient, storage: Storage | null = defaultStor
     };
     initRef.current = run();
     return initRef.current;
-  }, [client, storage, storageKey, startNew]);
+  }, [client, storage, storageKey, startNew, recordHistory]);
 
   const send = useCallback(
     async (text: string) => {
       const content = text.trim();
       if (!content || busy || busyRef.current || !sessionId) return;
       busyRef.current = true;
+      recordHistory(sessionId, content);
       const userKey = nextKey();
       const botKey = nextKey();
       setMessages((prev) => [
@@ -238,7 +268,7 @@ export function useChat(client: ApiClient, storage: Storage | null = defaultStor
         patch(botKey, (m) => ({ ...m, pending: false }));
       }
     },
-    [busy, sessionId, client, patch],
+    [busy, sessionId, client, patch, recordHistory],
   );
 
   /** Gửi lại tin nhắn lỗi: xóa cặp tin nhắn lỗi rồi gửi lại. */
@@ -318,6 +348,39 @@ export function useChat(client: ApiClient, storage: Storage | null = defaultStor
     }
   }, [startNew]);
 
+  /** Mở lại một cuộc trò chuyện trong "Recent chats". Trả false nếu không mở được. */
+  const openSession = useCallback(
+    async (id: string): Promise<boolean> => {
+      if (id === sessionId) return true;
+      abortRef.current?.abort();
+      setStatus('loading');
+      try {
+        const s = await client.getSession(id);
+        storageSet(storage, storageKey, s.session_id);
+        setSessionId(s.session_id);
+        setStage(s.stage);
+        setMessages(mergeLocals(s.messages.map(fromServer), loadLocals(storage, localMessagesKey(storageKey, s.session_id))));
+        setStatus('ready');
+        return true;
+      } catch (e) {
+        const status = e instanceof ApiError ? e.status : 0;
+        if (status >= 400 && status < 500) forgetHistory(id); // phiên không còn trên server
+        setStatus(sessionId ? 'ready' : 'error');
+        return false;
+      }
+    },
+    [client, sessionId, storage, storageKey, forgetHistory],
+  );
+
+  /** "Xóa tất cả": xóa lịch sử trên thiết bị này rồi mở cuộc trò chuyện mới. */
+  const clearHistory = useCallback(async () => {
+    for (const h of history) storageSet(storage, localMessagesKey(storageKey, h.id), null);
+    if (sessionId) storageSet(storage, localMessagesKey(storageKey, sessionId), null);
+    saveHistory(storage, storageKey, []);
+    setHistory([]);
+    await newConversation();
+  }, [history, sessionId, storage, storageKey, newConversation]);
+
   useEffect(() => () => abortRef.current?.abort(), []);
 
   /** estimate_session_id và MatchResult gần nhất trong hội thoại. */
@@ -349,6 +412,9 @@ export function useChat(client: ApiClient, storage: Storage | null = defaultStor
     runLocal,
     markQuoteSubmitted,
     newConversation,
+    history,
+    openSession,
+    clearHistory,
     estimateSessionId,
     latestMatch,
   };

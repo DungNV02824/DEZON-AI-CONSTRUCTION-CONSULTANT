@@ -117,6 +117,29 @@ của proxy (hoặc gateway Docker, vd `172.x.0.1`) và **chung một bucket** �
 - Điều khiển từ trang: `window.DezonWidget.open() / close() / toggle()`.
 - Thêm domain trang nhúng vào `ALLOWED_ORIGINS` của backend.
 
+### Giao diện mở rộng "AI for Planning" (trang đầy đủ)
+
+Dùng cho trang như `dezon.vn/planning/`: thanh bên (New chat, Recent chats, Đăng nhập / Đăng ký) + khung chat rộng,
+câu hỏi kèm lựa chọn nhanh hiển thị dạng thẻ lưới 2 cột.
+
+```html
+<div id="dezon-planning" style="height: 100vh"></div>
+<script src="https://<host-widget>/dezon-widget.js"
+        data-mode="page"
+        data-api-base="https://<host-api>"
+        data-login-url="https://dezon.vn/<trang-đăng-nhập>/"
+        defer></script>
+```
+
+- Trang có sẵn phần tử `#dezon-planning` thì widget tự chạy chế độ trang (không cần `data-mode`);
+  `data-target="<selector>"` để gắn vào phần tử khác. Giao diện lấp đầy chiều cao phần tử đó.
+- `data-login-url` rỗng → ẩn nút "Đăng nhập / Đăng ký".
+- "Recent chats" lưu trong trình duyệt của khách (localStorage), tiêu đề là câu hỏi đầu tiên; nội dung hội thoại
+  lấy lại từ server khi mở. "Xóa tất cả" chỉ xóa lịch sử trên thiết bị đó.
+- Widget nổi có nút **Mở rộng** (góc trên khung chat) chuyển sang giao diện này toàn màn hình, nút **Thu nhỏ** để quay
+  lại; từ trang chủ gọi được `window.DezonWidget.expand()`.
+- Demo: http://localhost:8080/planning
+
 ## Phát triển
 
 ```bash

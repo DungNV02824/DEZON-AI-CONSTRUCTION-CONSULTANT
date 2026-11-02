@@ -52,14 +52,14 @@ describe('readConfig', () => {
     const s = document.createElement('script');
     s.dataset.apiBase = 'https://api.dezon.vn/';
     s.dataset.open = 'true';
-    expect(readConfig(s, '', undefined)).toEqual({ apiBase: 'https://api.dezon.vn', open: true, mock: false });
+    expect(readConfig(s, '', undefined)).toMatchObject({ apiBase: 'https://api.dezon.vn', open: true, mock: false, mode: 'widget' });
     s.dataset.mock = 'true';
     expect(readConfig(s, '', undefined).mock).toBe(true);
   });
   it('fallback biến môi trường; ?dezon_mock=1 bật mock; không tự bật mock khi thiếu apiBase', () => {
-    expect(readConfig(null, '', 'http://localhost:8000')).toEqual({ apiBase: 'http://localhost:8000', open: false, mock: false });
+    expect(readConfig(null, '', 'http://localhost:8000')).toMatchObject({ apiBase: 'http://localhost:8000', open: false, mock: false });
     expect(readConfig(null, '?dezon_mock=1', undefined).mock).toBe(true);
-    expect(readConfig(null, '', undefined)).toEqual({ apiBase: '', open: false, mock: false });
+    expect(readConfig(null, '', undefined)).toMatchObject({ apiBase: '', open: false, mock: false, mode: 'widget', loginUrl: '' });
   });
   it('data-api-base rỗng -> fallback VITE_API_BASE_URL (không âm thầm gọi cùng origin)', () => {
     const s = document.createElement('script');

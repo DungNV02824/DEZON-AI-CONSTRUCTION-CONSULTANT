@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dezon — AI for Planning (demo giao diện mở rộng)</title>
+    <meta name="robots" content="noindex" />
+    <style>
+      html, body { margin: 0; height: 100%; }
+      /* Phần tử chứa giao diện đầy đủ: widget lấp đầy chiều cao của phần tử này. */
+      #dezon-planning { height: 100vh; }
+      @supports (height: 100dvh) { #dezon-planning { height: 100dvh; } }
+    </style>
+  </head>
+  <body>
+    <div id="dezon-planning"></div>
+    <!-- Khi build (vite.config.ts > demoPagePlugin), đoạn giữa hai dấu mốc được thay bằng thẻ nhúng thật
+         dezon-widget.js với data-mode="page". Dev server: có #dezon-planning nên widget tự chạy chế độ page. -->
+    <!-- dezon-widget:start -->
+    <script type="module" src="/src/main.tsx"></script>
+    <!-- dezon-widget:end -->
+  </body>
+</html>

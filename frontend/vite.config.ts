@@ -17,15 +17,22 @@ function escapeAttr(s: string): string {
  * Không có VITE_API_BASE_URL -> trang demo bật chế độ giả lập (data-mock="true").
  */
 function demoPagePlugin(apiBase: string): Plugin {
+  // index.html: trang demo widget nổi; planning.html: trang demo giao diện mở rộng (data-mode="page").
+  const pages: Array<{ file: string; extra: string }> = [
+    { file: 'index.html', extra: '' },
+    { file: 'planning.html', extra: ' data-mode="page" data-login-url="https://dezon.vn/wp-login.php"' },
+  ];
   return {
     name: 'dezon-demo-page',
     apply: 'build',
     generateBundle() {
-      const html = readFileSync(`${root}index.html`, 'utf8');
       const attrs = apiBase ? `data-api-base="${escapeAttr(apiBase)}"` : 'data-mock="true"';
-      const tag = `<script src="./dezon-widget.js" ${attrs} defer></script>`;
-      const out = html.replace(/<!-- dezon-widget:start -->[\s\S]*?<!-- dezon-widget:end -->/, tag);
-      this.emitFile({ type: 'asset', fileName: 'index.html', source: out });
+      for (const p of pages) {
+        const html = readFileSync(`${root}${p.file}`, 'utf8');
+        const tag = `<script src="./dezon-widget.js" ${attrs}${p.extra} defer></script>`;
+        const out = html.replace(/<!-- dezon-widget:start -->[\s\S]*?<!-- dezon-widget:end -->/, tag);
+        this.emitFile({ type: 'asset', fileName: p.file, source: out });
+      }
     },
   };
 }
