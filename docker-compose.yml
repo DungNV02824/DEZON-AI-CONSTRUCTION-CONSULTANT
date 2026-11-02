@@ -10,7 +10,8 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dezon -d dezon"]
+      # -h 127.0.0.1: kiểm tra qua TCP — lúc khởi tạo volume mới, server tạm chỉ nghe Unix socket
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U dezon -d dezon"]
       interval: 3s
       timeout: 3s
       retries: 20
@@ -34,7 +35,10 @@ services:
       DATABASE_URL: postgresql+psycopg://dezon:dezon@db:5432/dezon
       REDIS_URL: redis://redis:6379/0
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://dezon.vn,http://localhost:5173,http://localhost:8080}
-    command: sh -c "alembic upgrade head && python -m app.db.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+      # IP của reverse proxy được tin cho X-Forwarded-For (rate limit theo IP thật). Mặc định chỉ localhost.
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
+    command: sh -c "alembic upgrade head && python -m app.db.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers"
+    restart: unless-stopped
     ports:
       - "8000:8000"
     depends_on:
@@ -52,6 +56,7 @@ services:
       DATABASE_URL: postgresql+psycopg://dezon:dezon@db:5432/dezon
       REDIS_URL: redis://redis:6379/0
     command: python -m app.worker
+    restart: unless-stopped
     depends_on:
       backend:
         condition: service_started
