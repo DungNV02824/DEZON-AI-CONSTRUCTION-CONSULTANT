@@ -62,3 +62,13 @@ def test_slots_to_input():
 def test_seeded_db(db):
     assert db.scalar(select(func.count()).select_from(EstimateRule)) == 16
     assert db.scalar(select(Contractor).where(Contractor.slug == "kien-phong")).years_experience == 8
+
+
+def test_vnd_range_same_unit_same_decimals():
+    """C-F10: hai đầu khoảng cùng đơn vị hiển thị cùng số chữ số thập phân."""
+    assert format_vnd_range(1_740_000_000, 2_058_000_000) == "1,740–2,058 tỷ"
+    assert format_vnd_range(1_500_000_000, 2_058_000_000) == "1,500–2,058 tỷ"
+    assert format_vnd_range(1_280_000_000, 1_520_000_000) == "1,28–1,52 tỷ"
+    assert format_vnd_range(2_000_000_000, 3_000_000_000) == "2–3 tỷ"
+    assert format_vnd_range(850_000_000, 900_000_000) == "850–900 triệu"
+    assert vi_number(1.74, 3, 3) == "1,740"

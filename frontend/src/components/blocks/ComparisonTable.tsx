@@ -11,9 +11,12 @@ const UNAVAILABLE: EvidenceValue = { value: null, display: NO_DATA, status: 'una
 export function ComparisonTable({ block }: { block: ComparisonTableBlock }) {
   const { openContractor, recordClick } = useWidget();
   const { contractors, rows } = block.data;
+  // Bảng tổng quan (câu hỏi chung, C-F4) dùng lại block này với hàng đầu "projects_of_type".
+  const isOverview = rows[0]?.key === 'projects_of_type';
+  const title = `${isOverview ? 'Tổng quan' : 'So sánh'} ${contractors.length} nhà thầu`;
   return (
-    <section className="dz-card dz-compare" aria-label="Bảng so sánh nhà thầu">
-      <h3 className="dz-card__title">So sánh {contractors.length} nhà thầu</h3>
+    <section className="dz-card dz-compare" aria-label={isOverview ? 'Bảng tổng quan nhà thầu' : 'Bảng so sánh nhà thầu'}>
+      <h3 className="dz-card__title">{title}</h3>
       <div className="dz-table-scroll" role="region" aria-label="Bảng so sánh, cuộn ngang để xem thêm" tabIndex={0}>
         <table className="dz-table dz-table--compare">
           <thead>

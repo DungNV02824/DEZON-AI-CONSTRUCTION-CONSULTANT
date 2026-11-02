@@ -10,8 +10,11 @@
 """
 from __future__ import annotations
 
+import re
+
 from pydantic import BaseModel
 
+from app.ai.normalize import fold
 from app.formatting import NO_DATA, format_m2, format_vnd, vi_number
 from app.schemas.common import BUILDING_TYPE_VI, QUALITY_TIER_VI, WORK_SCOPE_VI
 from app.schemas.slots import Slots, missing_required
@@ -114,6 +117,51 @@ def budget_question(slots: Slots) -> NextQuestion | None:
 
 
 # ---------------------------------------------------------------------------
+# Sửa thông tin (C-F9) và không có nhà thầu (C-F11)
+# ---------------------------------------------------------------------------
+# value: tin nhắn "Tôi muốn sửa <mục>" -> detect_intent = edit, parse_message không trích slot nào (có test).
+EDIT_FIELD_REPLIES = _qr(
+    ("Loại công trình", "Tôi muốn sửa loại công trình"), ("Khu vực", "Tôi muốn sửa khu vực"),
+    ("Diện tích đất", "Tôi muốn sửa diện tích đất"), ("Số tầng", "Tôi muốn sửa số tầng"),
+    ("Phạm vi", "Tôi muốn sửa phạm vi công việc"), ("Mức hoàn thiện", "Tôi muốn sửa mức chất lượng"),
+    ("Giữ nguyên", "Thông tin đúng rồi"),
+)
+# (mẫu trên chuỗi đã gập dấu, slot, câu hỏi, quick replies) — thứ tự: mẫu cụ thể trước.
+_EDIT_FIELDS: list[tuple[re.Pattern[str], list[str], str, list[QuickReply]]] = [
+    (re.compile(r"muc hoan thien|chat luong|vat tu"), ["quality_tier"],
+     "Dạ, anh/chị muốn chọn mức hoàn thiện nào ạ?", QUALITY_TIER_REPLIES),
+    (re.compile(r"loai cong trinh|loai nha"), ["building_type"],
+     "Dạ, anh/chị muốn đổi sang loại công trình nào ạ?", BUILDING_TYPE_REPLIES),
+    (re.compile(r"khu vuc|dia diem|tinh thanh|thanh pho|quan huyen"), ["province", "district"],
+     "Dạ, anh/chị dự định xây dựng ở khu vực nào ạ? (tỉnh/thành phố, quận/huyện nếu có)", PROVINCE_REPLIES),
+    (re.compile(r"dien tich|kich thuoc|\bdat\b"), ["land_area_m2"],
+     "Dạ, anh/chị cho em xin lại diện tích đất (ngang × dài hoặc tổng m²) nhé.", LAND_REPLIES),
+    (re.compile(r"so tang|\btang\b|\blau\b"), ["floors"],
+     "Dạ, anh/chị muốn đổi thành mấy tầng ạ? (ví dụ 1 trệt 2 lầu)", FLOORS_REPLIES),
+    (re.compile(r"pham vi|hang muc"), ["work_scope"],
+     "Dạ, anh/chị muốn khái toán cho phạm vi nào ạ: xây thô, hoàn thiện, trọn gói hay nội thất?",
+     WORK_SCOPE_REPLIES),
+]
+
+
+def edit_field_question(message: str) -> NextQuestion | None:
+    """Khách nói muốn sửa một mục nhưng chưa nêu giá trị mới ("Tôi muốn sửa số tầng") -> hỏi đúng mục đó.
+    Không nêu mục nào -> None (orchestrator hỏi "sửa thông tin nào" kèm EDIT_FIELD_REPLIES)."""
+    f = fold(message)
+    for rx, slots, text, replies in _EDIT_FIELDS:
+        if rx.search(f):
+            return NextQuestion(slots=slots, text=text, quick_replies=QuickRepliesBlock(options=replies))
+    return None
+
+
+def no_match_replies(province: str | None) -> list[QuickReply]:
+    """Bước tiếp khi không có nhà thầu phù hợp ở khu vực của khách: tìm ở thành phố khác, sửa thông tin."""
+    others = [r for r in PROVINCE_REPLIES if not province or fold(r.value) != fold(province)][:2]
+    return ([QuickReply(label=f"Tìm nhà thầu tại {r.label}", value=f"Tìm nhà thầu tại {r.value}") for r in others]
+            + [QuickReply(label="Sửa thông tin công trình", value="Tôi muốn sửa lại thông tin")])
+
+
+# ---------------------------------------------------------------------------
 # Tóm tắt
 # ---------------------------------------------------------------------------
 
@@ -155,7 +203,9 @@ def default_assumptions(slots: Slots) -> list[str]:
     if slots.building_area_m2 is None:
         land = f" ({format_m2(slots.land_area_m2)})" if slots.land_area_m2 else ""
         out.append(f"Diện tích xây dựng mỗi tầng bằng diện tích đất{land}.")
-    if slots.foundation_type is None:
+    # Phạm vi hoàn thiện/nội thất và căn hộ không tính móng (C-F12) -> không nêu giả định móng.
+    no_foundation = str(slots.work_scope) in ("hoan_thien", "noi_that") or str(slots.building_type) == "can_ho"
+    if slots.foundation_type is None and not no_foundation:
         if slots.floors and slots.floors >= 4:
             out.append("Móng cọc (nhà từ 4 tầng nổi trở lên), chưa gồm chi phí ép cọc.")
         else:

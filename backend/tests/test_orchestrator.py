@@ -305,7 +305,8 @@ def test_edit_after_estimate_requires_reconfirm_and_recalculates(db):
     r1 = _say(db, sid, CONFIRM)
     est1 = next(b for b in r1.ui_blocks if b.type == "estimate_table").data
     r2 = _say(db, sid, "Tôi muốn sửa lại thông tin")
-    assert _types(r2) == ["summary_confirm"] and r2.slots["confirmed"] is False
+    # C-F9: chỉ hỏi sửa mục nào (nút theo từng mục), không gắn lại bản tóm tắt + câu đòi xác nhận.
+    assert _types(r2) == ["quick_replies"] and r2.slots["confirmed"] is False
     r3 = _say(db, sid, "1 trệt 2 lầu")
     assert "summary_confirm" in _types(r3) and r3.slots["floors"] == 3 and "estimate_table" not in _types(r3)
     _, state = split_raw(db.get(ChatSession, sid).slots)
@@ -399,8 +400,11 @@ def test_edit_without_new_info_asks_what_to_change(db):
     sid = _new(db)
     _say(db, sid, FULL)
     r = _say(db, sid, "Sửa lại")
-    assert r.text.startswith(orchestrator.EDIT_PROMPT) and "Em tóm tắt lại" in r.text
-    assert _types(r) == ["summary_confirm"]
+    # C-F9: chỉ hỏi mục cần sửa, không kèm tóm tắt/xác nhận (hai ý mâu thuẫn trong một tin).
+    assert r.text == orchestrator.EDIT_PROMPT and "Em tóm tắt lại" not in r.text and "xác nhận" not in r.text
+    assert _types(r) == ["quick_replies"]
+    labels = [o.label for o in r.ui_blocks[0].options]
+    assert {"Số tầng", "Khu vực", "Giữ nguyên"} <= set(labels)
 
 
 @pytest.mark.db

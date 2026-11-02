@@ -58,6 +58,8 @@ class MatchIn(MatchCriteria):
 class CompareIn(BaseModel):
     contractor_ids: list[int] = Field(min_length=2, max_length=5)
     estimate_session_id: UUID | None = None
+    # Tùy chọn: ngân sách khách nêu (VND). Không gửi -> lấy từ slot phiên chat gắn với khái toán.
+    budget_vnd: int | None = Field(default=None, ge=1, le=MAX_BIGINT)
 
 
 class ClickIn(BaseModel):
@@ -108,7 +110,8 @@ def compare(body: CompareIn, db: Session = Depends(get_db)) -> ComparisonMatrix:
         raise unprocessable("Mã nhà thầu không hợp lệ.")
     try:
         return contractor_service.compare_contractors(db, body.contractor_ids,
-                                                      estimate_session_id=body.estimate_session_id)
+                                                      estimate_session_id=body.estimate_session_id,
+                                                      budget_vnd=body.budget_vnd)
     except LookupError:
         raise HTTPException(status_code=503, detail=NO_WEIGHTS) from None
     except ValueError as exc:

@@ -185,6 +185,10 @@ _TRET_RE = re.compile(r"\btret\b")
 _LUNG_RE = re.compile(r"(?:\b\d\s*|\btang\s+|\bgac\s+|\bco\s+|\bthem\s+|\+\s*)lung\b|\blung\b(?=\s*(?:\d|,|\+|$))")
 _NO_LUNG_RE = re.compile(r"\bkhong\s+(?:co\s+|lam\s+)?(?:tang\s+|gac\s+)?lung\b")
 _CAP4_RE = re.compile(r"\bnha\s+cap\s*(?:4|bon)\b")
+# "còn N tầng" = số tầng tuyệt đối; "giảm/bớt/thêm N tầng" = thay đổi tương đối (không phải số tầng).
+_REMAIN_FLOORS_RE = re.compile(rf"\bcon(?:\s+lai)?\s+{_NUM_START}(\d{{1,2}})\s*tang\b(?!\s*(?:ham|lung))")
+_RELATIVE_FLOORS_RE = re.compile(
+    r"\b(?:giam|bot|them|cat|bo|nang|ha)\s+(?:di\s+|bot\s+|them\s+|xuong\s+|len\s+)?\d{1,2}\s*(?:tang|lau)\b")
 
 
 def parse_floors(text: str) -> dict[str, Any]:
@@ -196,9 +200,14 @@ def parse_floors(text: str) -> dict[str, Any]:
     """
     f = _words_to_digits(fold(text))
     out: dict[str, Any] = {}
+    # Nhãn phương án "Giảm 1 tầng (còn 3 tầng)" -> floors=3 (không phải 1).
+    remain = _REMAIN_FLOORS_RE.search(f)
+    f = _RELATIVE_FLOORS_RE.sub(" ", f)
     lau = _LAU_RE.search(f)
     tang = _TANG_RE.search(f)
-    if lau:
+    if remain:
+        floors = int(remain.group(1))
+    elif lau:
         floors = int(lau.group(1)) + 1
     elif tang:
         floors = int(tang.group(1))
@@ -623,6 +632,14 @@ _CONSTRUCTION_RE = re.compile(
     r"\b(?:nha|xay|thau|cong trinh|chi phi|don gia|gia|tang|lau|m2|noi that|thiet ke|vat lieu|mong|mai"
     r"|dat|khai toan|bao gia|du toan|ngan sach|thi cong|sua chua|can ho|biet thu|van phong|khach san)\b"
 )
+
+
+_HYPOTHETICAL_RE = re.compile(r"\b(?:neu|gia su|gia nhu|truong hop|thu tinh)\b")
+
+
+def is_hypothetical(text: str) -> bool:
+    """Câu giả định ("nếu chỉ xây 3 tầng thì hết bao nhiêu?") — tính thử, KHÔNG đổi thông tin công trình."""
+    return bool(_HYPOTHETICAL_RE.search(fold(text)))
 
 
 def detect_intent(text: str) -> Intent | None:

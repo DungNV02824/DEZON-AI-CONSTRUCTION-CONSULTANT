@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ContractorListBlock } from '../../api/types';
 import { useWidget } from '../../state/context';
+import { StatusLegend } from '../common/StatusLegend';
 import { ContractorCardView } from './ContractorCard';
 
 const MAX_COMPARE = 5;
@@ -17,6 +18,13 @@ export function ContractorList({ block }: { block: ContractorListBlock }) {
 
   const nameOf = (id: number) => d.results.find((r) => r.contractor.id === id)?.contractor.name ?? '';
   const allIds = d.results.map((r) => r.contractor.id).slice(0, MAX_COMPARE);
+  // Lý do có chấm trạng thái nguồn -> hiện chú giải màu (đọc được trên mobile, không cần hover).
+  const hasDots = d.results.some((r) =>
+    r.reasons.some((x) => {
+      const st = r.contractor.evidence?.[x.evidence]?.status;
+      return !!st && st !== 'unavailable';
+    }),
+  );
 
   if (d.results.length === 0) {
     return (
@@ -46,6 +54,12 @@ export function ContractorList({ block }: { block: ContractorListBlock }) {
             {n}
           </p>
         ))}
+        {hasDots && (
+          <div className="dz-legend-box">
+            <p className="dz-muted dz-small">Chấm màu cạnh mỗi lý do cho biết mức xác minh của nguồn (bấm chấm để xem nguồn):</p>
+            <StatusLegend />
+          </div>
+        )}
         {allIds.length >= 2 && (
           <button type="button" className="dz-linkbtn" onClick={() => compare(allIds, estimateId)}>
             So sánh {allIds.length} nhà thầu trong bảng

@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     embedding_api_key: str = Field(default="",
                                    validation_alias=AliasChoices("EMBEDDING_API_KEY", "OPENAI_API_KEY"))
     embedding_dim: int = 1536
+    # Endpoint /embeddings tương thích OpenAI khác (vd Azure/OpenRouter/proxy nội bộ); rỗng -> api.openai.com/v1
+    embedding_api_base: str = ""
 
     dezon_api_base_url: str = ""
     dezon_api_token: str = ""

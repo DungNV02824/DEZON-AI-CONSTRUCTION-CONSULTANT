@@ -9,9 +9,18 @@ from pydantic import BaseModel
 
 from app.ai.state import ContractorRef
 from app.ai.tools import ToolOutcome
-from app.evidence import SourceRef, VerificationStatus
+from app.evidence import EvidenceValue, SourceRef, VerificationStatus, make_evidence
+from app.formatting import vi_number
+from app.schemas.common import BUILDING_TYPE_VI
 from app.schemas.estimate import BudgetAdjustmentResult, EstimateResult
-from app.schemas.matching import ComparisonMatrix, ContractorProfile, MatchResult
+from app.schemas.matching import (
+    ComparedContractor,
+    ComparisonMatrix,
+    ComparisonRow,
+    ContractorOverview,
+    ContractorProfile,
+    MatchResult,
+)
 from app.schemas.ui_blocks import (
     BudgetOptionsBlock,
     ComparisonTableBlock,
@@ -81,6 +90,39 @@ def source_badges(results: Sequence[Any]) -> SourceBadgesBlock | None:
     return SourceBadgesBlock(badges=badges) if badges else None
 
 
+MAX_OVERVIEW_CONTRACTORS = 5
+# Cột của bảng tổng quan (mục 8.4) — dùng block comparison_table (frontend đã hiển thị được): mọi số trong câu trả
+# lời tổng quan truy được trên UI, nguồn hiển thị bằng chấm màu/badge thay vì lặp trong câu.
+_OVERVIEW_ROWS = (("dezon_project_count", "Công trình ghi nhận trên Dezon"), ("rough_price", "Đơn giá xây thô"),
+                  ("finish_price", "Đơn giá hoàn thiện"), ("warranty", "Bảo hành"))
+
+
+def projects_of_type_evidence(entry: Any, bt_label: str) -> EvidenceValue:
+    """"N công trình <loại> có trang dự án" của một nhà thầu trong ContractorOverview."""
+    projs = list(entry.projects_of_type or [])
+    n = getattr(entry, "projects_of_type_count", 0) or len(projs)
+    src = next((p.source for p in projs if p.source is not None), None) or entry.card.profile_source
+    return make_evidence(n, f"{vi_number(n, 0)} công trình {bt_label} có trang dự án",
+                         source=src, status=None if src is None else VerificationStatus.on_dezon)
+
+
+def overview_table(ov: ContractorOverview) -> ComparisonTableBlock | None:
+    entries = list(ov.contractors)[:MAX_OVERVIEW_CONTRACTORS]
+    if not entries:
+        return None
+    bt_label = BUILDING_TYPE_VI.get(str(ov.building_type), str(ov.building_type)).lower()
+    rows = [ComparisonRow(key="projects_of_type", label_vi=f"Công trình {bt_label} có trang dự án",
+                          cells=[projects_of_type_evidence(e, bt_label) for e in entries])]
+    rows += [ComparisonRow(key=k, label_vi=label,
+                           cells=[e.card.evidence.get(k) or EvidenceValue.unavailable() for e in entries])
+             for k, label in _OVERVIEW_ROWS]
+    return ComparisonTableBlock(data=ComparisonMatrix(
+        contractors=[ComparedContractor(id=e.card.id, slug=e.card.slug, name=e.card.name,
+                                        profile_url=e.card.profile_url, avatar_url=e.card.avatar_url)
+                     for e in entries],
+        rows=rows))
+
+
 def quote_form(contractors: Sequence[ContractorRef], estimate_session_id: str | UUID | None
                ) -> QuoteRequestFormBlock | None:
     if not contractors:
@@ -115,11 +157,18 @@ def build_ui_blocks(outcomes: Sequence[ToolOutcome], *, estimate_session_id: str
         res = cmp_[-1].result
         if isinstance(res, ComparisonMatrix):
             blocks.append(ComparisonTableBlock(data=res))
+    elif ov := _ok(outcomes, "get_contractor_overview"):
+        res = ov[-1].result
+        if isinstance(res, ContractorOverview) and (table := overview_table(res)) is not None:
+            blocks.append(table)
     seen_profiles: set[int] = set()
-    for o in _ok(outcomes, "get_contractor_profile"):
-        if isinstance(o.result, ContractorProfile) and o.result.card.id not in seen_profiles:
-            seen_profiles.add(o.result.card.id)
-            blocks.append(ContractorDetailBlock(data=o.result, estimate_session_id=est_id))
+    profiles = [o.result for o in _ok(outcomes, "get_contractor_profile")]
+    profiles += [o.result.get("profile") for o in _ok(outcomes, "get_contractor_projects")
+                 if isinstance(o.result, dict)]
+    for prof in profiles:
+        if isinstance(prof, ContractorProfile) and prof.card.id not in seen_profiles:
+            seen_profiles.add(prof.card.id)
+            blocks.append(ContractorDetailBlock(data=prof, estimate_session_id=est_id))
     if quote_request is not None:
         blocks.append(quote_request)
     badges = source_badges([o.result for o in outcomes if not o.is_error and o.result is not None

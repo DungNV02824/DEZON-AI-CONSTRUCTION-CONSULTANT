@@ -238,7 +238,8 @@ def _rates(r: Any) -> str:
         r = r[0] if r else {}
     rate = r.get("rate", r) if isinstance(r, dict) else {}
     if not _has(rate):
-        return f"Dạ, hiện em chưa có đơn giá tham chiếu phù hợp: {NO_DATA}."
+        return (f"Dạ, hiện em chưa có đơn giá tham chiếu cho loại công trình và khu vực này ({NO_DATA}). Anh/chị có "
+                "thể gửi yêu cầu báo giá để nhà thầu báo đơn giá cụ thể ạ.")
     return (f"Dạ, đơn giá tham chiếu hiện có là {_disp(rate)}{_source_note(rate)}. "
             "Đây là đơn giá tham khảo để khái toán sơ bộ, không phải báo giá thi công.")
 
@@ -277,9 +278,12 @@ def _knowledge(r: Any) -> str:
 
 def _quote(r: dict) -> str:
     ids = r.get("ids") or []
+    names = [str(n) for n in (r.get("contractor_names") or []) if n]
     code = r.get("code")
     msg = "Dạ, em đã ghi nhận yêu cầu báo giá của anh/chị"
-    if ids:
+    if names:
+        msg += f" gửi tới {', '.join(names)}"
+    elif ids:
         msg += f" gửi tới {len(ids)} nhà thầu"
     msg += "."
     if code:
@@ -288,47 +292,56 @@ def _quote(r: dict) -> str:
 
 
 def _projects(r: Any) -> str:
-    items = r.get("projects", r.get("items", [])) if isinstance(r, dict) else r
-    items = _j(items) if isinstance(items, list) else []
-    if not items:
-        return f"Dạ, hiện danh sách công trình ghi nhận trên Dezon: {NO_DATA}."
-    lines = ["Dạ, một số công trình ghi nhận trên Dezon:"]
-    for p in items[:MAX_ITEMS]:
-        if isinstance(p, dict):
-            url = f" ({p['project_url']})" if p.get("project_url") else ""
-            lines.append(f"- {p.get('name', '')}{url}")
-    return "\n".join(lines)
+    """get_contractor_projects: nêu TỔNG số công trình ghi nhận trên Dezon (nếu có) tách khỏi số trang dự án, để khách
+    không hiểu nhầm số trang dự án là số công trình; danh sách/link nằm trong thẻ hồ sơ."""
+    if not isinstance(r, dict):
+        items = _j(r) if isinstance(r, list) else []
+        if not items:
+            return f"Dạ, Dezon chưa có trang dự án nào của nhà thầu này ({NO_DATA})."
+        names = [str(p.get("name", "")) for p in items[:MAX_ITEMS] if isinstance(p, dict) and p.get("name")]
+        return "Dạ, một số công trình có trang dự án trên Dezon: " + ", ".join(names) + "."
+    items = _j(r.get("projects") or r.get("items") or [])
+    items = items if isinstance(items, list) else []
+    name = str((r.get("contractor") or {}).get("name") or "nhà thầu này")
+    bt = _vi(BUILDING_TYPE_VI, r.get("building_type")).lower() if r.get("building_type") else ""
+    kind = f"công trình {bt}" if bt else "công trình"
+    count = r.get("dezon_project_count")
+    if _has(count):
+        head = f"Dạ, {name} có {_disp(count)} (không đồng nghĩa với số công trình đã hoàn thành)"
+    else:
+        head = f"Dạ, hồ sơ {name} trên Dezon chưa có số công trình ghi nhận ({NO_DATA})"
+    if items:
+        return f"{head}; trong đó {len(items)} {kind} có trang dự án, anh/chị xem trong thẻ hồ sơ bên dưới."
+    joiner = " nhưng" if _has(count) else ", và"
+    return f"{head}{joiner} Dezon chưa có trang dự án {(bt + ' ') if bt else ''}nào của nhà thầu này."
 
 
 def _overview(r: dict) -> str:
-    """ContractorOverview (mục 8.4): trả lời câu hỏi tự do "nhà thầu nào thi công X tại Y"."""
-    what = " ".join(x for x in [_vi(BUILDING_TYPE_VI, r.get("building_type")).lower(),
-                                f"tại {r['province']}" if r.get("province") else ""] if x)
-    lines = [f"Dạ, em tổng hợp thông tin nhà thầu {what} trên Dezon:".replace("  ", " ")]
-    for key, label in (("contractor_count", "Số nhà thầu phù hợp"),
-                       ("contractors_with_projects", "Nhà thầu có công trình thực tế"),
-                       ("total_dezon_projects", "Công trình ghi nhận trên Dezon"),
-                       ("rough_price_range", "Đơn giá xây thô tham khảo"),
-                       ("finish_price_range", "Đơn giá hoàn thiện tham khảo"),
-                       ("with_warranty_info", "Thông tin bảo hành"),
-                       ("verified_profiles", "Hồ sơ đã xác minh")):
-        if key in r:
-            lines.append(f"- {label}: {_disp(r.get(key))}{_source_note(r.get(key))}.")
-    for e in (r.get("contractors") or [])[:MAX_ITEMS]:
-        card = e.get("card") or {}
-        line = f"- {card.get('name', '')}"
-        if card.get("profile_url"):
-            line += f": hồ sơ {card['profile_url']}"
-        links = [str(p.get("project_url")) for p in (e.get("projects_of_type") or [])[:3] if p.get("project_url")]
-        if links:
-            line += f"; công trình thực tế: {', '.join(links)}"
-        lines.append(line)
-    for n in r.get("notes") or []:
-        lines.append(str(n))
-    lines.append(PROJECT_COUNT_NOTE)
-    lines.append("Dezon chưa có dữ liệu đánh giá chất lượng thi công sau bàn giao, nên anh/chị nên xem công trình "
-                 "thực tế và hồ sơ của từng đơn vị để đánh giá thêm ạ.")
-    return "\n".join(lines)
+    """ContractorOverview (mục 8.4): câu ngắn — số nhà thầu, nhà thầu nào có công trình đúng loại (kèm số trang dự án đúng loại);
+    chi tiết từng nhà thầu ở bảng (block comparison_table), nguồn ở chấm màu/badge — không lặp nguồn/URL trong câu."""
+    bt = _vi(BUILDING_TYPE_VI, r.get("building_type")).lower()
+    where = f" tại {r['province']}" if r.get("province") else ""
+    entries = [e for e in (r.get("contractors") or []) if isinstance(e, dict)]
+    if not entries:
+        return (f"Dạ, hiện Dezon chưa ghi nhận nhà thầu {bt}{where} ({NO_DATA}). Anh/chị có thể thử khu vực lân cận "
+                "hoặc để em tìm theo thông tin công trình của anh/chị ạ.")
+    lines = [f"Dạ, trên Dezon có {_disp(r.get('contractor_count'))} phù hợp, nhận thi công {bt}{where}."]
+    with_type = [e for e in entries if e.get("has_projects_of_type")]
+    if with_type:
+        parts = []
+        for e in with_type[:MAX_ITEMS]:
+            n = e.get("projects_of_type_count") or len(e.get("projects_of_type") or [])
+            nm = str((e.get("card") or {}).get("name", ""))
+            parts.append(f"{nm} ({n} công trình {bt} có trang dự án)" if n else nm)
+        rest = (f"; các nhà thầu còn lại chưa có trang dự án {bt} trên Dezon" if len(with_type) < len(entries)
+                else "")
+        lines.append(f"Nhà thầu có công trình {bt} thực tế trên Dezon: {', '.join(parts)}{rest}.")
+    else:
+        lines.append(f"Chưa nhà thầu nào có trang dự án {bt} trên Dezon.")
+    lines.append("Công trình ghi nhận, đơn giá tham khảo và bảo hành của từng nhà thầu có trong bảng bên dưới.")
+    lines.append("Dezon chưa có dữ liệu đánh giá chất lượng thi công sau bàn giao nên em không xếp hạng nhà thầu; "
+                 "anh/chị nên xem công trình thực tế và hồ sơ của từng đơn vị ạ.")
+    return " ".join(lines)
 
 
 _TEMPLATES: dict[str, Callable[[Any], str]] = {

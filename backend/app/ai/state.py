@@ -61,12 +61,14 @@ def to_raw(slots: Slots, state: SessionState) -> dict[str, Any]:
     return data
 
 
+# Trường nội bộ của dialog (không phải slot nghiệp vụ) — không trả ra client.
+INTERNAL_SLOT_FIELDS = frozenset({"asked"})
+
+
 def public_slots(raw: dict[str, Any] | Slots | None) -> dict[str, Any]:
-    """Slots trả cho frontend (không có khóa nội bộ)."""
-    if isinstance(raw, Slots):
-        return raw.model_dump(mode="json")
-    slots, _ = split_raw(raw)
-    return slots.model_dump(mode="json")
+    """Slots trả cho frontend: chỉ slot nghiệp vụ (bỏ `_state` và trường nội bộ như `asked`)."""
+    slots = raw if isinstance(raw, Slots) else split_raw(raw)[0]
+    return slots.model_dump(mode="json", exclude=set(INTERNAL_SLOT_FIELDS))
 
 
 def estimate_slots_hash(slots: Slots) -> str:

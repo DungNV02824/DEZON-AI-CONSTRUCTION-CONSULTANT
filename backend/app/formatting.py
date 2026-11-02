@@ -9,13 +9,15 @@ TRIEU = 1_000_000
 NO_DATA = "Chưa có dữ liệu"
 
 
-def vi_number(x: float | int | Decimal, max_decimals: int = 2) -> str:
-    """1234.5 -> '1.234,5'; 2.058 -> '2,058' (max_decimals=3); bỏ số 0 thừa."""
+def vi_number(x: float | int | Decimal, max_decimals: int = 2, min_decimals: int = 0) -> str:
+    """1234.5 -> '1.234,5'; 2.058 -> '2,058' (max_decimals=3); bỏ số 0 thừa (giữ tối thiểu `min_decimals` chữ số)."""
     d = Decimal(str(x)).quantize(Decimal(1).scaleb(-max_decimals), rounding=ROUND_HALF_UP)
     sign = "-" if d < 0 else ""
     d = abs(d)
     int_part, _, frac = f"{d:f}".partition(".")
     frac = frac.rstrip("0")
+    if min_decimals:
+        frac = frac.ljust(min(min_decimals, max_decimals), "0")
     int_grouped = f"{int(int_part):,}".replace(",", ".")
     return f"{sign}{int_grouped},{frac}" if frac else f"{sign}{int_grouped}"
 
@@ -39,6 +41,10 @@ def format_vnd(amount: float | int | Decimal | None) -> str:
     return f"{vi_number(a / div, dec)} {unit}"
 
 
+def _decimals(formatted: str) -> int:
+    return len(formatted.partition(",")[2])
+
+
 def format_vnd_range(lo: float | int | Decimal | None, hi: float | int | Decimal | None) -> str:
     """(2_058e6, 2_352e6) -> '2,058–2,352 tỷ'; khác đơn vị -> '850 triệu–1,2 tỷ'."""
     if lo is None or hi is None:
@@ -49,7 +55,10 @@ def format_vnd_range(lo: float | int | Decimal | None, hi: float | int | Decimal
     if unit_lo == unit_hi:
         if lo_f == hi_f:
             return format_vnd(lo_f)
-        return f"{vi_number(lo_f / div_lo, dec_lo)}–{vi_number(hi_f / div_hi, dec_hi)} {unit_hi}"
+        # Hai đầu khoảng cùng số chữ số thập phân: "1,740–2,058 tỷ" (không "1,74–2,058").
+        width = max(_decimals(vi_number(lo_f / div_lo, dec_lo)), _decimals(vi_number(hi_f / div_hi, dec_hi)))
+        return (f"{vi_number(lo_f / div_lo, dec_lo, width)}–{vi_number(hi_f / div_hi, dec_hi, width)} "
+                f"{unit_hi}")
     return f"{format_vnd(lo_f)}–{format_vnd(hi_f)}"
 
 

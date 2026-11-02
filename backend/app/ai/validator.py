@@ -323,12 +323,12 @@ _NOISE_KEY_RE = re.compile(r"(^id$|_id$|^ids$|rank|version|^limit$|chunk_index|s
 _SCORE_KEY_RE = re.compile(r"(score|weight|coefficient|completeness|similarity|^k$)", re.I)
 _SKIP_STR_KEYS = frozenset({"url", "profile_url", "project_url", "avatar_url", "slug", "code"})
 _LIST_KIND: dict[str, str] = {
-    "projects": PROJECT_COUNT, "results": CONTRACTOR_COUNT, "contractors": CONTRACTOR_COUNT,
+    "projects": PROJECT_COUNT, "projects_of_type": PROJECT_COUNT, "results": CONTRACTOR_COUNT, "contractors": CONTRACTOR_COUNT,
     "contractor_ids": CONTRACTOR_COUNT, "ids": CONTRACTOR_COUNT,
 }
 # Suy ra loại số liệu từ đường dẫn khóa JSON (vd results.contractor.evidence.staff.value.workers -> staff).
 _PATH_KIND: list[tuple[str, re.Pattern[str]]] = [
-    (PROJECT_COUNT, re.compile(r"project_count|projects_count|total_projects|total_dezon_projects", re.I)),
+    (PROJECT_COUNT, re.compile(r"project_count|projects_count|projects_of_type_count|total_projects|total_dezon_projects", re.I)),
     (CONTRACTOR_COUNT, re.compile(
         r"total_candidates|contractor_count|contractors_with_projects|with_warranty_info|verified_profiles", re.I)),
     (PERCENT, re.compile(r"percent|pct", re.I)),

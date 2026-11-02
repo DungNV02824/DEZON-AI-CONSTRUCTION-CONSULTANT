@@ -173,6 +173,11 @@
       <label>Số trang tối đa (api/crawl)<input name="max_pages" type="number" min="1" max="1000" placeholder="mặc định"></label>
       <button class="btn" type="submit">Kích hoạt</button>
     </form>
+    <div class="row">
+      <label>Mã job<input id="jobId" type="text" maxlength="64" placeholder="job_id sau khi kích hoạt"></label>
+      <button class="btn" type="button" id="jobCheck">Xem trạng thái job</button>
+      <span id="jobStatus" class="muted">—</span>
+    </div>
     <h2>Nhập đơn giá / hệ số từ CSV, XLSX</h2>
     <form id="uploadForm" class="row">
       <label>Loại dữ liệu<select name="kind"><option value="rates">Đơn giá (construction_rates)</option><option value="rules">Hệ số (estimate_rules)</option></select></label>
@@ -430,16 +435,34 @@
     ev.preventDefault(); var f = ev.target;
     var q = f.max_pages.value ? '?max_pages=' + encodeURIComponent(f.max_pages.value) : '';
     try { var r = await api('/api/admin/sync/' + f.source.value + q, { method: 'POST' }); $('syncResult').textContent = JSON.stringify(r, null, 2);
-      toast('Đã xếp job ' + r.job + (r.job_id ? ' (' + r.job_id + ')' : '') + '.', true); }
+      toast('Đã xếp job ' + r.job + (r.job_id ? ' (' + r.job_id + ')' : '') + '.', true);
+      if (r.job_id) { $('jobId').value = r.job_id; pollJob(r.job_id, 0); } }
     catch (e) { $('syncResult').textContent = String(e.message || e); }
   });
+  // Theo dõi trạng thái + kết quả job (GET /api/admin/sync/jobs/{id}); dừng khi job kết thúc hoặc sau ~3 phút.
+  var pollTimer = null;
+  async function showJob(id) {
+    var j = await api('/api/admin/sync/jobs/' + encodeURIComponent(id));
+    $('jobStatus').textContent = 'Job ' + (j.job || '') + ' · ' + j.status_vi + ' (' + j.status + ')' + (j.error ? ' — ' + j.error : '');
+    $('syncResult').textContent = JSON.stringify(j, null, 2);
+    return j;
+  }
+  async function pollJob(id, n) {
+    if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+    try { var j = await showJob(id); } catch (e) { $('jobStatus').textContent = String(e.message || e); return; }
+    if (['queued', 'started', 'deferred', 'scheduled'].indexOf(j.status) >= 0 && n < 90) {
+      pollTimer = setTimeout(function () { pollJob(id, n + 1); }, 2000);
+    }
+  }
+  $('jobCheck').addEventListener('click', function () { var id = $('jobId').value.trim(); if (id) pollJob(id, 0); });
   $('uploadForm').addEventListener('submit', async function (ev) {
     ev.preventDefault(); var f = ev.target;
     if (!f.file.files.length) { toast('Chọn file trước.', false); return; }
     var fd = new FormData(); fd.append('file', f.file.files[0]);
     fd.append('dry_run', f.dry_run.checked ? 'true' : 'false'); fd.append('force', f.force.checked ? 'true' : 'false');
     try { var r = await api('/api/admin/import/' + f.kind.value, { method: 'POST', body: fd }); $('syncResult').textContent = JSON.stringify(r, null, 2);
-      toast('Nhập xong: ' + r.status + ' — thêm ' + r.inserted + ', cập nhật ' + r.updated + ', lỗi ' + r.error_count + '.', r.status !== 'failed'); }
+      var counts = 'thêm ' + r.inserted + ', cập nhật ' + r.updated + ', giữ nguyên ' + r.unchanged + ', bị chặn (nguồn ưu tiên cao hơn) ' + r.skipped + ', lỗi ' + r.error_count;
+      toast((r.dry_run ? 'Chạy thử (chưa ghi): ' + r.status + ' — sẽ ' : 'Nhập xong: ' + r.status + ' — ') + counts + '.', r.status !== 'failed'); }
     catch (e) { $('syncResult').textContent = String(e.message || e); }
   });
 

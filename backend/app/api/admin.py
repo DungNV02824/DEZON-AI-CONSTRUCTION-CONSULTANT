@@ -282,6 +282,13 @@ async def sync(source: SyncSource, request: Request, db: Session = Depends(get_d
     return await run_in_threadpool(_call, svc.enqueue_sync, source.value, **kwargs)
 
 
+
+@api.get("/sync/jobs/{job_id}")
+def sync_job_status(job_id: str) -> dict:
+    """Trạng thái + kết quả job đồng bộ đã xếp (queued|started|finished|failed..., result/error). Kết quả giữ 7 ngày."""
+    return _call(svc.get_sync_job, job_id)
+
+
 router = APIRouter()
 router.include_router(page)
 router.include_router(api)

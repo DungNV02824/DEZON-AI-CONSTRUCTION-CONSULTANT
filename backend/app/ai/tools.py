@@ -213,7 +213,7 @@ def to_jsonable(obj: Any) -> Any:
 
 
 _DROP_KEYS = frozenset({"avatar_url", "cover_images", "images", "breakdown", "total_images", "chips",
-                        "profile_source", "group_name"})
+                        "profile_source", "group_name", "profile"})
 _LIST_LIMITS = {"projects": 5, "projects_of_type": 3, "chunks": 5, "items": 20, "contractors": 10}
 _MAX_STR = 500
 
@@ -395,8 +395,13 @@ def _get_projects(ctx: ToolContext, inp: GetContractorProjectsIn) -> dict[str, A
     if profile is None:
         raise ToolError("Không tìm thấy nhà thầu trên Dezon")
     projects = contractor_service.get_contractor_projects(ctx.db, profile.card.id, inp.building_type, inp.limit)
+    # Kèm tổng số công trình ghi nhận trên Dezon (khác số trang dự án) + hồ sơ để hiển thị thẻ nhà thầu: khách
+    # không hiểu nhầm "3 trang dự án" là "3 công trình".
+    count = profile.info.get("dezon_project_count") or profile.card.evidence.get("dezon_project_count")
     return {"contractor": {"id": profile.card.id, "name": profile.card.name,
-                           "profile_url": profile.card.profile_url}, "projects": projects}
+                           "profile_url": profile.card.profile_url},
+            "building_type": inp.building_type, "projects": projects,
+            "dezon_project_count": count, "profile": profile}
 
 
 def _compare(ctx: ToolContext, inp: CompareContractorsIn) -> Any:
@@ -451,6 +456,14 @@ def _phones_in(texts: list[str]) -> set[str]:
     return out
 
 
+def named_contractor_ids(ctx: ToolContext, text: str | None = None) -> list[int]:
+    """id các nhà thầu đã đề xuất trong phiên mà khách nêu tên trong `text` (mặc định: tin nhắn hiện tại)."""
+    if text is None:
+        text = ctx.user_texts[-1] if ctx.user_texts else ""
+    f = fold(text or "")
+    return [c.id for c in ctx.state.contractors if c.name and fold(c.name) in f]
+
+
 def _create_quote(ctx: ToolContext, inp: CreateQuoteRequestIn) -> Any:
     try:
         phone = quote_service.normalize_phone(inp.customer_phone)
@@ -461,7 +474,9 @@ def _create_quote(ctx: ToolContext, inp: CreateQuoteRequestIn) -> Any:
     joined = fold(" ".join(ctx.user_texts))
     if fold(inp.customer_name).strip() not in joined:
         raise ToolError("Tên khách phải do khách tự cung cấp trong tin nhắn; hãy hỏi tên khách")
-    ids = list(inp.contractor_ids or [c.id for c in ctx.state.contractors][:5])
+    # Không truyền contractor_ids: chỉ gửi tới nhà thầu khách NÊU TÊN trong tin nhắn hiện tại (nếu có); không nêu tên
+    # mới gửi tới các nhà thầu vừa đề xuất. Không gửi thông tin liên hệ của khách tới nhà thầu khách không chọn.
+    ids = list(inp.contractor_ids or named_contractor_ids(ctx) or [c.id for c in ctx.state.contractors][:5])
     if not ids:
         raise ToolError("Chưa có nhà thầu nào để gửi yêu cầu báo giá; hãy tìm nhà thầu trước")
     esid = inp.estimate_session_id or _current_estimate_id(ctx)
@@ -485,7 +500,8 @@ def _overview(ctx: ToolContext, inp: GetContractorOverviewIn) -> Any:
     bt = inp.building_type or (str(ctx.slots.building_type) if ctx.slots.building_type else None)
     if not province or not bt:
         raise ToolError("Cần khu vực (tỉnh/thành) và loại công trình để tổng hợp nhà thầu")
-    return contractor_service.contractor_overview(ctx.db, province, bt)
+    # Lấy đủ danh sách công trình đúng loại của từng nhà thầu (đếm "N công trình <loại> có trang dự án").
+    return contractor_service.contractor_overview(ctx.db, province, bt, projects_per_contractor=20)
 
 
 # =============================================================================================

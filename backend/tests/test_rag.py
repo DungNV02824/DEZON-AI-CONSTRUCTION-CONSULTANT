@@ -158,6 +158,16 @@ def test_search_knowledge_service(db):
     assert len(search_knowledge(db, "nhà phố", entity_type="khong_hop_le", limit=2)) <= 2
 
 
+def test_search_knowledge_drops_irrelevant_chunks(db):
+    """C-F3: câu hỏi chi phí lạc đề (ép cọc, giả định số tầng) không trả mô tả nhà thầu/dự án không liên quan."""
+    from app.services.knowledge_service import search_knowledge
+
+    reindex_all(db)
+    assert search_knowledge(db, "ép cọc hết bao nhiêu tiền?") == []
+    assert search_knowledge(db, "nếu tôi chỉ xây 3 tầng thì hết bao nhiêu?") == []
+    assert search_knowledge(db, "Green Pool Villa Vĩnh Long", limit=3)  # câu hỏi đúng thực thể vẫn có kết quả
+
+
 # ================================================================== api_sync / snapshot / jobs
 def test_api_sync_skipped_when_not_configured(db, monkeypatch):
     from app.ingestion import api_sync
@@ -328,7 +338,7 @@ def test_enqueue_passes_job_kwargs_verbatim(monkeypatch):
     calls = []
 
     class Q:
-        def enqueue_call(self, func, kwargs):
+        def enqueue_call(self, func, kwargs, **opts):  # opts: result_ttl/failure_ttl của RQ
             calls.append((func, kwargs))
             return "job"
 

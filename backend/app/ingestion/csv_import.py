@@ -25,7 +25,7 @@ from typing import Any, Literal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import ConstructionRate, EstimateRule
+from app.db.models import ConstructionRate, DataSource, EstimateRule
 from app.evidence import SourceType
 from app.ingestion.parse_vi import (
     clean_text,
@@ -109,10 +109,19 @@ def read_table(content: bytes, filename: str) -> list[dict[str, Any]]:
     if filename.lower().endswith((".xlsx", ".xlsm")):
         from openpyxl import load_workbook
 
-        wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
-        ws = wb.worksheets[0]
-        rows = list(ws.iter_rows(values_only=True))
-        wb.close()
+        try:
+            wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+            try:
+                if not wb.worksheets:
+                    raise ValueError("File Excel không có sheet nào")
+                rows = list(wb.worksheets[0].iter_rows(values_only=True))
+            finally:
+                wb.close()
+        except ValueError:
+            raise
+        except Exception as exc:  # noqa: BLE001 — zip hỏng (BadZipFile), XML hỏng, sai định dạng... (O-F3)
+            raise ValueError("File Excel không hợp lệ hoặc bị hỏng — hãy lưu lại dưới dạng .xlsx "
+                             "(hoặc xuất CSV UTF-8) rồi nhập lại") from exc
     else:
         try:
             text_ = content.decode("utf-8-sig")
@@ -375,21 +384,29 @@ def import_table(db: Session, content: bytes, filename: str, kind: Kind, *, labe
         seen_keys.add(key)
         valid.append((rec["_row"], data))
 
-    if dry_run:
-        report.skipped = len(valid)
-        report.status = "partial" if report.errors else "ok"
-        return report
-
     raw_hash = hashlib.sha256(content).hexdigest()
     label = label or (f"Bảng đơn giá nhập từ file {Path(filename).name}" if kind == "rates"
                       else f"Bộ hệ số khái toán nhập từ file {Path(filename).name}")
-    ds, state = upsert_data_source(db, url=None, label=label, source_type=SourceType.csv_import,
-                                   raw_hash=raw_hash)
-    report.source_id = ds.id
-    if state == "unchanged" and not force:
-        report.unchanged = len(valid)
-        report.status = "unchanged"
-        return report
+    if dry_run:
+        # Xem trước: KHÔNG ghi DB, nhưng chạy đúng logic so khớp để báo số dòng sẽ thêm/cập nhật/giữ nguyên/bị chặn
+        # (O-F7). Nguồn được tìm giống upsert_data_source (theo nhãn, url rỗng, loại csv_import).
+        ds = db.scalar(select(DataSource).where(DataSource.label == label, DataSource.url.is_(None),
+                                                DataSource.source_type == SourceType.csv_import.value))
+        ds_id = ds.id if ds is not None else None
+        report.source_id = ds_id
+        if ds is not None and ds.raw_hash == raw_hash and not force:
+            report.unchanged = len(valid)
+            report.status = "unchanged"
+            return report
+    else:
+        ds, state = upsert_data_source(db, url=None, label=label, source_type=SourceType.csv_import,
+                                       raw_hash=raw_hash)
+        ds_id = ds.id
+        report.source_id = ds.id
+        if state == "unchanged" and not force:
+            report.unchanged = len(valid)
+            report.status = "unchanged"
+            return report
 
     for row_no, data in valid:
         if kind == "rates":
@@ -403,8 +420,9 @@ def import_table(db: Session, content: bytes, filename: str, kind: Kind, *, labe
             existing = db.scalar(select(EstimateRule).where(EstimateRule.code == data["code"],
                                                             EstimateRule.version == data["version"]))
         if existing is None:
-            model = ConstructionRate if kind == "rates" else EstimateRule
-            db.add(model(**data, source_id=ds.id))
+            if not dry_run:
+                model = ConstructionRate if kind == "rates" else EstimateRule
+                db.add(model(**data, source_id=ds_id))
             report.inserted += 1
             continue
         if not force and _protected(db, existing.source_id):
@@ -417,12 +435,14 @@ def import_table(db: Session, content: bytes, filename: str, kind: Kind, *, labe
             if k == "approved":
                 continue  # xử lý bên dưới: chỉ bỏ duyệt khi nội dung hệ số thật sự thay đổi
             if _differs(getattr(existing, k), v):
-                setattr(existing, k, v)
+                if not dry_run:
+                    setattr(existing, k, v)
                 changed = True
-        if kind == "rules" and changed and existing.approved:
+        if kind == "rules" and changed and existing.approved and not dry_run:
             existing.approved = False  # hệ số đã đổi -> admin phải duyệt lại (mục 11.2 bước 4)
-        if existing.source_id != ds.id:
-            existing.source_id = ds.id
+        if existing.source_id != ds_id:
+            if not dry_run:
+                existing.source_id = ds_id
             changed = True
         if changed:
             report.updated += 1

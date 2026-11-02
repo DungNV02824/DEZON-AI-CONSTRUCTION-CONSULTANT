@@ -141,7 +141,10 @@ def test_summary_area_only_and_one_floor():
     items = {i.label: i.value for i in block.items}
     assert items["Diện tích đất"] == "80 m²"
     assert items["Số tầng"] == "1 trệt (1 tầng)"
-    assert any("Móng băng" in a for a in block.assumptions)
+    # C-F12: phạm vi Hoàn thiện không tính móng -> không nêu giả định móng; xây thô thì có.
+    assert not any("Móng" in a for a in block.assumptions)
+    _, rough = build_summary(s.model_copy(update={"work_scope": "xay_tho"}))
+    assert any("Móng băng" in a for a in rough.assumptions)
 
 
 def test_summary_missing_fields_show_no_data():

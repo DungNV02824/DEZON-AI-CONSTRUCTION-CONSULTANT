@@ -653,3 +653,29 @@ def enqueue_sync(source: str, **kwargs: Any) -> dict[str, Any]:
     if source == "api" and not get_settings().dezon_api_base_url:
         result["warning"] = "Chưa cấu hình DEZON_API_BASE_URL — job api_sync sẽ bỏ qua (status skipped)."
     return result
+
+
+JOB_STATUS_VI = {"queued": "Đang chờ worker", "started": "Đang chạy", "finished": "Hoàn tất", "failed": "Lỗi",
+                 "deferred": "Đang chờ job khác", "scheduled": "Đã lên lịch", "stopped": "Đã dừng",
+                 "canceled": "Đã hủy"}
+
+
+def get_sync_job(job_id: str) -> dict[str, Any]:
+    """Trạng thái/kết quả job đồng bộ (O-F6). Không có -> 404; Redis không sẵn sàng -> 503."""
+    if not job_id or len(job_id) > 64 or not all(ch.isalnum() or ch in "-_" for ch in job_id):
+        raise AdminError(422, "Mã job không hợp lệ.")
+    from redis.exceptions import RedisError
+
+    try:
+        conn = redis_connection()
+        info = jobs.fetch_job(job_id, connection=conn)
+    except (RedisError, OSError) as exc:
+        raise AdminError(503, "Hàng đợi job (Redis) chưa sẵn sàng nên chưa xem được trạng thái job — kiểm tra "
+                              f"REDIS_URL. Lỗi: {exc.__class__.__name__}") from None
+    if info is None:
+        raise AdminError(404, f"Không tìm thấy job {job_id} (sai mã hoặc kết quả đã hết hạn sau 7 ngày).")
+    info["status_vi"] = JOB_STATUS_VI.get(str(info.get("status")), str(info.get("status")))
+    result = info.get("result")
+    if isinstance(result, dict) and result.get("status") == "skipped":
+        info["status_vi"] = "Bỏ qua"
+    return info

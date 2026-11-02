@@ -134,7 +134,14 @@ def calculate_estimate(inp: EstimateInput, rules: RuleSet, rate: RateData | None
             "không tính móng, mái, hầm, sân thượng và sân")
 
     # --- Móng ---------------------------------------------------------------------------------
-    if not interior_only:
+    # Phạm vi Hoàn thiện không gồm phần thô: móng không có hạng mục hoàn thiện nên KHÔNG cộng hệ số móng
+    # (quyết định nghiệp vụ, docs/DECISIONS.md "Nghiệm thu MVP — fixer chat"). Mái/hầm/sân thượng vẫn tính vì có
+    # phần hoàn thiện (chống thấm, lát, sơn).
+    finishing_only = scope == WorkScope.hoan_thien
+    if not interior_only and finishing_only:
+        assumptions.append(
+            "Phạm vi Hoàn thiện: không tính diện tích móng (móng thuộc phần xây thô, không có hạng mục hoàn thiện)")
+    if not interior_only and not finishing_only:
         foundation = inp.foundation_type
         if foundation is None:
             foundation = R.default_foundation(inp.floors)

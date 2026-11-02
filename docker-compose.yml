@@ -35,8 +35,14 @@ services:
       DATABASE_URL: postgresql+psycopg://dezon:dezon@db:5432/dezon
       REDIS_URL: redis://redis:6379/0
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://dezon.vn,http://localhost:5173,http://localhost:8080}
-      # IP của reverse proxy được tin cho X-Forwarded-For (rate limit theo IP thật). Mặc định chỉ localhost.
+      # IP/subnet của reverse proxy được tin cho X-Forwarded-For (rate limit chat theo IP thật của khách).
+      # Mặc định chỉ localhost. Khi chạy sau nginx/LB ở container hoặc máy khác PHẢI đặt đúng IP/subnet proxy
+      # (vd 172.16.0.0/12 hoặc 10.0.0.5), nếu không mọi khách chung một bucket CHAT_RATE_LIMIT_PER_MIN.
+      # KHÔNG đặt "*" khi cổng backend mở trực tiếp ra Internet (khách tự giả mạo X-Forwarded-For được).
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
+      # Nạp snapshot dữ liệu THẬT crawl từ dezon.vn (app/db/seed_data/dezon_snapshot.json) khi seed:
+      # hồ sơ + công trình thực tế + URL ảnh thật của nhà thầu demo. Đặt 0 để chỉ dùng fixture tối thiểu.
+      SEED_SNAPSHOT: ${SEED_SNAPSHOT:-1}
     command: sh -c "alembic upgrade head && python -m app.db.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers"
     restart: unless-stopped
     ports:

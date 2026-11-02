@@ -15,7 +15,6 @@ from __future__ import annotations
 import hashlib
 import logging
 import math
-import os
 import re
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -34,6 +33,7 @@ from app.schemas.common import BUILDING_TYPE_VI, WORK_SCOPE_VI
 log = logging.getLogger(__name__)
 
 EMBED_DIM = 1536
+DEFAULT_EMBEDDING_API_BASE = "https://api.openai.com/v1"
 ENTITY_TYPES = ("contractor", "project")
 
 
@@ -128,7 +128,8 @@ class OpenAIEmbedder:
         if not api_key:
             raise ValueError("Thiếu EMBEDDING_API_KEY cho EMBEDDING_PROVIDER=openai")
         self.api_key, self.model, self.dim = api_key, model, dim
-        self.base_url = (base_url or os.environ.get("EMBEDDING_API_BASE") or "https://api.openai.com/v1").rstrip("/")
+        # base_url lấy từ Settings.embedding_api_base (biến EMBEDDING_API_BASE) qua get_embedder().
+        self.base_url = (base_url or DEFAULT_EMBEDDING_API_BASE).rstrip("/")
         self.client = client or httpx.Client(timeout=60)
         self.batch_size = batch_size
 
@@ -150,10 +151,10 @@ class OpenAIEmbedder:
 
 
 @lru_cache
-def _cached_embedder(provider: str, model: str, dim: int, key_set: bool) -> Embedder:
+def _cached_embedder(provider: str, model: str, dim: int, key_set: bool, base_url: str = "") -> Embedder:
     settings = get_settings()
     if provider == "openai":
-        return OpenAIEmbedder(settings.embedding_api_key, model, dim)
+        return OpenAIEmbedder(settings.embedding_api_key, model, dim, base_url=base_url or None)
     if provider != "hash":
         log.warning("EMBEDDING_PROVIDER=%s không hỗ trợ — dùng HashEmbedder", provider)
     return HashEmbedder(dim)
@@ -173,7 +174,8 @@ def resolve_provider(settings=None) -> str:
 
 def get_embedder() -> Embedder:
     s = get_settings()
-    return _cached_embedder(resolve_provider(s), s.embedding_model, s.embedding_dim, bool(s.embedding_api_key))
+    return _cached_embedder(resolve_provider(s), s.embedding_model, s.embedding_dim, bool(s.embedding_api_key),
+                            s.embedding_api_base)
 
 
 def cosine(a: Sequence[float], b: Sequence[float]) -> float:

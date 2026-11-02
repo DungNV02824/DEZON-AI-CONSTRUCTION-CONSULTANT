@@ -56,9 +56,11 @@ def _candidates(inp: EstimateInput, rules: RuleSet, current: EstimateResult) -> 
 
     lower = R.lower_quality(inp.quality_tier)
     if lower is not None:
+        # Tên mức chất lượng viết thường giữa câu (thống nhất "mức tiết kiệm", không "mức Tiết kiệm").
+        lo_vi, cur_vi = QUALITY_TIER_VI[lower].lower(), QUALITY_TIER_VI[inp.quality_tier].lower()
         out.append(_Candidate(
-            "lower_quality", f"Hạ mức chất lượng xuống {QUALITY_TIER_VI[lower]}",
-            f"Dùng vật tư mức {QUALITY_TIER_VI[lower]} thay cho mức {QUALITY_TIER_VI[inp.quality_tier]}.",
+            "lower_quality", f"Hạ mức chất lượng xuống {lo_vi}",
+            f"Dùng vật tư mức {lo_vi} thay cho mức {cur_vi}.",
             {"quality_tier": lower.value}))
 
     if eff.basement and "ham" in groups:
@@ -115,7 +117,8 @@ def _to_option(cand: _Candidate, result: EstimateResult, current: EstimateResult
 def suggest_adjustments(inp: EstimateInput, rules: RuleSet, rate_lookup: RateLookup,
                         target_budget_vnd: int, current: EstimateResult,
                         today: date | None = None) -> list[BudgetOption]:
-    """Các phương án điều chỉnh, sắp theo chi phí tăng dần; mỗi phương án do engine tính lại.
+    """Các phương án điều chỉnh (đơn lẻ sắp theo chi phí tăng dần, phương án kết hợp — nếu có — ở cuối); mỗi
+    phương án do engine tính lại.
 
     `inp` là input GỐC của khách (chưa áp mặc định) để engine tính lại mặc định phù hợp
     (vd giảm từ 4 xuống 3 tầng -> móng mặc định đổi từ cọc sang băng).
@@ -138,18 +141,20 @@ def suggest_adjustments(inp: EstimateInput, rules: RuleSet, rate_lookup: RateLoo
             continue
         options.append(opt)
 
+    options.sort(key=lambda o: (o.cost_min is None, o.cost_min or 0))
+
     # Không phương án đơn lẻ nào vừa ngân sách -> thử kết hợp 2 phương án tiết kiệm nhiều nhất.
+    # Phương án kết hợp đặt SAU các phương án thành phần và mô tả nêu đúng tên hai phương án.
     if len(options) >= 2 and not any(o.fits_budget for o in options):
-        top = sorted(options, key=lambda o: o.cost_min)
-        first = top[0]
-        second = next((o for o in top[1:] if not set(o.changes) & set(first.changes)), None)
+        first = options[0]
+        second = next((o for o in options[1:] if not set(o.changes) & set(first.changes)), None)
         if second is not None:
             merged = {**first.changes, **second.changes}
             res = run(merged)
             if res is not None and res.cost_min < first.cost_min:
-                cand = _Candidate("combined", f"Kết hợp: {first.label_vi} + {second.label_vi.lower()}",
-                                  "Áp dụng đồng thời hai phương án trên.", merged)
+                second_lc = second.label_vi[:1].lower() + second.label_vi[1:]
+                cand = _Candidate("combined", f"Kết hợp: {first.label_vi} + {second_lc}",
+                                  f"Áp dụng đồng thời hai phương án “{first.label_vi}” và “{second.label_vi}”.",
+                                  merged)
                 options.append(_to_option(cand, res, current, target_budget_vnd))
-
-    options.sort(key=lambda o: (o.cost_min is None, o.cost_min or 0))
     return options

@@ -15,7 +15,7 @@ interface Errors {
 }
 
 export function QuoteRequestForm({ block }: { block: QuoteRequestFormBlock }) {
-  const { submitQuote, estimateSessionId } = useWidget();
+  const { submitQuote, quoteSubmitted, estimateSessionId } = useWidget();
   const uid = useId();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -24,7 +24,7 @@ export function QuoteRequestForm({ block }: { block: QuoteRequestFormBlock }) {
   const [chosen, setChosen] = useState<number[]>(() => block.contractors.map((c) => c.id));
   const [errors, setErrors] = useState<Errors>({});
   const [submitting, setSubmitting] = useState(false);
-  const [code, setCode] = useState<string | null>(null);
+  const [code, setCode] = useState<string | null>(block.submitted_code ?? null);
   const estimateId = block.estimate_session_id ?? estimateSessionId;
 
   const validate = (): Errors => {
@@ -60,6 +60,7 @@ export function QuoteRequestForm({ block }: { block: QuoteRequestFormBlock }) {
         note: note.trim() || null,
       });
       setCode(res.code);
+      quoteSubmitted(block, res.code);
     } catch {
       setErrors({ submit: 'Xin lỗi, em chưa gửi được yêu cầu. Anh/chị vui lòng thử lại sau ít phút.' });
     } finally {

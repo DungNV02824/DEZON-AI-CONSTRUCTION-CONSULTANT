@@ -54,7 +54,7 @@ ENGINE (app.engines.matching, hàm thuần):
 - rank_contractors(contractors, criteria, weights, neighbors=(), converted_area_m2=None, limit=None, min_candidates=3) -> RankingResult(ranked, total_candidates, relaxed_to_neighbors, notes)
 - build_evidence(facts, today=None, stale_days=None) -> dict[str, EvidenceValue]; build_reasons(scored, evidence, criteria) -> list[Reason]; build_cautions(scored, evidence, criteria) -> list[Caution]; estimate_cost(facts, work_scope, area) -> ((lo,hi)|None, kind); scorer.budget_score(cost, budget>0) -> (score, flag)
 SCHEMA (app.schemas.matching):
-- OverviewContractor{card, has_projects_of_type, projects_of_type, profile_verified}
+- OverviewContractor{card, has_projects_of_type, projects_of_type, profile_verified, projects_of_type_count}. projects_of_type_count (int, mặc định 0) là trường MỚI: tổng số công trình đúng loại có trang dự án của nhà thầu, không bị cắt như danh sách projects_of_type.
 - ContractorOverview{province, building_type, contractor_count, contractors_with_projects, total_dezon_projects, rough_price_range, finish_price_range, with_warranty_info, verified_profiles, contractors, notes, projects_of_type_count}. projects_of_type_count là trường MỚI, mặc định unavailable. total_dezon_projects là tổng mọi loại công trình, display ghi rõ điều này.
 
 

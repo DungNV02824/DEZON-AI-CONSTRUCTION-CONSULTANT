@@ -21,6 +21,9 @@ from app.schemas.knowledge import KnowledgeChunk
 VECTOR_WEIGHT = 0.6
 LEXICAL_WEIGHT = 0.4
 MIN_SCORE = 0.05
+# Ngưỡng "liên quan" cho câu trả lời chat (search_knowledge): dưới ngưỡng coi như không tìm thấy thay vì trả đoạn
+# mô tả lạc đề (đo trên dữ liệu mẫu: câu hỏi lạc đề ≤ 0,2; câu hỏi đúng thực thể/loại công trình ≥ 0,28).
+RELEVANT_MIN_SCORE = 0.25
 
 
 def _vec_literal(vec: list[float]) -> str:
@@ -52,8 +55,8 @@ LIMIT :lim
 
 
 def search(db: Session, query: str, entity_type: str | None = None, k: int = 5,
-           embedder: Embedder | None = None) -> list[KnowledgeChunk]:
-    """Tìm k chunk liên quan nhất (mỗi thực thể tối đa 1 chunk)."""
+           embedder: Embedder | None = None, min_score: float = MIN_SCORE) -> list[KnowledgeChunk]:
+    """Tìm k chunk liên quan nhất (mỗi thực thể tối đa 1 chunk), chỉ giữ chunk có điểm ≥ `min_score`."""
     query = clean_text(query)
     if not query:
         return []
@@ -85,7 +88,7 @@ def search(db: Session, query: str, entity_type: str | None = None, k: int = 5,
         lexical = max(float(r["trgm_score"] or 0.0), _term_overlap(terms, r["content"]))
         score = VECTOR_WEIGHT * max(float(r["vec_score"] or 0.0), 0.0) + LEXICAL_WEIGHT * lexical
         key = (r["entity_type"], r["entity_id"])
-        if score >= MIN_SCORE and (key not in best or score > best[key][0]):
+        if score >= max(min_score, MIN_SCORE) and (key not in best or score > best[key][0]):
             best[key] = (score, r)
     ranked = sorted(best.values(), key=lambda x: x[0], reverse=True)
 

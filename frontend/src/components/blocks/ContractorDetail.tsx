@@ -18,6 +18,12 @@ const INFO_LABELS: Record<ContractorInfoKey, string> = {
   warranty: 'Bảo hành',
 };
 const INFO_ORDER = Object.keys(INFO_LABELS) as ContractorInfoKey[];
+/** Khóa phụ backend có thể gửi (fallback.py INFO_LABEL_VI). */
+const EXTRA_INFO_LABELS: Record<string, string> = { staff: 'Nhân sự', province: 'Khu vực' };
+/** Không bao giờ in tên khóa thô (vd "years_experience") ra giao diện. */
+export function infoLabel(k: string): string {
+  return (INFO_LABELS as Record<string, string>)[k] ?? EXTRA_INFO_LABELS[k] ?? 'Thông tin khác';
+}
 const DEFAULT_CHIPS = ['Hồ sơ nhà thầu', 'Dự án thực tế', 'Đơn giá tham khảo'];
 
 function projectMeta(p: ProjectSummary): string[] {
@@ -89,9 +95,9 @@ export function ContractorDetail({ block }: { block: ContractorDetailBlock }) {
         <tbody>
           {infoKeys.map((k) => (
             <tr key={k}>
-              <th scope="row">{INFO_LABELS[k as ContractorInfoKey] ?? k}</th>
+              <th scope="row">{infoLabel(k)}</th>
               <td>
-                <EvidenceCell ev={p.info[k]} title={INFO_LABELS[k as ContractorInfoKey] ?? k} />
+                <EvidenceCell ev={p.info[k]} title={infoLabel(k)} />
               </td>
             </tr>
           ))}

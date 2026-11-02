@@ -349,7 +349,9 @@ def test_mock_writes_from_tool_results_without_best_claim():
                     name="search_contractors")]
     r = MockProvider().chat("S", msgs, [ToolSpec("search_contractors", "", {})], {"last_user_message": "tìm nhà thầu"})
     assert not r.tool_calls
-    assert "Kiến Phong" in r.text and "7 công trình ghi nhận trên Dezon" in r.text
+    assert "Kiến Phong" in r.text
+    # W-F7: lý do từng nhà thầu nằm trong block contractor_list — văn bản không chép lại.
+    assert "7 công trình ghi nhận trên Dezon" not in r.text
     assert "tốt nhất" not in r.text and "phù hợp nhất với tiêu chí của anh/chị" in r.text
 
 

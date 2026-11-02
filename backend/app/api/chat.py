@@ -15,13 +15,16 @@ from sqlalchemy.orm import Session
 
 from app.ai.orchestrator import SessionNotFoundError
 from app.ai.providers.base import LLMProvider
+from app.api.deps import VietnameseRoute
 from app.db.session import get_db
 from app.services import chat_service
 from app.services.chat_service import RateLimiter, SessionCreatedOut, SessionStateOut
 
 log = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/chat", tags=["chat"])
+# VietnameseRoute: lỗi validation (vd tin nhắn rỗng) -> 422 {detail, errors:[{field, message}]} tiếng Việt như các API
+# khác, không trả lỗi pydantic thô.
+router = APIRouter(prefix="/api/chat", tags=["chat"], route_class=VietnameseRoute)
 
 SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"}
 

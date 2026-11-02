@@ -234,7 +234,12 @@ def test_7c_free_question_overview_with_links(db):
     r = _say(db, sid, "Nhà thầu nào thi công biệt thự tốt tại TP.HCM?")
     assert "get_contractor_overview" in r.tool_calls
     assert "tốt nhất" not in r.text and "phù hợp" in r.text
-    assert "https://dezon.vn/" in r.text
+    # C-F4: link hồ sơ/công trình nằm trong block có cấu trúc (bảng tổng quan), không dán URL thô vào câu.
+    table = _block(r, "comparison_table").data
+    assert all(c.profile_url.startswith("https://dezon.vn/") for c in table.contractors)
+    projects_row = next(row for row in table.rows if row.key == "projects_of_type")
+    assert any(c.source and str(c.source.url or "").startswith("https://dezon.vn/") for c in projects_row.cells)
+    assert "https://" not in r.text
     assert validator.check(r.text, r.tool_results, _user_texts(db, sid)).ok
 
 

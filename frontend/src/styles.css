@@ -871,6 +871,12 @@ thead .dz-sticky {
   color: var(--dz-muted);
 }
 
+.dz-legend-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .dz-legend li {
   display: inline-flex;
   align-items: center;
@@ -940,7 +946,7 @@ thead .dz-sticky {
   gap: 4px;
   border: 0;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 16px;
   white-space: nowrap;
@@ -1617,9 +1623,42 @@ thead .dz-sticky {
     min-width: 32px;
     min-height: 32px;
   }
+  /* Lý do trong thẻ nhà thầu: chấm nguồn vẫn có vùng chạm 32px nhưng không làm giãn dòng chữ. */
+  .dz-reasons li .dz-badge--dot {
+    min-width: 32px;
+    min-height: 32px;
+    margin: -7px 0;
+  }
+  .dz-breakdown summary {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .dz-namebtn {
+    min-height: 32px;
+  }
+  /* Chữ nội dung ≥ 13px (selector có đủ độ ưu tiên để thắng rule gốc như .dz-srcbadges .dz-badge--full). */
   .dz-pill,
   .dz-badge,
-  .dz-small {
+  .dz-small,
+  .dz-srcbadges .dz-badge--full,
+  .dz-legend,
+  .dz-header__sub,
+  .dz-ev__source,
+  .dz-ev__stale,
+  .dz-facts dt,
+  .dz-chip,
+  .dz-option__meta,
+  .dz-note--inline,
+  .dz-error,
+  .dz-src__meaning,
+  .dz-src__stale,
+  .dz-table--grid,
+  .dz-table--compare {
     font-size: 13px;
+  }
+  .dz-footnote,
+  .dz-mock-tag {
+    font-size: 12px;
   }
 }

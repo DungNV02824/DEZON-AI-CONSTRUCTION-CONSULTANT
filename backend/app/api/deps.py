@@ -66,6 +66,7 @@ _FIELD_VI = {
     "basement_area_m2": "diện tích hầm", "roof_area_m2": "diện tích mái", "rooftop_area_m2": "diện tích sân thượng",
     "yard_area_m2": "diện tích sân", "roof_type": "loại mái", "foundation_type": "loại móng",
     "rooftop_terrace": "sân thượng", "converted_area_m2": "diện tích quy đổi",
+    "content": "nội dung tin nhắn", "user_id": "mã người dùng",
 }
 
 
@@ -85,6 +86,8 @@ def _message_vi(err: dict[str, Any]) -> str:
     msg = str(err.get("msg", ""))
     if t == "missing":
         return "thiếu thông tin bắt buộc"
+    if t == "int_parsing_size":
+        return "số quá lớn"
     if t in ("int_parsing", "int_type", "int_from_float"):
         return "phải là số nguyên"
     if t in ("float_parsing", "float_type", "decimal_parsing", "decimal_type"):

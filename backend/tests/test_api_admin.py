@@ -338,13 +338,15 @@ def test_import_rates_dry_run_then_real(client, db):
     r = client.post("/api/admin/import/rates", headers=H, params={"dry_run": "true"},
                     files={"file": ("construction_rates.csv", content, "text/csv")})
     assert r.status_code == 200, r.text
-    assert r.json()["dry_run"] is True and r.json()["inserted"] == 0
-    assert db.scalar(select(func.count()).select_from(ConstructionRate)) == before
+    preview = r.json()
+    assert preview["dry_run"] is True and preview["inserted"] > 0  # xem trước số dòng sẽ thêm (O-F7)
+    assert db.scalar(select(func.count()).select_from(ConstructionRate)) == before  # nhưng không ghi DB
     r = client.post("/api/admin/import/rates", headers=H,
                     files={"file": ("construction_rates.csv", content, "text/csv")})
     rep = r.json()
     assert r.status_code == 200 and rep["dry_run"] is False and rep["inserted"] > 0 and rep["source_id"]
     assert db.scalar(select(func.count()).select_from(ConstructionRate)) == before + rep["inserted"]
+    assert (rep["inserted"], rep["updated"]) == (preview["inserted"], preview["updated"])
     assert db.get(DataSource, rep["source_id"]).source_type == "csv_import"
     # Nhập lại cùng file -> unchanged
     r = client.post("/api/admin/import/rates", headers=H,

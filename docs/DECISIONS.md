@@ -617,3 +617,148 @@ Mỗi module bổ sung mục riêng khi có quyết định mới.
 - K5: thông báo lỗi thiếu diện tích bằng tiếng Việt, không lộ tên trường.
 - docker-compose: healthcheck Postgres qua TCP (sửa lỗi backend sập ở lần khởi động đầu), `restart: unless-stopped`,
   uvicorn `--proxy-headers` với `FORWARDED_ALLOW_IPS` mặc định `127.0.0.1` (không tin `X-Forwarded-For` giả).
+
+## Nghiệm thu MVP — fixer frontend
+
+- W-F2: reset `font/color: inherit` cho button/input/textarea đặt trong `:where(...)` (specificity 0), nên mọi class
+  (`.dz-btn--primary`, `.dz-btn--sm`, `.dz-composer__input`...) đều thắng. Test hồi quy đọc văn bản `styles.css` vì
+  jsdom không tính cascade theo specificity.
+- W-F3: nhãn thông tin nhà thầu dùng `infoLabel()`: map đủ khóa backend (`years_experience`, `staff`, `province`), còn
+  khóa lạ thì hiện "Thông tin khác", không bao giờ in tên khóa thô.
+- W-F6: chip trong `source_badges` xuống dòng (`white-space: normal`, `overflow-wrap: anywhere`, `max-width: 100%`).
+  Không rút gọn bằng ellipsis vì khách cần đọc hết nguồn.
+- W-F7 (phần frontend): khi có block mới, nếu tin nhắn cao hơn khung nhìn thì cuộn tới đầu tin nhắn. Vị trí tính bằng
+  `getBoundingClientRect` so với khung cuộn. Nguyên nhân gốc: trước đây dùng `offsetTop`, mà `.dz-messages` không được định
+  vị nên `offsetTop` tính theo `.dz-panel` (cộng thêm chiều cao header), làm khung chat cuộn vào giữa đoạn văn. Việc rút
+  gọn lời dẫn do fixer chat làm.
+- W-F8: tin nhắn cục bộ đã xong (hồ sơ, so sánh, form báo giá) được lưu vào localStorage, khóa
+  `<khóa phiên>:local:<session_id>`, tối đa 20 tin. Mỗi tin ghi `afterId` = id của tin server đứng ngay trước nó; khi tải
+  lại trang thì ghép vào đúng vị trí đó, mốc không còn thì xếp cuối. Gửi báo giá thành công thì ghi
+  `submitted_code` vào block `quote_request_form` (trường chỉ có ở client), nên sau khi tải lại vẫn thấy thẻ thành công
+  kèm mã DZ-…. Bắt đầu phiên mới hoặc phiên hết hạn (4xx) thì xóa bản lưu của phiên cũ. Nếu vượt hạn mức thì bỏ dần tin
+  cũ nhất. Không đổi backend.
+- W-F10: chỉ áp dụng ở viewport ≤ 640px: nút, chip, link, `summary` cao ≥ 44px; icon header 44×44; chấm nguồn trong lý do
+  có vùng chạm 32px (dùng margin âm để dòng chữ không giãn); chữ nội dung ≥ 13px (nhắc lại các selector có specificity
+  cao như `.dz-srcbadges .dz-badge--full`); ô nhập 16px. Trên desktop, badge tăng từ 11px lên 12px.
+- W-F11 (phần frontend): pill mức phù hợp có viền và bảng màu riêng (teal, indigo, tím), không trùng 4 màu trạng thái
+  mục 4.4. `contractor_list` hiện sẵn chú giải 4 trạng thái (`StatusLegend`) khi lý do có chấm, nên đọc được mà không
+  cần hover. Badge cho ô "Hồ sơ dự án" trong bảng so sánh do fixer ops làm ở backend.
+
+## Nghiệm thu MVP — fixer ops
+
+- O-F1: `python -m app.db.seed` gọi `main()` của module `app.db.seed` (commit 3e802c5), nên các hook (snapshot →
+  profile_completeness → RAG) chạy đúng danh sách đã đăng ký. Test hồi quy là
+  `test_acceptance_fixes.py::test_seed_as_main_runs_hooks` (chạy qua `runpy` với `run_name="__main__"`).
+- O-F2: chặn ký tự điều khiển ở một chỗ chung: `RejectControlCharsMiddleware` (ASGI thuần, không dùng
+  BaseHTTPMiddleware để không ảnh hưởng SSE) trong `app/main.py`. Middleware soi path, query và body JSON; ký tự C0 (trừ
+  tab, CR, LF) và DEL, ở dạng byte thô hay escape `\u0000`, đều bị trả 422 với `detail` tiếng Việt trước khi truy vấn
+  DB. Không soi body multipart hay octet-stream (file import của admin). Chuỗi `\u0000` khách tự gõ không bị chặn. CORS
+  bọc ngoài middleware này nên phản hồi 422 vẫn có header CORS.
+- O-F5: thêm handler `RequestValidationError` ở cấp app, dùng chung `validation_error_response`, làm lưới an toàn cho
+  mọi router. Chat router cũng đã dùng `VietnameseRoute` do fixer chat thêm. Map thêm `int_parsing_size` → "số quá lớn"
+  và nhãn trường `content` và `user_id`.
+- O-F3: `read_table` bọc lỗi openpyxl (BadZipFile, XML hỏng…) thành `ValueError("File Excel không hợp lệ…")`, nên
+  báo cáo trả `status: failed` thay vì lỗi 500.
+- O-F7: `dry_run` chạy đúng logic so khớp của lần nhập thật nhưng không ghi gì. Nó tìm nguồn csv_import theo nhãn giống
+  `upsert_data_source`: cùng hash thì báo `unchanged`, khác thì đếm từng dòng `inserted/updated/unchanged/skipped`
+  (`skipped` = bị nguồn ưu tiên cao hơn chặn). Toast ở admin.html ghi rõ "Chạy thử (chưa ghi): sẽ thêm…".
+- O-F6: thêm `GET /api/admin/sync/jobs/{job_id}`, trả `status`, `status_vi`, `result` và `error` (dòng cuối
+  traceback). Job được xếp với `result_ttl` và `failure_ttl` là 7 ngày (mặc định của RQ là 500 s). Trang admin tự hỏi
+  trạng thái mỗi 2 s sau khi kích hoạt (tối đa khoảng 3 phút) và có ô "Mã job" để xem lại. `job_reindex_all` và
+  `job_after_sync` giờ có log thống kê.
+- O-F4/O-F8/O-F9: README có thêm mục "Triển khai sau reverse proxy" (`FORWARDED_ALLOW_IPS`) và bảng biến môi trường
+  đầy đủ (LLM_API_KEY cho Claude, LLM_MODEL, LLM_BASE_URL, MAX_TOOL_ROUNDS, EMBEDDING_*, SEED_SNAPSHOT). `.env.example`
+  có đủ các biến này. `EMBEDDING_API_BASE` giờ đi qua `Settings.embedding_api_base`, không còn đọc thẳng
+  `os.environ`. API_CONTRACT.md liệt kê đủ endpoint admin, kèm mục lỗi chung.
+- W-F4: `_criteria_for_estimate_id` dựng tiêu chí giống `tools._slot_criteria`. Nếu phiên chat gắn với khái toán có
+  `slots.province` và `slots.building_type` thì lấy tỉnh/quận/loại/hạng mục/số tầng từ slot; ngân sách lấy theo thứ tự
+  body `budget_vnd` → `slots.budget_vnd` → `input.budget_vnd`. Nếu slot thiếu thì dùng `estimate_sessions.input`.
+  `CompareIn` nhận thêm `budget_vnd` (tùy chọn). Đã kiểm trên dữ liệu e2e: thẻ cho 52/42/41, code cũ ra 62/42/41,
+  code mới ra 52/42/41.
+- W-F11 (backend): ô "Hồ sơ dự án" đã có sẵn `status` (nguồn yếu nhất trong các dự án, thường là `on_dezon`) và
+  `source` (link hồ sơ nhà thầu, ngày cập nhật mới nhất). Đã kiểm trên stack 8001 và thêm test để mọi ô khác
+  `unavailable` của bảng so sánh luôn có status và source. Backend không cần sửa gì thêm.
+- W-F5: KHÔNG bịa dữ liệu. Dùng crawler của dự án (`Fetcher`: robots.txt, delay ≥ 2 s, UA DezonAIBot,
+  `max_requests=25`; thực tế chạy 22 request ngày 02/11/2026) để lấy hồ sơ và 6 công trình thực tế cho mỗi nhà thầu
+  kien-phong, smartcons-tech, huy-hoang. Kết quả lưu ở `app/db/seed_data/dezon_snapshot.json`: 3 hồ sơ, 18 công trình
+  có `project_url`, mỗi công trình 3–8 URL ảnh gốc trên dezon.vn, avatar thật. docker-compose đặt
+  `SEED_SNAPSHOT=${SEED_SNAPSHOT:-1}` cho backend. Upsert dùng cùng URL nguồn nên ảnh placehold.co của fixture
+  Kiến Phong được thay bằng ảnh thật. Test luôn đặt `SEED_SNAPSHOT=0` trong conftest để fixture mục 11.3 giữ nguyên.
+  Bản thân snapshot được test riêng: dữ liệu thật, idempotent, mỗi nhà thầu có công trình và ảnh, có nhà thầu > 3 ảnh.
+
+## Nghiệm thu MVP — fixer chat
+
+Test hồi quy chính: `tests/test_chat_fixes.py` (luồng thật qua orchestrator + MockProvider).
+
+- C-F1/C-F2: `create_quote_request` không có `contractor_ids` thì chỉ gửi tới nhà thầu đã đề xuất mà khách NÊU TÊN
+  trong tin nhắn hiện tại. Khách không nêu tên ai thì mới gửi tới các nhà thầu vừa đề xuất (luồng nút "Yêu cầu báo
+  giá"). Mock tự truyền `contractor_ids` theo tên. Văn bản xác nhận nêu tên nhà thầu nhận yêu cầu
+  (`contractor_names`). Bộ nhận tên khách hiểu cả "tên X", "họ tên X", "tên tôi là X", "tôi là X".
+- C-F3: câu giả định ("nếu…/giả sử…", `normalize.is_hypothetical`) không ghi đè slot (`_protect_profile`). Mock gọi
+  `calculate_estimate` với tham số giả định. Tool không cập nhật `state.estimate` khi tham số khác slot, nên khái toán
+  chính giữ nguyên, kèm `estimate_table` của phương án thử. Chi phí ngoài phạm vi engine (ép/khoan cọc, giấy phép,
+  thiết kế, tháo dỡ, khảo sát địa chất, đấu nối) trả "Chưa có dữ liệu" và nói rõ khoản đó chưa gồm trong khái toán,
+  không tra RAG. `search_knowledge` chỉ trả chunk có điểm ≥ `RELEVANT_MIN_SCORE = 0,25`. Đo trên dữ liệu e2e: câu
+  lạc đề ≤ 0,12, câu đúng thực thể ≥ 0,29.
+- C-F4: câu hỏi tổng quan (mục 8.4) trả block `comparison_table`, vì frontend đã render được block này. Dòng đầu là
+  "Công trình <loại> có trang dự án" (số đúng loại, nguồn là trang dự án), sau đó là công trình ghi nhận, đơn giá
+  thô/hoàn thiện, bảo hành. Văn bản nêu số nhà thầu và TÊN nhà thầu có công trình đúng loại. Không lặp nguồn/URL
+  trong câu: link hồ sơ nằm ở tiêu đề cột, link công trình nằm ở chấm nguồn. Không xếp hạng.
+- C-F5: `get_contractor_projects` trả thêm tổng `dezon_project_count` và hồ sơ (`contractor_detail`). Câu trả lời có
+  dạng "7 công trình ghi nhận trên Dezon (không đồng nghĩa với số công trình đã hoàn thành); trong đó 3 công trình có
+  trang dự án".
+- C-F6: câu thiếu dữ liệu viết thành câu tự nhiên, không dùng "…: Chưa có dữ liệu.". Khi đang thu thập, câu hỏi
+  "đơn giá …" không ngầm điền `work_scope`/`quality_tier`. Khu vực khách nói vẫn được nhận.
+- C-F7: câu hỏi hồ sơ được trả lời đúng mục (kinh nghiệm/bảo hành/nhân sự/quy mô/đơn giá), phần hồ sơ còn lại ở thẻ.
+  Văn bản ngân sách chỉ nêu phương án vừa ngân sách (hoặc rẻ nhất). "Tìm nhà thầu khác" mà không có nhà thầu mới thì
+  nói rõ Dezon chỉ có N nhà thầu phù hợp. Để phân biệt lần đề xuất đầu với lần cập nhật, khối trạng thái có thêm
+  `nha_thau_luot_truoc`.
+- C-F8: ở lượt thu thập slot, câu hỏi do code dựng là đủ, mock không thêm câu "đã ghi nhận". Nhiều đoạn trong một
+  tin thì chỉ đoạn đầu mở bằng "Dạ,". Lời chào thì đáp "Dạ, em chào anh/chị ạ."
+- C-F9: "Sửa lại" mà chưa nói sửa gì thì CHỈ hỏi sửa mục nào, kèm nút theo từng mục (`dialog.EDIT_FIELD_REPLIES`,
+  value "Tôi muốn sửa <mục>"). Nút "Giữ nguyên" gửi "Thông tin đúng rồi". Không gắn lại bản tóm tắt. Khách nêu mục
+  ("Tôi muốn sửa số tầng") thì hỏi đúng mục đó, kèm quick replies và `expected_slots`.
+- K4: khách xác nhận lại (chưa xác nhận → xác nhận) mà slot khái toán không đổi, trong khi phiên đã có khái toán: tính
+  lại và hiển thị lại khái toán, ngân sách, nhà thầu (reset `estimate/matched_for/budget_checked_for`). Không trả câu
+  chung chung.
+- C-F10: hai đầu khoảng tiền cùng đơn vị hiển thị cùng số chữ số thập phân ("1,740–2,058 tỷ", "1,065–1,260 tỷ"). Hai
+  đầu cùng là số nguyên thì vẫn gọn ("2–3 tỷ").
+- C-F11: văn bản khái toán nói rõ khi dùng đơn giá mặc định toàn quốc. Không có nhà thầu thì không hỏi ngân sách mà
+  gợi ý bằng quick replies ("Tìm nhà thầu tại <TP khác>", "Sửa thông tin công trình"). "Tìm nhà thầu tại X" chỉ tìm
+  ở X, không đổi khu vực công trình.
+- C-F12 (quyết định nghiệp vụ, chờ Dezon xác nhận): phạm vi **Hoàn thiện** KHÔNG cộng hệ số móng vào diện tích quy
+  đổi, vì móng thuộc phần xây thô và không có hạng mục hoàn thiện. Assumptions ghi rõ điều này. Bản tóm tắt cũng không
+  nêu giả định móng cho Hoàn thiện, Nội thất hay căn hộ. Mái, hầm, sân thượng vẫn tính vì có phần hoàn thiện (chống
+  thấm, lát, sơn). Ví dụ nhà phố 5×20, 4 tầng, hoàn thiện: 490 m² → 450 m².
+- C-F13: rate limit chuyển sang cửa sổ TRƯỢT 60 s cho cả Redis (sorted set) và bộ nhớ, không còn burst gấp đôi quanh
+  mốc phút. Lượt bị chặn không được tính. Lấy IP thật sau proxy là việc cấu hình triển khai (`FORWARDED_ALLOW_IPS`,
+  README mục reverse proxy).
+- C-F14: chat router dùng `route_class=VietnameseRoute`. Tin nhắn rỗng trả 422 `{detail, errors:[{field, message}]}`.
+- C-F15: `public_slots` bỏ trường nội bộ `asked` (GET phiên, event `done`, TurnResult).
+- W-F1: orchestrator nhận diện "Tôi chọn phương án: <label>" bằng cách so khớp tên với `options` của lần
+  `suggest_budget_adjustments` gần nhất: khớp đúng tên trước, rồi khớp tên dài nhất. Sau đó áp đúng `changes` của
+  phương án do engine tính vào slot, không suy lại từ chữ. Khách đã chủ động chọn nên giữ trạng thái xác nhận, tính
+  lại ngay (khái toán, ngân sách, nhà thầu) và báo "đã áp dụng phương án …". Dự phòng: `parse_floors` ưu tiên "còn N
+  tầng", bỏ qua "giảm/bớt/thêm N tầng".
+- W-F7: văn bản khi trả estimate/contractor_list chỉ có lời dẫn ngắn và giải thích gồm, chưa gồm, 1–2 yếu tố tăng
+  (mục 6.5). Không chép bảng, phương án hay lý do. Câu hỏi ngân sách là đoạn cuối, tách riêng. Hướng dẫn
+  `buoc_tiep_theo` cho LLM thật cũng yêu cầu như vậy.
+- W-F9: phương án "Kết hợp" đứng sau các phương án thành phần. Mô tả nêu đúng tên hai phương án. Tên mức chất lượng
+  viết thường khi đứng giữa câu ("hạ mức chất lượng xuống tiết kiệm").
+
+## Nghiệm thu MVP — tích hợp sau 3 fixer
+
+- Sau khi rebuild stack e2e với snapshot dữ liệu thật, câu hỏi tổng quan ("Nhà thầu nào thi công biệt thự tốt tại
+  TP.HCM?") rơi về câu xin lỗi chung dù bảng vẫn hiện. Nguyên nhân: câu "Kiến Phong (4 công trình biệt thự có trang
+  dự án)" không truy được, vì tool chỉ trả danh sách `projects_of_type`. Validator không đếm danh sách này, và khi
+  rút gọn cho LLM danh sách còn bị cắt còn 3 mục. Fixture test chỉ có ít công trình nên không lộ lỗi. Cách sửa: THÊM
+  `OverviewContractor.projects_of_type_count: int = 0` (đếm đủ). Validator coi trường này và độ dài
+  `projects_of_type` là số công trình. Câu dự phòng và ô "Công trình <loại> có trang dự án" dùng số đếm này. Có
+  test hồi quy `tests/test_integration_fixes.py`.
+- Frontend `ComparisonTable`: khi hàng đầu có key `projects_of_type` (bảng tổng quan C-F4), tiêu đề là
+  "Tổng quan N nhà thầu" thay vì "So sánh N nhà thầu".
+- Rate limit theo IP thật (C-F13): `docker-compose.yml` đã có `FORWARDED_ALLOW_IPS` (mặc định 127.0.0.1). Stack e2e
+  không có reverse proxy, nên mọi khách đi qua cổng Docker chung một IP gateway. Đây là cấu hình triển khai, không
+  phải lỗi mã.
+- Mã báo giá DZ-… chỉ lưu localStorage (W-F8). Chưa ghi tin nhắn báo giá vào lịch sử chat phía server: để sau MVP.
+

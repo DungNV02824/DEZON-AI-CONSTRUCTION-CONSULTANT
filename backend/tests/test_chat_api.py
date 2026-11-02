@@ -56,6 +56,62 @@ def test_redis_rate_limiter_falls_back_to_memory_on_error():
     assert [lim.hit("ip")[0] for _ in range(3)] == [True, True, False]
 
 
+class _FakeZRedis:
+    """Redis giả tối thiểu (sorted set) để kiểm tra logic cửa sổ trượt không cần Redis thật."""
+
+    def __init__(self):
+        self.z: dict[str, dict[str, float]] = {}
+
+    def pipeline(self):
+        outer = self
+
+        class _P:
+            def __init__(self):
+                self.ops = []
+
+            def __getattr__(self, name):
+                return lambda *a, **k: self.ops.append((name, a, k))
+
+            def execute(self):
+                return [getattr(outer, n)(*a, **k) for n, a, k in self.ops]
+
+        return _P()
+
+    def zremrangebyscore(self, key, lo, hi):
+        d = self.z.setdefault(key, {})
+        for m in [m for m, sc in d.items() if sc <= float(hi)]:
+            del d[m]
+
+    def zadd(self, key, mapping):
+        self.z.setdefault(key, {}).update(mapping)
+
+    def zcard(self, key):
+        return len(self.z.get(key, {}))
+
+    def expire(self, key, ttl):
+        return True
+
+    def zrem(self, key, member):
+        self.z.get(key, {}).pop(member, None)
+
+    def zrange(self, key, start, end, withscores=False):
+        items = sorted(self.z.get(key, {}).items(), key=lambda x: x[1])[start:end + 1]
+        return items if withscores else [m for m, _ in items]
+
+
+def test_redis_rate_limiter_sliding_window_no_double_burst():
+    """C-F13: cửa sổ trượt — không cho burst gấp đôi quanh mốc chuyển phút; lượt bị chặn không bị tính."""
+    now = [59.0]
+    lim = RedisRateLimiter(_FakeZRedis(), limit=20, clock=lambda: now[0])
+    assert all(lim.hit("ip")[0] for _ in range(20))
+    now[0] = 61.0  # sang phút mới — cửa sổ cố định sẽ cho thêm 20 tin
+    ok, retry = lim.hit("ip")
+    assert not ok and 1 <= retry <= 60
+    assert lim.hit("ip-khac")[0]
+    now[0] = 119.5  # các lượt lúc 59.0 đã ra khỏi cửa sổ 60 giây
+    assert lim.hit("ip")[0]
+
+
 def test_redis_rate_limiter_with_real_redis():
     redis = pytest.importorskip("redis")
     from app.config import get_settings
@@ -116,7 +172,12 @@ def test_get_session_excludes_tool_messages(api):
 @pytest.mark.parametrize("payload", [{"content": ""}, {"content": "   "}, {"content": "x" * 2001}, {}])
 def test_send_message_validation_422(api, payload):
     sid = api.post("/api/chat/sessions", json={}).json()["session_id"]
-    assert api.post(f"/api/chat/sessions/{sid}/messages", json=payload).status_code == 422
+    r = api.post(f"/api/chat/sessions/{sid}/messages", json=payload)
+    assert r.status_code == 422
+    # C-F14: định dạng lỗi tiếng Việt gọn như các API khác, không phải lỗi pydantic thô.
+    body = r.json()
+    assert isinstance(body["detail"], str) and "Value error" not in r.text and "msg" not in r.text
+    assert body["errors"] and {"field", "message"} <= set(body["errors"][0])
 
 
 @pytest.mark.db
@@ -152,6 +213,9 @@ def test_sse_events_order_and_done_payload(api):
     done = events[-1][1]
     assert set(done) == {"message_id", "stage", "slots", "missing_required"}
     assert done["stage"] == "collect" and done["slots"]["building_type"] == "nha_pho"
+    # C-F15: không lộ trạng thái nội bộ của dialog ra client.
+    assert "asked" not in done["slots"] and "_state" not in done["slots"]
+    assert "asked" not in api.get(f"/api/chat/sessions/{sid}").json()["slots"]
     assert "province" in done["missing_required"]
     assert events[first_block][1]["block"]["type"] == "quick_replies"
 

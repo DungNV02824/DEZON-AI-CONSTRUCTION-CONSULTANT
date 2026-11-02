@@ -379,3 +379,16 @@ def test_rate_not_matching_input_warns_and_is_reference():
     ok = calc(rules=make_rules(approved=True), rate=make_rate(status=VerificationStatus.verified))
     assert not any("không khớp" in w for w in ok.warnings)
     assert ok.cost.status == "verified"
+
+
+def test_finishing_scope_does_not_add_foundation_area():
+    """C-F12: phạm vi Hoàn thiện không cộng hệ số móng (móng thuộc phần xây thô) và ghi rõ trong assumptions."""
+    rough = calc(make_input(floors=4), rate=make_rate())
+    fin = calc(make_input(floors=4, work_scope="hoan_thien"), rate=make_rate(work_scope="hoan_thien"))
+    assert any(c.startswith("foundation") for c in codes(rough))
+    assert not any(c.startswith("foundation") for c in codes(fin))
+    assert fin.input.foundation_type is None
+    assert not any("Móng: " in a for a in fin.assumptions)
+    assert any("không tính diện tích móng" in a for a in fin.assumptions)
+    assert any("Phần xây thô" in e for e in fin.exclusions)
+    assert fin.converted_area_m2 < rough.converted_area_m2

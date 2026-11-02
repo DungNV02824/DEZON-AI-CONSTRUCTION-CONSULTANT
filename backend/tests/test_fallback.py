@@ -212,8 +212,10 @@ def test_fallback_overview_passes_validator():
     ov = make_overview()
     for tools in ([("get_contractor_overview", ov)], [("whatever_name", ov.model_dump(mode="json"))]):
         text = build_fallback_text(tools)
-        assert "2/3 nhà thầu có công trình biệt thự" in text and "Đơn giá hoàn thiện tham khảo: Chưa có dữ liệu" in text
-        assert PROJECT_COUNT_NOTE in text and "tốt nhất" not in text
+        # C-F4: câu ngắn — số nhà thầu + NÊU TÊN nhà thầu có công trình đúng loại; chi tiết số nằm ở bảng (block),
+        # không lặp nguồn/URL trong câu.
+        assert "3 nhà thầu" in text and "Kiến Phong" in text and "biệt thự" in text
+        assert "nguồn:" not in text and "http" not in text and "tốt nhất" not in text
         res = check(text, tools)
         assert res.ok, (text, res.violations)
     assert infer_tool_name(ov) == "get_contractor_overview"

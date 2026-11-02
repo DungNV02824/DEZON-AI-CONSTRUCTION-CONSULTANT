@@ -51,14 +51,21 @@ export function MessageList({
     if (el && nearBottom.current) el.scrollTop = el.scrollHeight;
   }, [lastLen]);
 
-  // Block mới đến: nếu tin nhắn cao hơn khung nhìn, cuộn tới đầu tin nhắn để khách đọc từ đầu.
+  // Block mới đến: nếu tin nhắn cao hơn khung nhìn, cuộn tới ĐẦU tin nhắn để khách đọc từ đầu (lời dẫn rồi tới bảng/thẻ).
+  // Vị trí tính bằng getBoundingClientRect so với khung cuộn — KHÔNG dùng offsetTop: .dz-messages không định vị nên
+  // offsetTop tính theo .dz-panel (cộng thêm chiều cao header) và làm khung chat cuộn vào giữa đoạn văn.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || !lastKey || lastBlocks === 0) return;
     const node = el.querySelector<HTMLElement>(`[data-key="${lastKey}"]`);
     if (!node) return;
-    if (node.offsetHeight > el.clientHeight - 24) el.scrollTop = node.offsetTop - 8;
-    else el.scrollTop = el.scrollHeight;
+    const rect = node.getBoundingClientRect();
+    if (rect.height > el.clientHeight - 24) {
+      el.scrollTop = Math.max(0, el.scrollTop + rect.top - el.getBoundingClientRect().top - 8);
+      nearBottom.current = false;
+    } else {
+      el.scrollTop = el.scrollHeight;
+    }
   }, [lastBlocks, lastKey]);
 
   return (

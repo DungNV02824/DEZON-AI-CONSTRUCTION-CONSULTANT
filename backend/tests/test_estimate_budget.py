@@ -46,7 +46,7 @@ def test_typical_case_has_at_least_two_options_each_computed_by_engine():
         assert o.cost.display == expected.cost.display
         assert o.saving_min == current.cost_min - o.cost_min > 0
         assert o.fits_budget is (o.cost_min <= 1_200_000_000)
-    mins = [o.cost_min for o in options]
+    mins = [o.cost_min for o in options if o.code != "combined"]
     assert mins == sorted(mins)
     codes = by_code(options)
     assert {"reduce_floor", "lower_quality", "change_roof"} <= set(codes)
@@ -75,6 +75,20 @@ def test_combined_option_when_no_single_option_fits():
     singles = [o for o in options if o.code != "combined"]
     assert combo.cost_min < min(o.cost_min for o in singles)
     assert combo.label_vi.startswith("Kết hợp:")
+    # W-F9: phương án kết hợp đứng sau các phương án thành phần, mô tả nêu đúng tên hai phương án.
+    assert options[-1].code == "combined"
+    names = [o.label_vi for o in singles if o.label_vi in combo.description]
+    assert len(names) == 2
+    assert "hai phương án trên" not in combo.description
+
+
+def test_quality_tier_names_lowercase_mid_sentence():
+    _, options = run(make_input(), 1_000_000_000)
+    lq = by_code(options)["lower_quality"]
+    assert lq.label_vi == "Hạ mức chất lượng xuống tiết kiệm"
+    assert "Tiết kiệm" not in lq.description and "Trung bình" not in lq.description
+    combo = by_code(options)["combined"]
+    assert "Tiết kiệm" not in combo.label_vi
 
 
 def test_fits_budget_true_when_target_is_close():

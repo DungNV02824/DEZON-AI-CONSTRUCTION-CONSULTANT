@@ -124,7 +124,7 @@ def test_create_and_get_estimate_roundtrip(db):
     assert res.estimate_session_id is not None
     assert res.converted_area_m2 == 490
     assert (res.cost_min, res.cost_max) == (1_740_000_000, 2_058_000_000)
-    assert res.cost.display == "1,74–2,058 tỷ"
+    assert res.cost.display == "1,740–2,058 tỷ"
     assert res.rules_status == "reference" and RULES_NOT_APPROVED_WARNING in res.warnings
     assert res.rate_id is not None
 

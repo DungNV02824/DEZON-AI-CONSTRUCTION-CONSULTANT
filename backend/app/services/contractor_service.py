@@ -528,17 +528,32 @@ def _fit_cell(s: ScoredContractor, version: int) -> EvidenceValue:
                          source=ref, status=VerificationStatus.reference)
 
 
-def _criteria_for_estimate_id(db: Session, estimate_session_id) -> MatchCriteria | None:
+def _criteria_for_estimate_id(db: Session, estimate_session_id,
+                              budget_vnd: int | None = None) -> MatchCriteria | None:
+    """Tiêu chí chấm "Mức phù hợp" cho bảng so sánh — PHẢI giống tiêu chí đã chấm thẻ contractor_list.
+
+    Thẻ trong chat được chấm từ slot phiên chat (tools._slot_criteria: tỉnh/quận/loại/hạng mục/ngân sách/
+    số tầng + estimate_session_id). Ngân sách thường được khách nêu SAU khái toán nên không có trong
+    estimate_sessions.input -> lấy từ chat_sessions.slots của phiên chat gắn với khái toán (W-F4).
+    `budget_vnd` (tùy chọn, từ body) ưu tiên cao nhất.
+    """
     es = db.get(EstimateSession, estimate_session_id)
     if es is None:
         return None
     inp = es.input or {}
+    slots: dict = {}
+    if es.chat_session_id:
+        cs = db.get(ChatSession, es.chat_session_id)
+        slots = dict(cs.slots or {}) if cs is not None else {}
+    # Slot chat có đủ tỉnh + loại công trình -> dùng đúng bộ slot như lúc chấm thẻ; không thì dùng input khái toán.
+    base = slots if slots.get("province") and slots.get("building_type") else inp
+    budget = budget_vnd or slots.get("budget_vnd") or inp.get("budget_vnd")
     try:
-        return MatchCriteria(province=inp["province"], district=inp.get("district"),
-                             building_type=inp["building_type"], work_scope=inp.get("work_scope"),
-                             floors=inp.get("floors"), estimate_session_id=es.id,
-                             converted_area_m2=float(es.converted_area_m2))
-    except (KeyError, ValueError):
+        return MatchCriteria(province=base["province"], district=base.get("district"),
+                             building_type=base["building_type"], work_scope=base.get("work_scope"),
+                             floors=base.get("floors"), budget_vnd=int(budget) if budget else None,
+                             estimate_session_id=es.id, converted_area_m2=float(es.converted_area_m2))
+    except (KeyError, ValueError, TypeError):
         return None
 
 
@@ -555,7 +570,8 @@ COMPARISON_ROWS: tuple[tuple[str, str], ...] = (
 
 
 def compare_contractors(db: Session, contractor_ids: list[int], criteria: MatchCriteria | None = None, *,
-                        estimate_session_id: uuid.UUID | str | None = None) -> ComparisonMatrix:
+                        estimate_session_id: uuid.UUID | str | None = None,
+                        budget_vnd: int | None = None) -> ComparisonMatrix:
     """Ma trận so sánh 2–5 nhà thầu (mục 8.2). Không ô trống: thiếu dữ liệu = unavailable."""
     ids = [int(i) for i in contractor_ids]
     if not 2 <= len(ids) <= 5:
@@ -571,7 +587,7 @@ def compare_contractors(db: Session, contractor_ids: list[int], criteria: MatchC
     cards = {c.id: _card(c, facts[c.id]) for c in contractors}
 
     if criteria is None and estimate_session_id:
-        criteria = _criteria_for_estimate_id(db, estimate_session_id)
+        criteria = _criteria_for_estimate_id(db, estimate_session_id, budget_vnd)
     fit: dict[int, EvidenceValue] = {}
     if criteria is not None:
         weights = load_active_weights(db)
@@ -626,6 +642,7 @@ def contractor_overview(db: Session, province: str, building_type: str | Buildin
         type_projects.update({p.id: p for p in _unique_projects(c) if p.building_type == bt})
         entries.append(OverviewContractor(
             card=_card(c, f), has_projects_of_type=bool(projs), projects_of_type=projs[:projects_per_contractor],
+            projects_of_type_count=len(projs),
             profile_verified=bool(f.default_source and f.default_source.status == VerificationStatus.verified.value),
         ))
     entries.sort(key=lambda e: (not e.has_projects_of_type,

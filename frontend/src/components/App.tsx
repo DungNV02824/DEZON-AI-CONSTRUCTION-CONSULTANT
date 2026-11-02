@@ -53,7 +53,7 @@ export function App({ client, initiallyOpen = false, registerControls }: AppProp
     setTimeout(() => launcherRef.current?.focus(), 0);
   }, []);
 
-  const { runLocal, latestMatch, estimateSessionId, send, busy } = chat;
+  const { runLocal, markQuoteSubmitted, latestMatch, estimateSessionId, send, busy } = chat;
 
   const actions = useMemo<WidgetActions>(
     () => ({
@@ -92,9 +92,10 @@ export function App({ client, initiallyOpen = false, registerControls }: AppProp
         client.recordClick(id, contractorId).catch(() => undefined);
       },
       submitQuote: (body) => client.createQuoteRequest(body),
+      quoteSubmitted: markQuoteSubmitted,
       estimateSessionId,
     }),
-    [client, busy, send, runLocal, latestMatch, estimateSessionId],
+    [client, busy, send, runLocal, markQuoteSubmitted, latestMatch, estimateSessionId],
   );
 
   const onPanelKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {

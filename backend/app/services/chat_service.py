@@ -150,7 +150,8 @@ def error_events(message: str = ERROR_MESSAGE) -> list[str]:
 
 
 # ============================================================================================
-# Rate limit (20 tin/phút/IP): Redis nếu có, fallback bộ nhớ trong tiến trình
+# Rate limit (20 tin/60 giây trượt/IP): Redis nếu có, fallback bộ nhớ trong tiến trình.
+# IP lấy từ request.client — sau reverse proxy phải chạy uvicorn với --forwarded-allow-ips=<IP proxy> để có IP thật.
 # ============================================================================================
 class RateLimiter(Protocol):
     def hit(self, key: str) -> tuple[bool, int]:
@@ -179,7 +180,11 @@ class MemoryRateLimiter:
 
 
 class RedisRateLimiter:
-    """Cửa sổ cố định theo phút trên Redis (INCR + EXPIRE). Redis lỗi -> chuyển sang bộ nhớ."""
+    """Cửa sổ TRƯỢT 60 giây trên Redis (sorted set: mỗi lượt là một phần tử, điểm = thời điểm).
+
+    Cửa sổ cố định theo phút cho phép burst gấp đôi quanh mốc chuyển phút; cửa sổ trượt thì không. Lượt bị chặn
+    không được tính (xóa lại phần tử vừa thêm). Redis lỗi -> chuyển sang bộ nhớ.
+    """
 
     def __init__(self, client: Any, limit: int, window_s: int = 60, prefix: str = "dezon:rl:chat",
                  fallback: MemoryRateLimiter | None = None, clock=time.time):
@@ -187,20 +192,25 @@ class RedisRateLimiter:
         self.fallback = fallback or MemoryRateLimiter(limit, window_s)
 
     def hit(self, key: str) -> tuple[bool, int]:
-        now = self.clock()
-        bucket = int(now // self.window)
-        rkey = f"{self.prefix}:{key}:{bucket}"
+        now = float(self.clock())
+        rkey = f"{self.prefix}:{key}"
+        member = f"{now:.6f}:{uuid.uuid4().hex[:8]}"
         try:
             pipe = self.client.pipeline()
-            pipe.incr(rkey)
-            pipe.expire(rkey, self.window + 5)
-            count = int(pipe.execute()[0])
+            pipe.zremrangebyscore(rkey, "-inf", now - self.window)
+            pipe.zadd(rkey, {member: now})
+            pipe.zcard(rkey)
+            pipe.expire(rkey, int(self.window) + 5)
+            count = int(pipe.execute()[2])
+            if count <= self.limit:
+                return True, 0
+            self.client.zrem(rkey, member)
+            oldest = self.client.zrange(rkey, 0, 0, withscores=True)
         except Exception:  # noqa: BLE001 — Redis mất kết nối: không chặn khách vì lỗi hạ tầng
             log.warning("Redis rate limit lỗi — dùng bộ nhớ trong tiến trình", exc_info=True)
             return self.fallback.hit(key)
-        if count > self.limit:
-            return False, max(1, int(self.window - (now % self.window)) + 1)
-        return True, 0
+        first = float(oldest[0][1]) if oldest else now
+        return False, max(1, int(self.window - (now - first)) + 1)
 
 
 @lru_cache

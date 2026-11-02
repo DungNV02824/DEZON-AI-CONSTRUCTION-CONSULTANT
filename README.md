@@ -37,7 +37,10 @@ docker compose up -d --build
 | PostgreSQL + pgvector | localhost:5433 (user/pass/db: `dezon`) |
 | Redis | localhost:6379 |
 
-Khi khởi động, backend tự chạy migration (`alembic upgrade head`) và seed dữ liệu mẫu (idempotent).
+Khi khởi động, backend tự chạy migration (`alembic upgrade head`) và seed dữ liệu mẫu (idempotent): hệ số,
+đơn giá tham khảo, trọng số, 3 nhà thầu demo, rồi tính `profile_completeness` và tạo embedding RAG. Trong Docker
+`SEED_SNAPSHOT=1` (mặc định) nạp thêm snapshot dữ liệu **thật** crawl từ dezon.vn (hồ sơ, công trình thực tế,
+URL ảnh) cho 3 nhà thầu demo — xem mục "Dữ liệu".
 Worker RQ xử lý đồng bộ dữ liệu, re-embed và lịch đồng bộ hằng ngày 02:00 (Asia/Ho_Chi_Minh).
 
 ### Chế độ AI
@@ -52,23 +55,55 @@ trang quản trị → "Đồng bộ" → `reindex` (vì vector cũ được t�
 
 Có thể ép provider bằng `LLM_PROVIDER=mock|openai|anthropic`, `EMBEDDING_PROVIDER=hash|openai`.
 
+- **OpenAI hoặc endpoint tương thích OpenAI**: `OPENAI_API_KEY` (hoặc `LLM_API_KEY`), `LLM_MODEL`/`MODEL_NAME`,
+  tùy chọn `LLM_BASE_URL`.
+- **Claude (`LLM_PROVIDER=anthropic`)**: đặt key Anthropic vào `LLM_API_KEY` (hoặc để trống và đặt
+  `ANTHROPIC_API_KEY` — SDK tự đọc), `LLM_MODEL` là tên model Claude. Lưu ý `OPENAI_API_KEY` cũng là bí danh của
+  `LLM_API_KEY`, nên khi dùng Claude đừng để `OPENAI_API_KEY` chứa key OpenAI mà không đặt `LLM_API_KEY`.
+  Embedding vẫn đi theo `EMBEDDING_PROVIDER`/`EMBEDDING_API_KEY` (Anthropic không có API embedding).
+- **Embedding qua endpoint khác** (Azure/proxy nội bộ…): `EMBEDDING_PROVIDER=openai`, `EMBEDDING_API_KEY`,
+  `EMBEDDING_API_BASE=https://.../v1` (đi qua Settings), `EMBEDDING_MODEL`, `EMBEDDING_DIM` (mặc định 1536 — đổi
+  thì phải đổi cả cột vector trong migration).
+
 ## Biến môi trường
 
 Xem [.env.example](.env.example). Quan trọng:
 
 | Biến | Mặc định | Ý nghĩa |
 |---|---|---|
-| `OPENAI_API_KEY` | — | Key OpenAI (không commit file `.env`) |
-| `MODEL_NAME` | `gpt-4.1-mini` | Model hội thoại |
-| `EMBEDDING_MODEL` | `text-embedding-3-small` | Model embedding (1536 chiều) |
+| `OPENAI_API_KEY` | — | Key OpenAI (không commit file `.env`); bí danh của `LLM_API_KEY` và `EMBEDDING_API_KEY` |
+| `LLM_PROVIDER` | `auto` | `auto` (có key → openai, không → mock) \| `mock` \| `openai` \| `anthropic` |
+| `LLM_API_KEY` | — | Key cho provider LLM đang chọn (bắt buộc với `anthropic` nếu không có `ANTHROPIC_API_KEY`) |
+| `LLM_MODEL` / `MODEL_NAME` | `gpt-4.1-mini` | Model hội thoại |
+| `LLM_BASE_URL` | — | Endpoint LLM tương thích khác (tùy chọn) |
+| `MAX_TOOL_ROUNDS` | `6` | Số vòng gọi tool tối đa mỗi lượt chat |
+| `EMBEDDING_PROVIDER` | `auto` | `auto` (có key → openai, không → hash cục bộ) \| `hash` \| `openai` |
+| `EMBEDDING_MODEL` | `text-embedding-3-small` | Model embedding |
+| `EMBEDDING_API_KEY` | — | Key embedding (mặc định lấy `OPENAI_API_KEY`) |
+| `EMBEDDING_API_BASE` | `https://api.openai.com/v1` | Endpoint `/embeddings` tương thích OpenAI khác |
+| `EMBEDDING_DIM` | `1536` | Số chiều vector (phải khớp cột `vector(1536)` của bảng `documents`) |
+| `SEED_SNAPSHOT` | `1` trong Docker, `0` khi chạy tay | `1`: seed nạp `backend/app/db/seed_data/dezon_snapshot.json`. Đọc từ biến môi trường thật (không từ `.env` khi chạy ngoài Docker); test luôn tắt |
 | `APP_ENV` | `development` | `production`: trang quản trị bị khóa nếu `ADMIN_TOKEN` còn mặc định |
 | `ADMIN_TOKEN` | `change-me` | Token cho `/api/admin/*` — **bắt buộc đổi trên production** |
 | `IMPORT_DIR` | `data/imports` | Thư mục duy nhất admin được nhập CSV/XLSX theo đường dẫn (ngoài ra có thể tải file lên) |
-| `FORWARDED_ALLOW_IPS` | `127.0.0.1` | IP reverse proxy được tin cho `X-Forwarded-For` (rate limit theo IP thật) |
+| `FORWARDED_ALLOW_IPS` | `127.0.0.1` | IP/subnet reverse proxy được tin cho `X-Forwarded-For` — **phải đặt khi chạy sau proxy**, xem "Triển khai sau reverse proxy" |
 | `ALLOWED_ORIGINS` | `https://dezon.vn,...` | CORS (chỉ dezon.vn + môi trường dev) |
 | `STALE_DAYS` | `180` | Dữ liệu cũ hơn số ngày này hiển thị cảnh báo |
 | `CHAT_RATE_LIMIT_PER_MIN` | `20` | Giới hạn tin nhắn / phút / IP |
 | `DEZON_API_BASE_URL`, `DEZON_API_TOKEN` | — | API nội bộ Dezon (để trống → dùng crawler trang công khai) |
+
+### Triển khai sau reverse proxy (rate limit theo IP khách)
+
+Rate limit chat (`CHAT_RATE_LIMIT_PER_MIN` tin/phút) tính theo IP mà uvicorn thấy. Backend chạy với
+`--proxy-headers`, nhưng chỉ tin `X-Forwarded-For` từ các IP trong `FORWARDED_ALLOW_IPS` (mặc định `127.0.0.1`).
+Khi đặt nginx/Caddy/load balancer ở **container hoặc máy khác**, nếu không đặt biến này thì mọi khách bị tính là IP
+của proxy (hoặc gateway Docker, vd `172.x.0.1`) và **chung một bucket** → chặn hàng loạt khi đông khách.
+
+- Đặt `FORWARDED_ALLOW_IPS` = IP hoặc subnet của proxy thật, vd `FORWARDED_ALLOW_IPS=10.0.0.5` hoặc
+  `FORWARDED_ALLOW_IPS=172.16.0.0/12` (mạng Docker), nhiều giá trị cách nhau bằng dấu phẩy.
+- Proxy phải ghi đè (không nối thêm) header: nginx `proxy_set_header X-Forwarded-For $remote_addr;`.
+- **Không** đặt `*` nếu cổng backend còn mở trực tiếp ra Internet: khách sẽ tự giả mạo `X-Forwarded-For` để né giới hạn.
+- Kiểm tra: log truy cập uvicorn phải hiện IP khách thật, không phải IP proxy.
 
 ## Nhúng widget vào dezon.vn
 
@@ -106,6 +141,12 @@ Test gọi LLM thật (tốn phí): `RUN_LIVE_LLM=1 OPENAI_API_KEY=... pytest -m
 - **Seed dev** ([backend/app/db/seed.py](backend/app/db/seed.py)): hệ số khái toán mục 6.2 (chưa duyệt),
   **đơn giá mẫu gắn nhãn "Dữ liệu tham khảo"** (không phải bảng giá chính thức), trọng số matching v1,
   3 nhà thầu tham chiếu (Kiến Phong, Smartcons Tech, Huy Hoàng) với URL hồ sơ thật trên dezon.vn.
+  Fixture tối thiểu này (mục 11.3) là thứ test dùng.
+- **Snapshot dữ liệu thật** ([backend/app/db/seed_data/dezon_snapshot.json](backend/app/db/seed_data/dezon_snapshot.json)):
+  hồ sơ + 6 công trình thực tế mỗi nhà thầu (kèm `project_url` và URL ảnh gốc trên dezon.vn) của 3 nhà thầu demo,
+  crawl ngày 02/11/2026 bằng crawler của dự án (robots.txt, ≥ 2 giây/request, 22 request). Nạp khi
+  `SEED_SNAPSHOT=1` (mặc định trong docker-compose). Làm mới: chạy crawler với `--snapshot <file>` hoặc
+  trang quản trị → Đồng bộ → crawl.
 - **Nhập đơn giá / hệ số chính thức**: trang quản trị → Import CSV/XLSX (mẫu tại [docs/samples](docs/samples)),
   sau đó bật `approved` cho hệ số đã duyệt.
 - **Đồng bộ dữ liệu nhà thầu/dự án**: ưu tiên API Dezon (`DEZON_API_BASE_URL`); nếu chưa có, crawler đọc trang

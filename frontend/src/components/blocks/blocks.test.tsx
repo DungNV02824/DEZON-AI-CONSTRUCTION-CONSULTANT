@@ -39,6 +39,22 @@ describe('ComparisonTable', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết Smartcons Tech' }));
     expect(actions.openContractor).toHaveBeenCalledWith('smartcons-tech', 2);
   });
+
+  it('bảng tổng quan (hàng đầu projects_of_type) có tiêu đề "Tổng quan", bảng so sánh giữ "So sánh"', () => {
+    const n = COMPARISON_FIXTURE.contractors.length;
+    const overview: ComparisonMatrix = {
+      ...COMPARISON_FIXTURE,
+      rows: [
+        { key: 'projects_of_type', label_vi: 'Công trình nhà phố có trang dự án', cells: COMPARISON_FIXTURE.rows[0]!.cells },
+        ...COMPARISON_FIXTURE.rows,
+      ],
+    };
+    const { unmount } = renderWithWidget(<ComparisonTable block={{ type: 'comparison_table', data: overview }} />);
+    expect(screen.getByRole('heading', { name: `Tổng quan ${n} nhà thầu` })).toBeInTheDocument();
+    unmount();
+    renderWithWidget(<ComparisonTable block={{ type: 'comparison_table', data: COMPARISON_FIXTURE }} />);
+    expect(screen.getByRole('heading', { name: `So sánh ${n} nhà thầu` })).toBeInTheDocument();
+  });
 });
 
 describe('EstimateTable', () => {

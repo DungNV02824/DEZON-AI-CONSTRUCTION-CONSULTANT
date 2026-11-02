@@ -34,8 +34,16 @@ from sqlalchemy.orm import Session
 
 from app.ai import blocks as ui
 from app.ai import fallback, slot_filling, validator
-from app.ai.dialog import GREETING_EXPECTED_SLOTS, budget_question, build_summary, next_question
-from app.ai.normalize import detect_intent, fold
+from app.ai.dialog import (
+    EDIT_FIELD_REPLIES,
+    GREETING_EXPECTED_SLOTS,
+    budget_question,
+    build_summary,
+    edit_field_question,
+    next_question,
+    no_match_replies,
+)
+from app.ai.normalize import detect_intent, fold, is_hypothetical
 from app.ai.providers import LLMError, get_provider
 from app.ai.providers.base import LLMProvider, Message, ToolCall
 from app.ai.slot_filling import SlotUpdate
@@ -66,8 +74,14 @@ BUDGET_TAIL = ("Anh/chị cho em biết ngân sách dự kiến để em đánh 
                "chính xác hơn nhé.")
 LLM_UNAVAILABLE_TEXT = ("Dạ, hệ thống tư vấn đang bận, em chưa trả lời được câu này. Anh/chị vui lòng thử lại sau "
                         "ít phút giúp em nhé.")
-EDIT_PROMPT = ("Dạ, anh/chị muốn sửa thông tin nào ạ? Anh/chị cứ nhắn thông tin mới (loại công trình, khu vực, diện "
-               "tích, số tầng, phạm vi hoặc mức hoàn thiện), em sẽ cập nhật lại bản tóm tắt.")
+EDIT_PROMPT = ("Dạ, anh/chị muốn sửa thông tin nào ạ? Anh/chị chọn mục bên dưới hoặc nhắn luôn thông tin mới (vd "
+               "\"1 trệt 2 lầu\"), em sẽ cập nhật lại bản tóm tắt.")
+# Nút "Chọn phương án này" của budget_options gửi "Tôi chọn phương án: <label_vi>".
+_CHOOSE_OPTION_RE = re.compile(r"\bchon phuong an\b\s*:?\s*(.+)$")
+# Khách hỏi đơn giá tham chiếu ("đơn giá xây thô ở HCM?") — không phải mô tả phạm vi/mức hoàn thiện công trình của mình.
+_RATE_Q_RE = re.compile(r"\bdon gia\b")
+# Yêu cầu tìm nhà thầu ở khu vực khác ("Tìm nhà thầu tại Hà Nội") — không đổi khu vực của công trình.
+_FIND_CONTRACTOR_RE = re.compile(r"\b(?:tim|de xuat|goi y|gioi thieu|liet ke)\b.{0,30}\bnha thau\b")
 _QUOTE_INTENT_RE = re.compile(r"\bbao gia\b")
 _NOT_QUOTE_RE = re.compile(r"khong (?:phai|duoc xem la|thay the) (?:la )?bao gia")
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?…])\s+")
@@ -152,6 +166,11 @@ def _pre_llm(ctx: ToolContext, outcomes: list[ToolOutcome]) -> CodePlan:
         if not o.is_error:
             st.matched_for = match_key
             matched_now = True
+    if matched_now and not st.contractors:
+        # C-F11: không có nhà thầu phù hợp -> gợi ý bước tiếp (tìm khu vực khác, sửa thông tin); không hỏi ngân sách
+        # "để đánh giá mức phù hợp ngân sách của từng nhà thầu" khi chưa có nhà thầu nào.
+        plan.quick = QuickRepliesBlock(options=no_match_replies(s.province))
+        return plan
     bq = budget_question(s) if (new_estimate or matched_now) else None
     if bq is not None:
         plan.tail, plan.quick, plan.expected = BUDGET_TAIL, bq.quick_replies, list(bq.slots)
@@ -170,14 +189,19 @@ def _next_step(slots: Slots, plan: CodePlan, outcomes: list[ToolOutcome]) -> str
                 "calculate_estimate.")
     done = {o.name for o in outcomes if o.forced and not o.is_error}
     steps: list[str] = []
+    # W-F7: bảng/thẻ do hệ thống hiển thị ngay sau câu trả lời -> văn bản chỉ là lời dẫn ngắn + giải thích (mục 6.5),
+    # KHÔNG chép lại từng dòng của bảng khái toán, danh sách phương án hay lý do từng nhà thầu.
     if "calculate_estimate" in done:
-        steps.append("Giải thích ngắn khái toán vừa tính: gồm gì theo phạm vi, chưa gồm gì (exclusions), yếu tố làm "
-                     "tăng chi phí (cost_drivers); nhắc đây là khái toán sơ bộ, không phải báo giá.")
+        steps.append("Lời dẫn 1 câu nêu chi phí khái toán (cost.display), rồi giải thích ngắn: gồm gì theo phạm vi, "
+                     "chưa gồm gì (exclusions), 1–2 yếu tố làm tăng chi phí (cost_drivers); nếu assumptions có "
+                     "\"Dùng đơn giá mặc định toàn quốc\" thì nói rõ; nhắc đây là khái toán sơ bộ, không phải báo "
+                     "giá. Không liệt kê hạng mục/hệ số (đã có bảng).")
     if "suggest_budget_adjustments" in done:
-        steps.append("Ngân sách thấp hơn khái toán: trình bày các phương án điều chỉnh (chi phí lấy từ kết quả tool).")
+        steps.append("Ngân sách thấp hơn khái toán: 1–2 câu nêu phương án nào vừa ngân sách (hoặc chưa phương án nào "
+                     "vừa); danh sách phương án đã có trong bảng, không liệt kê lại.")
     if "search_contractors" in done:
-        steps.append("Giới thiệu ngắn các nhà thầu đề xuất kèm lý do (reasons); mời xem hồ sơ, so sánh hoặc yêu cầu "
-                     "báo giá.")
+        steps.append("1–2 câu giới thiệu các nhà thầu đề xuất (nêu tên); lý do từng nhà thầu đã có trong danh sách, "
+                     "không chép lại. Không có nhà thầu nào thì nói rõ và gợi ý tìm khu vực khác hoặc sửa thông tin.")
     if not steps:
         steps.append("Trả lời câu hỏi của khách bằng tool phù hợp (compare_contractors, get_contractor_profile, "
                      "get_contractor_overview, get_contractor_projects, get_reference_rates, search_knowledge, "
@@ -185,18 +209,75 @@ def _next_step(slots: Slots, plan: CodePlan, outcomes: list[ToolOutcome]) -> str
     return " ".join(steps)
 
 
-def _protect_profile(prev: Slots, u: SlotUpdate, content: str) -> SlotUpdate:
-    """Câu HỎI khi khách đã cung cấp đủ thông tin (vd "nhà thầu nào thi công biệt thự tốt?", "đơn giá xây thô bao
-    nhiêu?") không được ghi đè thông tin công trình; chỉ nhận ngân sách/thời gian. Muốn đổi thì khách nói rõ ("đổi
-    sang ...", "sửa lại ...") -> detect_intent = edit."""
-    if missing_required(prev) or detect_intent(content) != "question":
-        return u
-    kept = [c for c in u.changed if c in NON_ESTIMATE_SLOTS]
+def _keep_changes(prev: Slots, u: SlotUpdate, kept: list[str]) -> SlotUpdate:
+    """Chỉ giữ các thay đổi `kept` (phần còn lại của tin nhắn là câu hỏi, không phải thông tin công trình)."""
     if len(kept) == len(u.changed):
         return u
     slots = prev.model_copy(update={k: getattr(u.slots, k) for k in kept})
     return u.model_copy(update={"slots": slots, "changed": kept, "intent": "question",
                                 "missing_required": missing_required(slots)})
+
+
+def _protect_profile(prev: Slots, u: SlotUpdate, content: str) -> SlotUpdate:
+    """Câu HỎI khi khách đã cung cấp đủ thông tin (vd "nhà thầu nào thi công biệt thự tốt?", "đơn giá xây thô bao
+    nhiêu?", "nếu chỉ xây 3 tầng thì hết bao nhiêu?", "tìm nhà thầu tại Hà Nội") không được ghi đè thông tin công
+    trình; chỉ nhận ngân sách/thời gian. Muốn đổi thì khách nói rõ ("đổi sang ...", "sửa lại ...") -> intent = edit.
+
+    Khi còn đang thu thập: câu hỏi đơn giá ("đơn giá xây thô ở HCM bao nhiêu?") không ngầm điền phạm vi/mức hoàn
+    thiện của công trình (C-F6)."""
+    intent = detect_intent(content)
+    if intent == "edit":
+        return u
+    f = fold(content)
+    if missing_required(prev):
+        if intent == "question" and _RATE_Q_RE.search(f):
+            return _keep_changes(prev, u, [c for c in u.changed if c not in ("work_scope", "quality_tier")])
+        return u
+    if intent != "question" and not is_hypothetical(content) and not _FIND_CONTRACTOR_RE.search(f):
+        return u
+    return _keep_changes(prev, u, [c for c in u.changed if c in NON_ESTIMATE_SLOTS])
+
+
+def _budget_options(db: Session, sid: uuid.UUID) -> list[dict[str, Any]]:
+    """Các phương án ngân sách ở lần gợi ý gần nhất của phiên (kết quả tool suggest_budget_adjustments)."""
+    rows = db.scalars(select(ChatMessage).where(ChatMessage.session_id == sid, ChatMessage.role == "tool",
+                                                ChatMessage.tool_name == "suggest_budget_adjustments")
+                      .order_by(ChatMessage.id.desc()).limit(5)).all()
+    for r in rows:
+        payload = r.tool_payload if isinstance(r.tool_payload, dict) else {}
+        result = payload.get("result")
+        if not payload.get("is_error") and isinstance(result, dict) and isinstance(result.get("options"), list):
+            return [o for o in result["options"] if isinstance(o, dict)]
+    return []
+
+
+def _norm_label(x: Any) -> str:
+    return re.sub(r"[^0-9a-z]+", " ", fold(str(x or ""))).strip()
+
+
+def chosen_budget_option(content: str, options: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """W-F1: phương án khách chọn ("Tôi chọn phương án: Giảm 1 tầng (còn 3 tầng)"), so khớp theo tên phương án."""
+    m = _CHOOSE_OPTION_RE.search(fold(content).strip())
+    target = _norm_label(m.group(1)) if m else ""
+    if not target or not options:
+        return None
+    exact = [o for o in options if _norm_label(o.get("label_vi")) == target]
+    if exact:
+        return exact[0]
+    # Khách gõ tay một phần tên: lấy phương án có tên dài nhất khớp (tránh "Giảm 1 tầng" ăn nhầm phương án "Kết hợp").
+    partial = [o for o in options if (lbl := _norm_label(o.get("label_vi"))) and (lbl in target or target in lbl)]
+    return max(partial, key=lambda o: len(_norm_label(o.get("label_vi")))) if partial else None
+
+
+def apply_budget_option(prev: Slots, option: dict[str, Any]) -> SlotUpdate:
+    """Áp đúng `changes` (do engine tính) của phương án vào slot. Khách đã chủ động chọn phương án nên giữ trạng thái
+    xác nhận để tính lại ngay theo phương án."""
+    changes = {k: v for k, v in (option.get("changes") or {}).items()
+               if k in Slots.model_fields and k not in ("confirmed", "asked")}
+    slots = Slots.model_validate({**prev.model_dump(), **changes, "confirmed": prev.confirmed})
+    changed = [k for k in changes if getattr(slots, k) != getattr(prev, k)]
+    return SlotUpdate(slots=slots, changed=changed, intent="provide_info" if changed else "confirm",
+                      missing_required=missing_required(slots))
 
 
 def _drop_questions(text: str) -> str:
@@ -266,9 +347,11 @@ def _previous_results(db: Session, sid: uuid.UUID, before_id: int) -> list[tuple
 
 
 def _state_block(slots: Slots, state: SessionState, u: SlotUpdate, plan: CodePlan,
-                 outcomes: list[ToolOutcome], stage: str) -> dict[str, Any]:
+                 outcomes: list[ToolOutcome], stage: str, chosen: dict[str, Any] | None = None,
+                 prev_contractor_ids: list[int] | None = None) -> dict[str, Any]:
     est = state.estimate
     return {
+        "phuong_an_da_chon": chosen.get("label_vi") if chosen else None,
         "stage": stage,
         "slots": slots.model_dump(mode="json", exclude_none=True, exclude={"asked"}),
         "missing_required": missing_required(slots),
@@ -276,6 +359,8 @@ def _state_block(slots: Slots, state: SessionState, u: SlotUpdate, plan: CodePla
         "thong_tin_moi": u.changed,
         "khai_toan_hien_tai": {"estimate_session_id": est.id, "cost": est.cost_display} if est else None,
         "nha_thau_da_de_xuat": [{"id": c.id, "name": c.name} for c in state.contractors],
+        # id nhà thầu đã đề xuất TRƯỚC lượt này (phân biệt "đề xuất lần đầu" với "cập nhật danh sách cũ").
+        "nha_thau_luot_truoc": list(prev_contractor_ids or []),
         "cong_cu_he_thong_da_chay": [o.name for o in outcomes if o.forced],
         "buoc_tiep_theo": _next_step(slots, plan, outcomes),
         "he_thong_se_tu_them": plan.tail,
@@ -302,7 +387,8 @@ def _guarantees(text: str, outcomes: list[ToolOutcome]) -> list[str]:
             if not _NOT_QUOTE_RE.search(fold(text)):
                 extra.append(fallback.ESTIMATE_NOTE)
         if (o.name == "suggest_budget_adjustments" and isinstance(o.result, BudgetAdjustmentResult)
-                and not any(opt.fits_budget for opt in o.result.options)):
+                and not any(opt.fits_budget for opt in o.result.options)
+                and "chua co phuong an nao" not in fold(text)):  # đã nói thì không lặp lại
             extra.append(f"Theo đơn giá hiện có, chưa có phương án nào đưa chi phí về trong ngân sách "
                          f"{o.result.target_budget.display} của anh/chị.")
     # khử trùng lặp, giữ thứ tự
@@ -355,13 +441,21 @@ def handle_message(db: Session, session_id: uuid.UUID | str, content: str,
     # 2. Slot filling.
     state.user_turns += 1
     expected = state.expected_slots if state.expected_slots is not None else list(GREETING_EXPECTED_SLOTS)
-    u = _protect_profile(prev_slots, slot_filling.extract(content, prev_slots, provider, expected_slots=expected),
-                         content)
+    chosen = (chosen_budget_option(content, _budget_options(db, sid))
+              if prev_slots.confirmed and state.estimate is not None else None)
+    if chosen is not None:  # W-F1: áp đúng thay đổi của phương án, không đoán lại từ chữ ("Giảm 1 tầng" ≠ 1 tầng)
+        u = apply_budget_option(prev_slots, chosen)
+    else:
+        u = _protect_profile(prev_slots, slot_filling.extract(content, prev_slots, provider,
+                                                              expected_slots=expected), content)
     slots = u.slots
     est_changed = [c for c in u.changed if c not in NON_ESTIMATE_SLOTS]
     if prev_slots.confirmed and not slots.confirmed and u.changed and not est_changed:
         slots = slots.model_copy(update={"confirmed": True})  # chỉ đổi ngân sách/thời gian: không xác nhận lại
-    if est_changed and state.estimate is not None:
+    # K4: "Sửa lại" rồi "Đúng rồi" mà không đổi gì -> tính lại, hiển thị lại khái toán + nhà thầu (không trả câu
+    # chung chung chỉ vì khái toán cũ "vẫn khớp" slot).
+    reconfirmed = slots.confirmed and not prev_slots.confirmed and not est_changed
+    if (est_changed or reconfirmed) and state.estimate is not None:
         state.estimate = None
         state.budget_checked_for = state.matched_for = None
         state.presented = False
@@ -371,15 +465,23 @@ def handle_message(db: Session, session_id: uuid.UUID | str, content: str,
         state.slots_completed_logged = True
 
     # 3. Luồng chính do code đảm bảo (tool tự gọi trước LLM).
+    prev_contractor_ids = [c.id for c in state.contractors]
     ctx = ToolContext(db=db, chat_session_id=sid, slots=slots, state=state, user_texts=user_texts)
     outcomes: list[ToolOutcome] = []
     plan = _pre_llm(ctx, outcomes)
-    if u.intent == "edit" and not u.changed and plan.summary is not None and plan.tail:
-        plan.tail = f"{EDIT_PROMPT}\n\n{plan.tail}"
+    if u.intent == "edit" and not u.changed and plan.summary is not None:
+        # C-F9: khách muốn sửa nhưng chưa nói sửa gì -> CHỈ hỏi mục cần sửa (kèm nút theo từng mục); không gắn lại bản
+        # tóm tắt cũ và câu đòi xác nhận trong cùng tin.
+        q = edit_field_question(content)
+        if q is not None:
+            plan = CodePlan(tail=q.text, quick=q.quick_replies, expected=list(q.slots), is_collect=True)
+        else:
+            plan = CodePlan(tail=EDIT_PROMPT, quick=QuickRepliesBlock(options=list(EDIT_FIELD_REPLIES)),
+                            expected=[], is_collect=True)
     stage_now = _stage(ctx.slots, state)
 
     # 4. Gọi LLM.
-    state_block = _state_block(ctx.slots, state, u, plan, outcomes, stage_now)
+    state_block = _state_block(ctx.slots, state, u, plan, outcomes, stage_now, chosen, prev_contractor_ids)
     system = _system_with_state(state_block)
     llm_ctx = {**state_block, "last_user_message": content, "retry": False}
     specs = tool_specs()

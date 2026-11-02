@@ -17,6 +17,8 @@ from app.config import get_settings
 log = logging.getLogger(__name__)
 
 QUEUE_NAME = "default"
+# Giữ kết quả/lỗi job 7 ngày để admin xem lại qua GET /api/admin/sync/jobs/{id} (mặc định RQ chỉ 500 s).
+JOB_RESULT_TTL = 7 * 24 * 3600
 
 
 @contextmanager
@@ -94,13 +96,17 @@ def job_reindex_all() -> dict[str, Any]:
 
     with _session() as db:
         n = reindex_all(db)
-    return {"reindexed_chunks": n}
+    result = {"reindexed_chunks": n}
+    log.info("job_reindex_all: %s", result)
+    return result
 
 
 def job_after_sync() -> dict[str, Any]:
     """Tính lại profile_completeness cho toàn bộ nhà thầu rồi re-index toàn bộ documents."""
     with _session() as db:
-        return _after_sync(db, None)
+        result = _after_sync(db, None)
+    log.info("job_after_sync: %s", result)
+    return result
 
 
 def job_daily_sync() -> dict[str, Any]:
@@ -140,4 +146,33 @@ def enqueue(name: str, *, connection: Any | None = None, **kwargs: Any):
         raise ValueError(f"Job không tồn tại: {name}. Hợp lệ: {sorted(JOBS)}")
     # enqueue_call(kwargs=...) để tham số của job (vd `timeout`, `description`) không bị RQ hiểu là tùy chọn
     # của chính RQ như khi truyền thẳng **kwargs vào Queue.enqueue.
-    return get_queue(connection).enqueue_call(func=JOBS[name], kwargs=kwargs)
+    return get_queue(connection).enqueue_call(func=JOBS[name], kwargs=kwargs, result_ttl=JOB_RESULT_TTL,
+                                              failure_ttl=JOB_RESULT_TTL)
+
+
+_NAME_BY_FUNC = {f"{fn.__module__}.{fn.__name__}": name for name, fn in JOBS.items() if name != "reindex"}
+
+
+def fetch_job(job_id: str, *, connection: Any | None = None) -> dict[str, Any] | None:
+    """Trạng thái + kết quả một job RQ (None nếu không có/đã hết hạn). Lỗi chỉ trả dòng cuối của traceback."""
+    from rq.exceptions import NoSuchJobError
+    from rq.job import Job, JobStatus
+
+    try:
+        job = Job.fetch(job_id, connection=connection or get_queue().connection)
+    except NoSuchJobError:
+        return None
+    status = job.get_status(refresh=False)
+    status_value = getattr(status, "value", status)
+    out: dict[str, Any] = {
+        "job_id": job.id, "job": _NAME_BY_FUNC.get(job.func_name or "", job.func_name), "status": status_value,
+        "enqueued_at": job.enqueued_at, "started_at": job.started_at, "ended_at": job.ended_at,
+        "result": None, "error": None,
+    }
+    if status == JobStatus.FINISHED:
+        out["result"] = job.return_value()
+    elif status in (JobStatus.FAILED, JobStatus.STOPPED, JobStatus.CANCELED):
+        res = job.latest_result()
+        exc = (getattr(res, "exc_string", None) or job.exc_info or "").strip()
+        out["error"] = exc.splitlines()[-1][:500] if exc else None
+    return out

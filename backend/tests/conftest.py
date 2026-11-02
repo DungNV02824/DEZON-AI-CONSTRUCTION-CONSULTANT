@@ -17,6 +17,8 @@ import pytest
 # Test gọi LLM thật đánh dấu live_llm và tự bật provider khi RUN_LIVE_LLM=1.
 os.environ["LLM_PROVIDER"] = "mock"
 os.environ["EMBEDDING_PROVIDER"] = "hash"
+# Fixture nhà thầu mục 11.3 phải giữ nguyên: không nạp snapshot crawl kể cả khi shell dev đặt SEED_SNAPSHOT=1.
+os.environ["SEED_SNAPSHOT"] = "0"
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url

@@ -140,6 +140,9 @@ class OverviewContractor(BaseModel):
     card: ContractorCard
     has_projects_of_type: bool  # có công trình loại được hỏi trong danh sách dự án trên Dezon
     projects_of_type: list[ProjectSummary] = []  # kèm project_url để khách xem công trình thực tế
+    # Tổng số công trình đúng loại có trang dự án (đủ, không bị cắt như projects_of_type) — để LLM/validator
+    # truy được câu "N công trình <loại> có trang dự án".
+    projects_of_type_count: int = 0
     profile_verified: bool = False  # hồ sơ có nguồn trạng thái verified
 
 

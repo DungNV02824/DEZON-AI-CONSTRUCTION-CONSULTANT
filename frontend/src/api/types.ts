@@ -449,6 +449,8 @@ export interface QuoteRequestFormBlock {
   type: 'quote_request_form';
   contractors: QuoteFormContractor[];
   estimate_session_id?: UUID | null;
+  /** Chỉ ở client: mã yêu cầu sau khi gửi thành công (lưu localStorage để còn thẻ thành công khi tải lại trang). */
+  submitted_code?: string | null;
 }
 
 export type UIBlock =

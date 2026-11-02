@@ -1,0 +1,1664 @@
+{
+ "contractors": [
+  {
+   "name": "Kiến Phong",
+   "badge": "Nhà thầu tiềm năng",
+   "province": "TP. Hồ Chí Minh",
+   "founded_year": 2018,
+   "years_experience": 8,
+   "staff_workers": 20,
+   "staff_office": 12,
+   "rough_price_min": 4300000,
+   "rough_price_max": 4700000,
+   "finish_price_min": 7300000,
+   "finish_price_max": 9500000,
+   "typical_project_value": 25000000000,
+   "dezon_project_count": 7,
+   "has_warranty_info": null,
+   "warranty_text": null,
+   "description": "Kiến Phong là đơn vị thi công xây dựng — hoàn thiện tại TP. HCM., thành lập năm 2018. Quy mô ghi nhận: 12 nhân sự văn phòng, 20 nhân sự thi công, 15 dự án/năm, 6 dự án đang thi công. Loại hình công trình từng thực hiện: Nhà phố, Biệt thự, Căn hộ, Công trình khác.",
+   "avatar_url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/ApoMbxpbgoLIAaxJt3cl2gFR.jpg",
+   "profile_url": "https://dezon.vn/nha-thau/kien-phong/",
+   "kind": "contractor",
+   "slug": "kien-phong",
+   "external_id": "kien-phong",
+   "building_types": [
+    "nha_pho",
+    "biet_thu",
+    "can_ho",
+    "khac"
+   ],
+   "service_provinces": [
+    "TP. Hồ Chí Minh"
+   ],
+   "works": [
+    {
+     "slug": "france-indochine-22-ha-noi",
+     "name": "France Indochine 22 Hà Nội",
+     "url": "https://dezon.vn/nha-thau/kien-phong/france-indochine-22-ha-noi/",
+     "thumb_url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/ApoMbxpbgoLIAaxJt3cl2gFR.jpg"
+    },
+    {
+     "slug": "green-pool-villa-vinh-long",
+     "name": "Green Pool Villa Vĩnh Long",
+     "url": "https://dezon.vn/nha-thau/kien-phong/green-pool-villa-vinh-long/",
+     "thumb_url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/VmpUbQRpQoqie5xgIrFliHOo.jpg"
+    },
+    {
+     "slug": "indochine-villa-quan-7-sai-gon",
+     "name": "Indochine Villa Quận 7 Sài gòn",
+     "url": "https://dezon.vn/nha-thau/kien-phong/indochine-villa-quan-7-sai-gon/",
+     "thumb_url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/UmjqbDGOsoPA8Sxm4xmliVZ7.jpg"
+    },
+    {
+     "slug": "nha-pho-khang-dien",
+     "name": "Nhà phố Khang Điền",
+     "url": "https://dezon.vn/nha-thau/kien-phong/nha-pho-khang-dien/",
+     "thumb_url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/PA86bJxPBo58MaxTOeIl1O4B.jpg"
+    },
+    {
+     "slug": "solar-villa-ha-noi",
+     "name": "Solar Villa Hà Nội",
+     "url": "https://dezon.vn/nha-thau/kien-phong/solar-villa-ha-noi/",
+     "thumb_url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/EBOnbgoWwoFrnoxmtSVlZqmX.jpg"
+    },
+    {
+     "slug": "the-opera-duplex",
+     "name": "The Opera Duplex",
+     "url": "https://dezon.vn/nha-thau/kien-phong/the-opera-duplex/",
+     "thumb_url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/Zslwb9sRXoEXcyxyHaDlykcf.jpg"
+    },
+    {
+     "slug": "villa-indochine-tien-giang",
+     "name": "Villa Indochine Tiền Giang",
+     "url": "https://dezon.vn/nha-thau/kien-phong/villa-indochine-tien-giang/",
+     "thumb_url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/VkzIbAHO1o4o4SxSs9hlFON3.jpg"
+    }
+   ],
+   "extra": {
+    "spec": {
+     "nam thanh lap": "2018",
+     "don gia tho": "Từ 4,3 đến 4,7 tr/m²",
+     "so luong nhan su": "20 thợ · 12 văn phòng",
+     "vai tro": "Tổng thầu",
+     "loai hinh cong trinh": "Nhà phố · Biệt thự · Căn hộ · Công trình khác",
+     "so nam kinh nghiem": "8 năm",
+     "don gia hoan thien co ban": "Từ 7,3 đến 9,5 tr/m²",
+     "quy mo du an": "25 tỷ / công trình",
+     "khu vuc da va dang thi cong": "TP. HCM.",
+     "van hanh": "Nuôi quân, Công nhật"
+    },
+    "role": "Tổng thầu",
+    "operation": "Nuôi quân, Công nhật"
+   },
+   "source_updated_at": "2026-08-26 02:22:20+00:00",
+   "_source": {
+    "url": "https://dezon.vn/nha-thau/kien-phong/",
+    "fetched_at": "2026-11-02T07:10:57.242919+00:00",
+    "raw_hash": "dd966d08b93eb91cc2597a822a122c0b898f976bbfabb0e536f73275ac0e6c18"
+   }
+  },
+  {
+   "name": "Smartcons Tech",
+   "badge": "Nhà thầu tiềm năng",
+   "province": "TP. Hồ Chí Minh",
+   "founded_year": 2020,
+   "years_experience": 6,
+   "staff_workers": 15,
+   "staff_office": null,
+   "rough_price_min": 2000000,
+   "rough_price_max": 4300000,
+   "finish_price_min": 2000000,
+   "finish_price_max": 8000000,
+   "typical_project_value": 20000000000,
+   "dezon_project_count": 8,
+   "has_warranty_info": null,
+   "warranty_text": null,
+   "description": "Smartcons Tech là đơn vị thi công xây dựng — hoàn thiện tại TP Hồ Chí Minh, thành lập năm 2020. Quy mô ghi nhận: 15 nhân sự thi công, 10 dự án/năm, 2 dự án đang thi công. Loại hình công trình từng thực hiện: Nhà phố, Biệt thự, Căn hộ.",
+   "avatar_url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/WqoJbgw4noOXCHxUQwklirM8.jpg",
+   "profile_url": "https://dezon.vn/nha-thau/smartcons-tech/",
+   "kind": "contractor",
+   "slug": "smartcons-tech",
+   "external_id": "smartcons-tech",
+   "building_types": [
+    "nha_pho",
+    "biet_thu",
+    "can_ho"
+   ],
+   "service_provinces": [
+    "TP. Hồ Chí Minh"
+   ],
+   "works": [
+    {
+     "slug": "nha-pho-so-8-hem-23-duong-26-p-hiep-binh-tp-hcm",
+     "name": "Nhà Phố số 8 hẻm 23, đường 26, P Hiệp Bình, TP HCM",
+     "url": "https://dezon.vn/nha-thau/smartcons-tech/nha-pho-so-8-hem-23-duong-26-p-hiep-binh-tp-hcm/",
+     "thumb_url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/WqoJbgw4noOXCHxUQwklirM8.jpg"
+    },
+    {
+     "slug": "nha-pho-tan-an-long-an",
+     "name": "Nhà phố Tân An, Long An",
+     "url": "https://dezon.vn/nha-thau/smartcons-tech/nha-pho-tan-an-long-an/",
+     "thumb_url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/UFljbWw2EovrPkxGuj0lzbPj.jpg"
+    },
+    {
+     "slug": "anna-villa-duong-26-linh-dong-thu-duc-tp-hcm",
+     "name": "Anna Villa, đường 26, Linh Đông, Thủ Đức, TP HCM",
+     "url": "https://dezon.vn/nha-thau/smartcons-tech/anna-villa-duong-26-linh-dong-thu-duc-tp-hcm/",
+     "thumb_url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/HfT2bg6Ilodu4vxqMoElzdLs.jpg"
+    },
+    {
+     "slug": "nha-pho-tan-co-dien-47-tran-quang-dieu-vi-thanh-tp-can-tho",
+     "name": "Nhà Phố Tân Cổ Điển, 47 Trần Quang Diệu, Vị Thanh, TP Cần Thơ",
+     "url": "https://dezon.vn/nha-thau/smartcons-tech/nha-pho-tan-co-dien-47-tran-quang-dieu-vi-thanh-tp-can-tho/",
+     "thumb_url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/E9dDbeqU0oSBnbxEodMl3qCO.jpg"
+    },
+    {
+     "slug": "biet-thu-tan-co-dien-duong-g9-kdc-vinh-loc-p-binh-hung-hoa-t",
+     "name": "Biệt thự Tân Cổ Điển, đường G9, KDC Vĩnh Lộc, P Bình Hưng Hòa, TP HCM",
+     "url": "https://dezon.vn/nha-thau/smartcons-tech/biet-thu-tan-co-dien-duong-g9-kdc-vinh-loc-p-binh-hung-hoa-t/",
+     "thumb_url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/IUeNbepRMoAqlKxgezglgdDO.jpg"
+    },
+    {
+     "slug": "biet-thu-tan-co-dien-duong-6b-kdc-vinh-loc-p-binh-hung-hoa-t",
+     "name": "Biệt thự Tân Cổ Điển, đường 6B, KDC Vĩnh Lộc, P Bình Hưng Hòa, TP HCM",
+     "url": "https://dezon.vn/nha-thau/smartcons-tech/biet-thu-tan-co-dien-duong-6b-kdc-vinh-loc-p-binh-hung-hoa-t/",
+     "thumb_url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/KoFxbncg1oIIKzxp7JClMSFP.jpg"
+    },
+    {
+     "slug": "biet-thu-ap-lap-khanh-khanh-hoa-tay-ninh",
+     "name": "Biệt thự ấp Lập Khánh, Khánh Hòa, Tây Ninh",
+     "url": "https://dezon.vn/nha-thau/smartcons-tech/biet-thu-ap-lap-khanh-khanh-hoa-tay-ninh/",
+     "thumb_url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/BC4QbNYmToUAtqxSbUpl4ZAM.jpg"
+    },
+    {
+     "slug": "nha-pho-hem-18-le-van-luong-nha-be-tp-hcm",
+     "name": "Nhà phố hẻm 18 Lê Văn Lương, Nhà Bè, TP HCM",
+     "url": "https://dezon.vn/nha-thau/smartcons-tech/nha-pho-hem-18-le-van-luong-nha-be-tp-hcm/",
+     "thumb_url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/DgYMbdm7Coqy9KxqP5Jl68qs.jpg"
+    }
+   ],
+   "extra": {
+    "spec": {
+     "nam thanh lap": "2020",
+     "don gia tho": "Từ 2 đến 4,3 tr/m²",
+     "so luong nhan su": "15 thợ",
+     "vai tro": "Tổng thầu",
+     "loai hinh cong trinh": "Nhà phố · Biệt thự · Căn hộ",
+     "so nam kinh nghiem": "6 năm",
+     "don gia hoan thien co ban": "Từ 2 đến 8 tr/m²",
+     "quy mo du an": "20 tỷ / công trình",
+     "khu vuc da va dang thi cong": "TP Hồ Chí Minh",
+     "van hanh": "Nuôi quân, Công nhật, Khoán tổ đội"
+    },
+    "role": "Tổng thầu",
+    "operation": "Nuôi quân, Công nhật, Khoán tổ đội"
+   },
+   "source_updated_at": "2026-08-26 02:22:20+00:00",
+   "_source": {
+    "url": "https://dezon.vn/nha-thau/smartcons-tech/",
+    "fetched_at": "2026-11-02T07:10:59.245153+00:00",
+    "raw_hash": "9912e54c79f5ae50945ea92861a24049ff7af80c7193fce2975253237cf1c7e4"
+   }
+  },
+  {
+   "name": "Huy Hoàng",
+   "badge": "Nhà thầu tiềm năng",
+   "province": "TP. Hồ Chí Minh",
+   "founded_year": 2004,
+   "years_experience": 22,
+   "staff_workers": null,
+   "staff_office": 5,
+   "rough_price_min": 4200000,
+   "rough_price_max": 4800000,
+   "finish_price_min": 2000000,
+   "finish_price_max": 80000000,
+   "typical_project_value": null,
+   "dezon_project_count": 7,
+   "has_warranty_info": null,
+   "warranty_text": null,
+   "description": "Công ty TNHH TM XD Huy Hoàng được thành lập vào năm 2004, hoạt động trong lĩnh vực xây dựng và hoàn thiện. Công ty đảm nhận vai trò tổng thầu, chuyên thi công các loại hình công trình như nhà phố, biệt thự và các công trình khác. Huy Hoàng thực hiện các bản vẽ thi công bao gồm MEP, kiến trúc và kết cấu. Công ty có khả năng huy động từ 100 đến 300 nhân sự thợ theo từng công trình, cùng với 5 nhân sự văn phòng. Số lượng dự án mà công ty thực hiện mỗi năm đạt khoảng 50 dự án. Người điều hành công ty là ông Hoàng Quang Tiến, một kiến trúc sư và kỹ sư xây dựng. Công ty hoạt động chủ yếu tại TP Hồ Chí Minh và có lợi thế trong việc thi công nhiều phong cách khác nhau.",
+   "avatar_url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/Gnx7bVqLBoukTDx7pYZl79Xh.jpg",
+   "profile_url": "https://dezon.vn/nha-thau/huy-hoang/",
+   "kind": "contractor",
+   "slug": "huy-hoang",
+   "external_id": "huy-hoang",
+   "building_types": [
+    "nha_pho",
+    "biet_thu",
+    "khac"
+   ],
+   "service_provinces": [
+    "TP. Hồ Chí Minh"
+   ],
+   "works": [
+    {
+     "slug": "nha-pho-duong-hoang-hoa-tham-p-bay-hien-tp-hcm",
+     "name": "Nhà phố đường Hoàng Hoa Thám, P Bảy Hiền, TP HCM",
+     "url": "https://dezon.vn/nha-thau/huy-hoang/nha-pho-duong-hoang-hoa-tham-p-bay-hien-tp-hcm/",
+     "thumb_url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/Gnx7bVqLBoukTDx7pYZl79Xh.jpg"
+    },
+    {
+     "slug": "nha-pho-duong-tan-thang-tan-phu-tp-hcm",
+     "name": "Nhà Phố đường Tân Thắng, Tân Phú, TP HCM",
+     "url": "https://dezon.vn/nha-thau/huy-hoang/nha-pho-duong-tan-thang-tan-phu-tp-hcm/",
+     "thumb_url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/ZLd0bd8B4o4TnJxJ3XBlQ13A.jpg"
+    },
+    {
+     "slug": "nha-pho-phuong-binh-trung-tp-hcm",
+     "name": "Nhà phố phường Bình Trưng, TP HCM",
+     "url": "https://dezon.vn/nha-thau/huy-hoang/nha-pho-phuong-binh-trung-tp-hcm/",
+     "thumb_url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/GGHsbzNC6oxwTuxqIvslI2zO.jpg"
+    },
+    {
+     "slug": "nha-pho-kdc-caric-p-an-khanh-tp-hcm",
+     "name": "Nhà phố, KDC Caric, P An Khánh, TP HCM",
+     "url": "https://dezon.vn/nha-thau/huy-hoang/nha-pho-kdc-caric-p-an-khanh-tp-hcm/",
+     "thumb_url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/HRBfbmLynoGruSxHtgPllbb0.jpg"
+    },
+    {
+     "slug": "van-phong-kdc-caric-p-an-khanh-tp-hcm",
+     "name": "Văn Phòng, KDC Caric, P An Khánh, TP HCM",
+     "url": "https://dezon.vn/nha-thau/huy-hoang/van-phong-kdc-caric-p-an-khanh-tp-hcm/",
+     "thumb_url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/ZPQ4bZFvqothlaxMbMwlIcyI.jpg"
+    },
+    {
+     "slug": "van-phong-kdc-caric-p-an-khanh-tphcm",
+     "name": "Văn phòng KDC Caric, P An Khánh, TPHCM",
+     "url": "https://dezon.vn/nha-thau/huy-hoang/van-phong-kdc-caric-p-an-khanh-tphcm/",
+     "thumb_url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/OyXxb7qt2o9dyyx17Z1lV3UV.jpg"
+    },
+    {
+     "slug": "nha-pho-kdc-caric-p-an-khanh-tp-hcm-2",
+     "name": "Nhà phố KDC Caric, P An Khánh, TP HCM",
+     "url": "https://dezon.vn/nha-thau/huy-hoang/nha-pho-kdc-caric-p-an-khanh-tp-hcm-2/",
+     "thumb_url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/ZMN6bIQvMoj6XYx2ku9lqo2m.jpg"
+    }
+   ],
+   "extra": {
+    "spec": {
+     "nam thanh lap": "2004",
+     "don gia tho": "Từ 4,2 đến 4,8 tr/m²",
+     "so luong nhan su": "Huy động theo công trình 100 - 300 người · 5",
+     "vai tro": "Tổng thầu",
+     "loai hinh cong trinh": "Nhà phố · Biệt thự · Công trình khác",
+     "so nam kinh nghiem": "22 năm",
+     "don gia hoan thien co ban": "Từ 2 đến 80 tr/m²",
+     "quy mo du an": "7 – 15 tỷ / công trình",
+     "khu vuc da va dang thi cong": "TP Hồ Chí Minh",
+     "van hanh": "Khoán tổ đội, Công nhật"
+    },
+    "role": "Tổng thầu",
+    "typical_project_value_range": [
+     7000000000,
+     15000000000
+    ],
+    "operation": "Khoán tổ đội, Công nhật"
+   },
+   "source_updated_at": "2026-08-26 02:22:20+00:00",
+   "_source": {
+    "url": "https://dezon.vn/nha-thau/huy-hoang/",
+    "fetched_at": "2026-11-02T07:11:01.243401+00:00",
+    "raw_hash": "306d74b8c9a9e518e24d249bb4fa234c55efd3519f7ef029a15480944cae1480"
+   }
+  }
+ ],
+ "projects": [
+  {
+   "kind": "project",
+   "slug": "kien-phong--france-indochine-22-ha-noi",
+   "external_id": "nha-thau/kien-phong/france-indochine-22-ha-noi",
+   "name": "France Indochine 22 Hà Nội",
+   "project_url": "https://dezon.vn/nha-thau/kien-phong/france-indochine-22-ha-noi/",
+   "building_type": null,
+   "province": "TP. Hồ Chí Minh",
+   "district": null,
+   "floors": null,
+   "land_area_m2": null,
+   "floor_area_m2": null,
+   "start_date": null,
+   "end_date": null,
+   "status": null,
+   "description": null,
+   "images": [
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/ApoMbxpbgoLIAaxJt3cl2gFR.jpg",
+     "caption": "France Indochine 22 Hà Nội — ảnh 1",
+     "sort_order": 0
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/W2ZkbSD0YoRhkbxGNp4lA8F1.jpg",
+     "caption": "France Indochine 22 Hà Nội — ảnh 2",
+     "sort_order": 1
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/Z0Mcb5HU5oIuvKx0Qv8l57rX.jpg",
+     "caption": "France Indochine 22 Hà Nội — ảnh 3",
+     "sort_order": 2
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/U4TYbK0iFomZA1xLn2xl6oe0.jpg",
+     "caption": "France Indochine 22 Hà Nội — ảnh 4",
+     "sort_order": 3
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/LVqFbl46NovqzjxkhFZlT68b.jpg",
+     "caption": "France Indochine 22 Hà Nội — ảnh 5",
+     "sort_order": 4
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/JNccb1mpUoatRcx9mcVlFZnv.jpg",
+     "caption": "France Indochine 22 Hà Nội — ảnh 6",
+     "sort_order": 5
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/EFrHb0Y7eoAwqqxvBLxl3FCZ.jpg",
+     "caption": "France Indochine 22 Hà Nội — ảnh 7",
+     "sort_order": 6
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/OgPLbyPGfo9mfwxaxoeliEvh.jpg",
+     "caption": "France Indochine 22 Hà Nội — ảnh 8",
+     "sort_order": 7
+    }
+   ],
+   "contractors": [
+    {
+     "slug": "kien-phong",
+     "name": "Kiến Phong",
+     "profile_url": "https://dezon.vn/nha-thau/kien-phong/",
+     "role": "thi_cong"
+    }
+   ],
+   "extra": {
+    "meta_line": "Công trình thực tế do Kiến Phong thi công · TP. HCM · 8 ảnh ghi nhận từ hồ sơ khảo sát · Đăng ngày 22/10/2026",
+    "posted_at": "2026-10-22"
+   },
+   "source_updated_at": "2026-08-26 02:22:20+00:00",
+   "_source": {
+    "url": "https://dezon.vn/nha-thau/kien-phong/france-indochine-22-ha-noi/",
+    "fetched_at": "2026-11-02T07:11:03.236325+00:00",
+    "raw_hash": "7ce602b7fac2adc350c5da61e1e7763ae1333c2157d70c6d8b8abca9c825835c"
+   }
+  },
+  {
+   "kind": "project",
+   "slug": "smartcons-tech--nha-pho-so-8-hem-23-duong-26-p-hiep-binh-tp-hcm",
+   "external_id": "nha-thau/smartcons-tech/nha-pho-so-8-hem-23-duong-26-p-hiep-binh-tp-hcm",
+   "name": "Nhà Phố số 8 hẻm 23, đường 26, P Hiệp Bình, TP HCM",
+   "project_url": "https://dezon.vn/nha-thau/smartcons-tech/nha-pho-so-8-hem-23-duong-26-p-hiep-binh-tp-hcm/",
+   "building_type": "nha_pho",
+   "province": "TP. Hồ Chí Minh",
+   "district": null,
+   "floors": null,
+   "land_area_m2": null,
+   "floor_area_m2": null,
+   "start_date": null,
+   "end_date": null,
+   "status": null,
+   "description": null,
+   "images": [
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/WqoJbgw4noOXCHxUQwklirM8.jpg",
+     "caption": "Nhà Phố số 8 hẻm 23, đường 26, P Hiệp Bình, TP HCM — ảnh 1",
+     "sort_order": 0
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/Uv7Gb7al6opDLSxo9XblakQD.jpg",
+     "caption": "Nhà Phố số 8 hẻm 23, đường 26, P Hiệp Bình, TP HCM — ảnh 2",
+     "sort_order": 1
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/A9mObPeLXoeI9oxjGGtlkZwg.jpg",
+     "caption": "Nhà Phố số 8 hẻm 23, đường 26, P Hiệp Bình, TP HCM — ảnh 3",
+     "sort_order": 2
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/FqDab7r1Eo8nR7xl41jlRBSY.jpg",
+     "caption": "Nhà Phố số 8 hẻm 23, đường 26, P Hiệp Bình, TP HCM — ảnh 4",
+     "sort_order": 3
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/XuhlbmTjnoNNEDxaziFl23f2.jpg",
+     "caption": "Nhà Phố số 8 hẻm 23, đường 26, P Hiệp Bình, TP HCM — ảnh 5",
+     "sort_order": 4
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/WULzbTFQuoABWXxfC7YlUJ77.jpg",
+     "caption": "Nhà Phố số 8 hẻm 23, đường 26, P Hiệp Bình, TP HCM — ảnh 6",
+     "sort_order": 5
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/VHk8beHzyo1QdQxBj0plcThK.jpg",
+     "caption": "Nhà Phố số 8 hẻm 23, đường 26, P Hiệp Bình, TP HCM — ảnh 7",
+     "sort_order": 6
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/StvabpeBZo2Og9xkMcel6D1J.jpg",
+     "caption": "Nhà Phố số 8 hẻm 23, đường 26, P Hiệp Bình, TP HCM — ảnh 8",
+     "sort_order": 7
+    }
+   ],
+   "contractors": [
+    {
+     "slug": "smartcons-tech",
+     "name": "Smartcons Tech",
+     "profile_url": "https://dezon.vn/nha-thau/smartcons-tech/",
+     "role": "thi_cong"
+    }
+   ],
+   "extra": {
+    "meta_line": "Công trình thực tế do Smartcons Tech thi công · TP Hồ Chí Minh · 8 ảnh ghi nhận từ hồ sơ khảo sát · Đăng ngày 24/09/2026",
+    "posted_at": "2026-09-24"
+   },
+   "source_updated_at": "2026-08-26 02:22:20+00:00",
+   "_source": {
+    "url": "https://dezon.vn/nha-thau/smartcons-tech/nha-pho-so-8-hem-23-duong-26-p-hiep-binh-tp-hcm/",
+    "fetched_at": "2026-11-02T07:11:05.243730+00:00",
+    "raw_hash": "fd42fc83330cd6eb80db527a5d6356853583d63ebf1d4e722515abb2f57a2e30"
+   }
+  },
+  {
+   "kind": "project",
+   "slug": "huy-hoang--nha-pho-duong-hoang-hoa-tham-p-bay-hien-tp-hcm",
+   "external_id": "nha-thau/huy-hoang/nha-pho-duong-hoang-hoa-tham-p-bay-hien-tp-hcm",
+   "name": "Nhà phố đường Hoàng Hoa Thám, P Bảy Hiền, TP HCM",
+   "project_url": "https://dezon.vn/nha-thau/huy-hoang/nha-pho-duong-hoang-hoa-tham-p-bay-hien-tp-hcm/",
+   "building_type": "nha_pho",
+   "province": "TP. Hồ Chí Minh",
+   "district": null,
+   "floors": null,
+   "land_area_m2": null,
+   "floor_area_m2": null,
+   "start_date": null,
+   "end_date": null,
+   "status": null,
+   "description": null,
+   "images": [
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/Gnx7bVqLBoukTDx7pYZl79Xh.jpg",
+     "caption": "Nhà phố đường Hoàng Hoa Thám, P Bảy Hiền, TP HCM — ảnh 1",
+     "sort_order": 0
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/DjEdbntezoi22QxWeUilXNKN.jpg",
+     "caption": "Nhà phố đường Hoàng Hoa Thám, P Bảy Hiền, TP HCM — ảnh 2",
+     "sort_order": 1
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/XHgDbg1HGofUn1xBzIXlaTLA.jpg",
+     "caption": "Nhà phố đường Hoàng Hoa Thám, P Bảy Hiền, TP HCM — ảnh 3",
+     "sort_order": 2
+    }
+   ],
+   "contractors": [
+    {
+     "slug": "huy-hoang",
+     "name": "Huy Hoàng",
+     "profile_url": "https://dezon.vn/nha-thau/huy-hoang/",
+     "role": "thi_cong"
+    }
+   ],
+   "extra": {
+    "meta_line": "Công trình thực tế do Huy Hoàng thi công · TP Hồ Chí Minh · 3 ảnh ghi nhận từ hồ sơ khảo sát · Đăng ngày 19/10/2026",
+    "posted_at": "2026-10-19"
+   },
+   "source_updated_at": "2026-08-26 02:22:20+00:00",
+   "_source": {
+    "url": "https://dezon.vn/nha-thau/huy-hoang/nha-pho-duong-hoang-hoa-tham-p-bay-hien-tp-hcm/",
+    "fetched_at": "2026-11-02T07:11:07.238452+00:00",
+    "raw_hash": "94b75dd6c018f54119ece9c1daca3f09feb551f1cd38cfdd5a8ba3c7d053b78f"
+   }
+  },
+  {
+   "kind": "project",
+   "slug": "kien-phong--green-pool-villa-vinh-long",
+   "external_id": "nha-thau/kien-phong/green-pool-villa-vinh-long",
+   "name": "Green Pool Villa Vĩnh Long",
+   "project_url": "https://dezon.vn/nha-thau/kien-phong/green-pool-villa-vinh-long/",
+   "building_type": "biet_thu",
+   "province": "TP. Hồ Chí Minh",
+   "district": null,
+   "floors": null,
+   "land_area_m2": null,
+   "floor_area_m2": null,
+   "start_date": null,
+   "end_date": null,
+   "status": null,
+   "description": null,
+   "images": [
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/VmpUbQRpQoqie5xgIrFliHOo.jpg",
+     "caption": "Green Pool Villa Vĩnh Long — ảnh 1",
+     "sort_order": 0
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/R0JHbbt4doaimtx8JLTlXtdo.jpg",
+     "caption": "Green Pool Villa Vĩnh Long — ảnh 2",
+     "sort_order": 1
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/OdfZbAjZAoMqudx1TFplrHYA.jpg",
+     "caption": "Green Pool Villa Vĩnh Long — ảnh 3",
+     "sort_order": 2
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/OgTcbyyQYo5SngxKVQRlbqwZ.jpg",
+     "caption": "Green Pool Villa Vĩnh Long — ảnh 4",
+     "sort_order": 3
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/F5vPbU3pKoD4mzxlqmrlAvpd.jpg",
+     "caption": "Green Pool Villa Vĩnh Long — ảnh 5",
+     "sort_order": 4
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/DRlKbgAtfobWMtxuytIlfleV.jpg",
+     "caption": "Green Pool Villa Vĩnh Long — ảnh 6",
+     "sort_order": 5
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/NrpgbbROGo2k7WxveFDloAtv.jpg",
+     "caption": "Green Pool Villa Vĩnh Long — ảnh 7",
+     "sort_order": 6
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/CaXhblEK3oR1Wnxrsfjloyni.jpg",
+     "caption": "Green Pool Villa Vĩnh Long — ảnh 8",
+     "sort_order": 7
+    }
+   ],
+   "contractors": [
+    {
+     "slug": "kien-phong",
+     "name": "Kiến Phong",
+     "profile_url": "https://dezon.vn/nha-thau/kien-phong/",
+     "role": "thi_cong"
+    }
+   ],
+   "extra": {
+    "meta_line": "Công trình thực tế do Kiến Phong thi công · TP. HCM · 8 ảnh ghi nhận từ hồ sơ khảo sát · Đăng ngày 22/10/2026",
+    "posted_at": "2026-10-22"
+   },
+   "source_updated_at": "2026-08-26 02:22:20+00:00",
+   "_source": {
+    "url": "https://dezon.vn/nha-thau/kien-phong/green-pool-villa-vinh-long/",
+    "fetched_at": "2026-11-02T07:11:09.245127+00:00",
+    "raw_hash": "a06be3c21391ce6a927891bbfd1f8194973982eb89df4c2bead57785a6e3836d"
+   }
+  },
+  {
+   "kind": "project",
+   "slug": "smartcons-tech--nha-pho-tan-an-long-an",
+   "external_id": "nha-thau/smartcons-tech/nha-pho-tan-an-long-an",
+   "name": "Nhà phố Tân An, Long An",
+   "project_url": "https://dezon.vn/nha-thau/smartcons-tech/nha-pho-tan-an-long-an/",
+   "building_type": "nha_pho",
+   "province": "TP. Hồ Chí Minh",
+   "district": null,
+   "floors": null,
+   "land_area_m2": null,
+   "floor_area_m2": null,
+   "start_date": null,
+   "end_date": null,
+   "status": null,
+   "description": null,
+   "images": [
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/UFljbWw2EovrPkxGuj0lzbPj.jpg",
+     "caption": "Nhà phố Tân An, Long An — ảnh 1",
+     "sort_order": 0
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/XR2ib39C9oo4rHx22hilM05M.jpg",
+     "caption": "Nhà phố Tân An, Long An — ảnh 2",
+     "sort_order": 1
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/K3Ylb8tY7oG0oUxoJpBljy2E.jpg",
+     "caption": "Nhà phố Tân An, Long An — ảnh 3",
+     "sort_order": 2
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/LVLFbpAv6okmxZxsbW9lJkOV.jpg",
+     "caption": "Nhà phố Tân An, Long An — ảnh 4",
+     "sort_order": 3
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/NmhrbRLuYoaznlxnsUxlM1Im.jpg",
+     "caption": "Nhà phố Tân An, Long An — ảnh 5",
+     "sort_order": 4
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/ZItObcktuoM953x0NiKlOcRP.jpg",
+     "caption": "Nhà phố Tân An, Long An — ảnh 6",
+     "sort_order": 5
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/PpkHb0NxBowRdexgNK0l0KR9.jpg",
+     "caption": "Nhà phố Tân An, Long An — ảnh 7",
+     "sort_order": 6
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/AUaxbx2jCoxFffxU15plB5ef.jpg",
+     "caption": "Nhà phố Tân An, Long An — ảnh 8",
+     "sort_order": 7
+    }
+   ],
+   "contractors": [
+    {
+     "slug": "smartcons-tech",
+     "name": "Smartcons Tech",
+     "profile_url": "https://dezon.vn/nha-thau/smartcons-tech/",
+     "role": "thi_cong"
+    }
+   ],
+   "extra": {
+    "meta_line": "Công trình thực tế do Smartcons Tech thi công · TP Hồ Chí Minh · 8 ảnh ghi nhận từ hồ sơ khảo sát · Đăng ngày 30/09/2026",
+    "posted_at": "2026-09-30"
+   },
+   "source_updated_at": "2026-08-26 02:22:20+00:00",
+   "_source": {
+    "url": "https://dezon.vn/nha-thau/smartcons-tech/nha-pho-tan-an-long-an/",
+    "fetched_at": "2026-11-02T07:11:11.248070+00:00",
+    "raw_hash": "32333fcad7fb81dd6b22201382e8dceaa3fd60bd19b692b7024117419449b28f"
+   }
+  },
+  {
+   "kind": "project",
+   "slug": "huy-hoang--nha-pho-duong-tan-thang-tan-phu-tp-hcm",
+   "external_id": "nha-thau/huy-hoang/nha-pho-duong-tan-thang-tan-phu-tp-hcm",
+   "name": "Nhà Phố đường Tân Thắng, Tân Phú, TP HCM",
+   "project_url": "https://dezon.vn/nha-thau/huy-hoang/nha-pho-duong-tan-thang-tan-phu-tp-hcm/",
+   "building_type": "nha_pho",
+   "province": "TP. Hồ Chí Minh",
+   "district": null,
+   "floors": null,
+   "land_area_m2": null,
+   "floor_area_m2": null,
+   "start_date": null,
+   "end_date": null,
+   "status": null,
+   "description": null,
+   "images": [
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/ZLd0bd8B4o4TnJxJ3XBlQ13A.jpg",
+     "caption": "Nhà Phố đường Tân Thắng, Tân Phú, TP HCM — ảnh 1",
+     "sort_order": 0
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/EkjUbpkL1oLWDFxaNBXl6lmr.jpg",
+     "caption": "Nhà Phố đường Tân Thắng, Tân Phú, TP HCM — ảnh 2",
+     "sort_order": 1
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/Ba9ubOPuwoqyDIxC1IdlT3Gs.jpg",
+     "caption": "Nhà Phố đường Tân Thắng, Tân Phú, TP HCM — ảnh 3",
+     "sort_order": 2
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/Vkb1btnTIoCfO6xQMPglBqb9.jpg",
+     "caption": "Nhà Phố đường Tân Thắng, Tân Phú, TP HCM — ảnh 4",
+     "sort_order": 3
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/Zfb7bYcB2oPFILxtVOGlYDHf.jpg",
+     "caption": "Nhà Phố đường Tân Thắng, Tân Phú, TP HCM — ảnh 5",
+     "sort_order": 4
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/WiNDbsEc5oIA66xOV5Gl4uu0.jpg",
+     "caption": "Nhà Phố đường Tân Thắng, Tân Phú, TP HCM — ảnh 6",
+     "sort_order": 5
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/GaexbZsmXosxvMxtE25lTHyt.jpg",
+     "caption": "Nhà Phố đường Tân Thắng, Tân Phú, TP HCM — ảnh 7",
+     "sort_order": 6
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/Jlapb0pwSoCgQaxZK4Vlx4Er.jpg",
+     "caption": "Nhà Phố đường Tân Thắng, Tân Phú, TP HCM — ảnh 8",
+     "sort_order": 7
+    }
+   ],
+   "contractors": [
+    {
+     "slug": "huy-hoang",
+     "name": "Huy Hoàng",
+     "profile_url": "https://dezon.vn/nha-thau/huy-hoang/",
+     "role": "thi_cong"
+    }
+   ],
+   "extra": {
+    "meta_line": "Công trình thực tế do Huy Hoàng thi công · TP Hồ Chí Minh · 8 ảnh ghi nhận từ hồ sơ khảo sát · Đăng ngày 19/10/2026",
+    "posted_at": "2026-10-19"
+   },
+   "source_updated_at": "2026-08-26 02:22:20+00:00",
+   "_source": {
+    "url": "https://dezon.vn/nha-thau/huy-hoang/nha-pho-duong-tan-thang-tan-phu-tp-hcm/",
+    "fetched_at": "2026-11-02T07:11:13.254793+00:00",
+    "raw_hash": "f280bdfe6b7d93080e6da24d75021b2e126dc91d71aaa0a215c40b8f6b2ae987"
+   }
+  },
+  {
+   "kind": "project",
+   "slug": "kien-phong--indochine-villa-quan-7-sai-gon",
+   "external_id": "nha-thau/kien-phong/indochine-villa-quan-7-sai-gon",
+   "name": "Indochine Villa Quận 7 Sài gòn",
+   "project_url": "https://dezon.vn/nha-thau/kien-phong/indochine-villa-quan-7-sai-gon/",
+   "building_type": "biet_thu",
+   "province": "TP. Hồ Chí Minh",
+   "district": null,
+   "floors": null,
+   "land_area_m2": null,
+   "floor_area_m2": null,
+   "start_date": null,
+   "end_date": null,
+   "status": null,
+   "description": null,
+   "images": [
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/UmjqbDGOsoPA8Sxm4xmliVZ7.jpg",
+     "caption": "Indochine Villa Quận 7 Sài gòn — ảnh 1",
+     "sort_order": 0
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/AmoNbyPi4oTp49xHWonlnFCP.jpg",
+     "caption": "Indochine Villa Quận 7 Sài gòn — ảnh 2",
+     "sort_order": 1
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/WADbbDhZWoGJYVxAPQclf9h3.jpg",
+     "caption": "Indochine Villa Quận 7 Sài gòn — ảnh 3",
+     "sort_order": 2
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/FJawbr9tpoRXZTxrWSYldaMl.jpg",
+     "caption": "Indochine Villa Quận 7 Sài gòn — ảnh 4",
+     "sort_order": 3
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/M4oCbcJaVoq4MFxWIyzlVvrx.jpg",
+     "caption": "Indochine Villa Quận 7 Sài gòn — ảnh 5",
+     "sort_order": 4
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/ROOKbKzJco8gRQxNbJCl9Quz.jpg",
+     "caption": "Indochine Villa Quận 7 Sài gòn — ảnh 6",
+     "sort_order": 5
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/YfyBb3TYooKXtxxvUQGl5iTK.jpg",
+     "caption": "Indochine Villa Quận 7 Sài gòn — ảnh 7",
+     "sort_order": 6
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/WFB1b8SWloKO2Xxj54ilnowR.jpg",
+     "caption": "Indochine Villa Quận 7 Sài gòn — ảnh 8",
+     "sort_order": 7
+    }
+   ],
+   "contractors": [
+    {
+     "slug": "kien-phong",
+     "name": "Kiến Phong",
+     "profile_url": "https://dezon.vn/nha-thau/kien-phong/",
+     "role": "thi_cong"
+    }
+   ],
+   "extra": {
+    "meta_line": "Công trình thực tế do Kiến Phong thi công · TP. HCM · 8 ảnh ghi nhận từ hồ sơ khảo sát · Đăng ngày 22/10/2026",
+    "posted_at": "2026-10-22"
+   },
+   "source_updated_at": "2026-08-26 02:22:20+00:00",
+   "_source": {
+    "url": "https://dezon.vn/nha-thau/kien-phong/indochine-villa-quan-7-sai-gon/",
+    "fetched_at": "2026-11-02T07:11:15.240453+00:00",
+    "raw_hash": "2cd17682c18d23877c56ec798ee10b8a5f1c386ffc6dd860964c08780e1b26aa"
+   }
+  },
+  {
+   "kind": "project",
+   "slug": "smartcons-tech--anna-villa-duong-26-linh-dong-thu-duc-tp-hcm",
+   "external_id": "nha-thau/smartcons-tech/anna-villa-duong-26-linh-dong-thu-duc-tp-hcm",
+   "name": "Anna Villa, đường 26, Linh Đông, Thủ Đức, TP HCM",
+   "project_url": "https://dezon.vn/nha-thau/smartcons-tech/anna-villa-duong-26-linh-dong-thu-duc-tp-hcm/",
+   "building_type": "biet_thu",
+   "province": "TP. Hồ Chí Minh",
+   "district": null,
+   "floors": null,
+   "land_area_m2": null,
+   "floor_area_m2": null,
+   "start_date": null,
+   "end_date": null,
+   "status": null,
+   "description": null,
+   "images": [
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/HfT2bg6Ilodu4vxqMoElzdLs.jpg",
+     "caption": "Anna Villa, đường 26, Linh Đông, Thủ Đức, TP HCM — ảnh 1",
+     "sort_order": 0
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/JgyXbTdlMoczh0xfME0lxAOB.jpg",
+     "caption": "Anna Villa, đường 26, Linh Đông, Thủ Đức, TP HCM — ảnh 2",
+     "sort_order": 1
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/NxEKbJ7tyoEoL3xqz7olQZf3.jpg",
+     "caption": "Anna Villa, đường 26, Linh Đông, Thủ Đức, TP HCM — ảnh 3",
+     "sort_order": 2
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/Ym39bpRlAolx3ExCE1ilwicK.jpg",
+     "caption": "Anna Villa, đường 26, Linh Đông, Thủ Đức, TP HCM — ảnh 4",
+     "sort_order": 3
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/NQO5bMPmSoLY4BxkX8ylC1dE.jpg",
+     "caption": "Anna Villa, đường 26, Linh Đông, Thủ Đức, TP HCM — ảnh 5",
+     "sort_order": 4
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/PFuHbcD2ToBQHcxPs4vlpfqG.jpg",
+     "caption": "Anna Villa, đường 26, Linh Đông, Thủ Đức, TP HCM — ảnh 6",
+     "sort_order": 5
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/NbR4bAp9EoEcXvxbzuOlqBE6.jpg",
+     "caption": "Anna Villa, đường 26, Linh Đông, Thủ Đức, TP HCM — ảnh 7",
+     "sort_order": 6
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/Y2eTb1y3uogkT5xg3d3l66aI.jpg",
+     "caption": "Anna Villa, đường 26, Linh Đông, Thủ Đức, TP HCM — ảnh 8",
+     "sort_order": 7
+    }
+   ],
+   "contractors": [
+    {
+     "slug": "smartcons-tech",
+     "name": "Smartcons Tech",
+     "profile_url": "https://dezon.vn/nha-thau/smartcons-tech/",
+     "role": "thi_cong"
+    }
+   ],
+   "extra": {
+    "meta_line": "Công trình thực tế do Smartcons Tech thi công · TP Hồ Chí Minh · 8 ảnh ghi nhận từ hồ sơ khảo sát · Đăng ngày 19/10/2026",
+    "posted_at": "2026-10-19"
+   },
+   "source_updated_at": "2026-08-26 02:22:20+00:00",
+   "_source": {
+    "url": "https://dezon.vn/nha-thau/smartcons-tech/anna-villa-duong-26-linh-dong-thu-duc-tp-hcm/",
+    "fetched_at": "2026-11-02T07:11:17.250042+00:00",
+    "raw_hash": "a0c27d0f4c5c498d22cb4d84b92b04fa3ffa168438b00aefe83b974a25919513"
+   }
+  },
+  {
+   "kind": "project",
+   "slug": "huy-hoang--nha-pho-phuong-binh-trung-tp-hcm",
+   "external_id": "nha-thau/huy-hoang/nha-pho-phuong-binh-trung-tp-hcm",
+   "name": "Nhà phố phường Bình Trưng, TP HCM",
+   "project_url": "https://dezon.vn/nha-thau/huy-hoang/nha-pho-phuong-binh-trung-tp-hcm/",
+   "building_type": "nha_pho",
+   "province": "TP. Hồ Chí Minh",
+   "district": null,
+   "floors": null,
+   "land_area_m2": null,
+   "floor_area_m2": null,
+   "start_date": null,
+   "end_date": null,
+   "status": null,
+   "description": null,
+   "images": [
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/GGHsbzNC6oxwTuxqIvslI2zO.jpg",
+     "caption": "Nhà phố phường Bình Trưng, TP HCM — ảnh 1",
+     "sort_order": 0
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/PrwNbycPcoqt8UxhuA9l4nDd.jpg",
+     "caption": "Nhà phố phường Bình Trưng, TP HCM — ảnh 2",
+     "sort_order": 1
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/Uo8XbaJ0ToW9UQxT2JilYe5s.jpg",
+     "caption": "Nhà phố phường Bình Trưng, TP HCM — ảnh 3",
+     "sort_order": 2
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/I9NbblapioEfVmxFQ7ilxqPp.jpg",
+     "caption": "Nhà phố phường Bình Trưng, TP HCM — ảnh 4",
+     "sort_order": 3
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/IOeHbmTfVoDK2wx3dVMlwACC.jpg",
+     "caption": "Nhà phố phường Bình Trưng, TP HCM — ảnh 5",
+     "sort_order": 4
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/XfcUbZUwroC4cBxanVelgrlP.jpg",
+     "caption": "Nhà phố phường Bình Trưng, TP HCM — ảnh 6",
+     "sort_order": 5
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/YVq5bs3sDonsQZxpd2WluyoQ.jpg",
+     "caption": "Nhà phố phường Bình Trưng, TP HCM — ảnh 7",
+     "sort_order": 6
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/DAh0bPfcJoAx6axM7ZPl2YnW.jpg",
+     "caption": "Nhà phố phường Bình Trưng, TP HCM — ảnh 8",
+     "sort_order": 7
+    }
+   ],
+   "contractors": [
+    {
+     "slug": "huy-hoang",
+     "name": "Huy Hoàng",
+     "profile_url": "https://dezon.vn/nha-thau/huy-hoang/",
+     "role": "thi_cong"
+    }
+   ],
+   "extra": {
+    "meta_line": "Công trình thực tế do Huy Hoàng thi công · TP Hồ Chí Minh · 8 ảnh ghi nhận từ hồ sơ khảo sát · Đăng ngày 19/10/2026",
+    "posted_at": "2026-10-19"
+   },
+   "source_updated_at": "2026-08-26 02:22:20+00:00",
+   "_source": {
+    "url": "https://dezon.vn/nha-thau/huy-hoang/nha-pho-phuong-binh-trung-tp-hcm/",
+    "fetched_at": "2026-11-02T07:11:19.244493+00:00",
+    "raw_hash": "8fc94d4615fb3c7ff1a4c6a4ae1d7823a7b0b1803c556a7c0cd81943bc607453"
+   }
+  },
+  {
+   "kind": "project",
+   "slug": "kien-phong--nha-pho-khang-dien",
+   "external_id": "nha-thau/kien-phong/nha-pho-khang-dien",
+   "name": "Nhà phố Khang Điền",
+   "project_url": "https://dezon.vn/nha-thau/kien-phong/nha-pho-khang-dien/",
+   "building_type": "nha_pho",
+   "province": "TP. Hồ Chí Minh",
+   "district": null,
+   "floors": null,
+   "land_area_m2": null,
+   "floor_area_m2": null,
+   "start_date": null,
+   "end_date": null,
+   "status": null,
+   "description": null,
+   "images": [
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/PA86bJxPBo58MaxTOeIl1O4B.jpg",
+     "caption": "Nhà phố Khang Điền — ảnh 1",
+     "sort_order": 0
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/SN8XbZ9lkogF0ZxDhmXlEGgP.jpg",
+     "caption": "Nhà phố Khang Điền — ảnh 2",
+     "sort_order": 1
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/Bv6sbGXsfoQ34Bxv2zvlrAhb.jpg",
+     "caption": "Nhà phố Khang Điền — ảnh 3",
+     "sort_order": 2
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/THUJbkPlDoR9j5xM0FYlGn72.jpg",
+     "caption": "Nhà phố Khang Điền — ảnh 4",
+     "sort_order": 3
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/K9H3bkOiRoGMwgxkQUQliaQQ.jpg",
+     "caption": "Nhà phố Khang Điền — ảnh 5",
+     "sort_order": 4
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/ScPfbGnwhoJHzPxIEJulQT8j.jpg",
+     "caption": "Nhà phố Khang Điền — ảnh 6",
+     "sort_order": 5
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/VFpZboD8joiYyDxwmpUlS3hD.jpg",
+     "caption": "Nhà phố Khang Điền — ảnh 7",
+     "sort_order": 6
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/ZODCbXC2HomQjmx1CjslQPBU.jpg",
+     "caption": "Nhà phố Khang Điền — ảnh 8",
+     "sort_order": 7
+    }
+   ],
+   "contractors": [
+    {
+     "slug": "kien-phong",
+     "name": "Kiến Phong",
+     "profile_url": "https://dezon.vn/nha-thau/kien-phong/",
+     "role": "thi_cong"
+    }
+   ],
+   "extra": {
+    "meta_line": "Công trình thực tế do Kiến Phong thi công · TP. HCM · 8 ảnh ghi nhận từ hồ sơ khảo sát · Đăng ngày 22/10/2026",
+    "posted_at": "2026-10-22"
+   },
+   "source_updated_at": "2026-08-26 02:22:20+00:00",
+   "_source": {
+    "url": "https://dezon.vn/nha-thau/kien-phong/nha-pho-khang-dien/",
+    "fetched_at": "2026-11-02T07:11:21.241049+00:00",
+    "raw_hash": "f159977c56a53c6ca5f0b597f1d8968d178311c41024d1cbb29a6deba08493e7"
+   }
+  },
+  {
+   "kind": "project",
+   "slug": "smartcons-tech--nha-pho-tan-co-dien-47-tran-quang-dieu-vi-thanh-tp-can-tho",
+   "external_id": "nha-thau/smartcons-tech/nha-pho-tan-co-dien-47-tran-quang-dieu-vi-thanh-tp-can-tho",
+   "name": "Nhà Phố Tân Cổ Điển, 47 Trần Quang Diệu, Vị Thanh, TP Cần Thơ",
+   "project_url": "https://dezon.vn/nha-thau/smartcons-tech/nha-pho-tan-co-dien-47-tran-quang-dieu-vi-thanh-tp-can-tho/",
+   "building_type": "nha_pho",
+   "province": "TP. Hồ Chí Minh",
+   "district": null,
+   "floors": null,
+   "land_area_m2": null,
+   "floor_area_m2": null,
+   "start_date": null,
+   "end_date": null,
+   "status": null,
+   "description": null,
+   "images": [
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/E9dDbeqU0oSBnbxEodMl3qCO.jpg",
+     "caption": "Nhà Phố Tân Cổ Điển, 47 Trần Quang Diệu, Vị Thanh, TP Cần Thơ — ảnh 1",
+     "sort_order": 0
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/VYElb0uLnoMXRJxnItNlBHVY.jpg",
+     "caption": "Nhà Phố Tân Cổ Điển, 47 Trần Quang Diệu, Vị Thanh, TP Cần Thơ — ảnh 2",
+     "sort_order": 1
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/UJowblEvloOSOExEHaXlUzy8.jpg",
+     "caption": "Nhà Phố Tân Cổ Điển, 47 Trần Quang Diệu, Vị Thanh, TP Cần Thơ — ảnh 3",
+     "sort_order": 2
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/Gxxab2sRiozVXxxQaXPlH3B3.jpg",
+     "caption": "Nhà Phố Tân Cổ Điển, 47 Trần Quang Diệu, Vị Thanh, TP Cần Thơ — ảnh 4",
+     "sort_order": 3
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/TyCRbO1wUoUBBmxYzAxlHG9X.jpg",
+     "caption": "Nhà Phố Tân Cổ Điển, 47 Trần Quang Diệu, Vị Thanh, TP Cần Thơ — ảnh 5",
+     "sort_order": 4
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/Zp2jb0qvQoBMbTxRoC6ll7l9.jpg",
+     "caption": "Nhà Phố Tân Cổ Điển, 47 Trần Quang Diệu, Vị Thanh, TP Cần Thơ — ảnh 6",
+     "sort_order": 5
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/N6SHbmMUsoEpprxFMMOlLyNV.jpg",
+     "caption": "Nhà Phố Tân Cổ Điển, 47 Trần Quang Diệu, Vị Thanh, TP Cần Thơ — ảnh 7",
+     "sort_order": 6
+    }
+   ],
+   "contractors": [
+    {
+     "slug": "smartcons-tech",
+     "name": "Smartcons Tech",
+     "profile_url": "https://dezon.vn/nha-thau/smartcons-tech/",
+     "role": "thi_cong"
+    }
+   ],
+   "extra": {
+    "meta_line": "Công trình thực tế do Smartcons Tech thi công · TP Hồ Chí Minh · 7 ảnh ghi nhận từ hồ sơ khảo sát · Đăng ngày 19/10/2026",
+    "posted_at": "2026-10-19"
+   },
+   "source_updated_at": "2026-08-26 02:22:20+00:00",
+   "_source": {
+    "url": "https://dezon.vn/nha-thau/smartcons-tech/nha-pho-tan-co-dien-47-tran-quang-dieu-vi-thanh-tp-can-tho/",
+    "fetched_at": "2026-11-02T07:11:23.243443+00:00",
+    "raw_hash": "314dedf29d9f6a4478734ddc42ef7ed1cda210a87ca1ec992a5697153543bd03"
+   }
+  },
+  {
+   "kind": "project",
+   "slug": "huy-hoang--nha-pho-kdc-caric-p-an-khanh-tp-hcm",
+   "external_id": "nha-thau/huy-hoang/nha-pho-kdc-caric-p-an-khanh-tp-hcm",
+   "name": "Nhà phố, KDC Caric, P An Khánh, TP HCM",
+   "project_url": "https://dezon.vn/nha-thau/huy-hoang/nha-pho-kdc-caric-p-an-khanh-tp-hcm/",
+   "building_type": "nha_pho",
+   "province": "TP. Hồ Chí Minh",
+   "district": null,
+   "floors": null,
+   "land_area_m2": null,
+   "floor_area_m2": null,
+   "start_date": null,
+   "end_date": null,
+   "status": null,
+   "description": null,
+   "images": [
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/HRBfbmLynoGruSxHtgPllbb0.jpg",
+     "caption": "Nhà phố, KDC Caric, P An Khánh, TP HCM — ảnh 1",
+     "sort_order": 0
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/D10rbC7C8oS8fVx05mDlfY0J.jpg",
+     "caption": "Nhà phố, KDC Caric, P An Khánh, TP HCM — ảnh 2",
+     "sort_order": 1
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/IMf4bn3JeoJ0GRxQ1ralkv3G.jpg",
+     "caption": "Nhà phố, KDC Caric, P An Khánh, TP HCM — ảnh 3",
+     "sort_order": 2
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/LTlZbXazjol2ZwxH72Ql43HM.jpg",
+     "caption": "Nhà phố, KDC Caric, P An Khánh, TP HCM — ảnh 4",
+     "sort_order": 3
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/IFF9b2SmVoep9MxHWcHl4WxE.jpg",
+     "caption": "Nhà phố, KDC Caric, P An Khánh, TP HCM — ảnh 5",
+     "sort_order": 4
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/ZxVhbgyw1ordpdxX5hnlP9Y0.jpg",
+     "caption": "Nhà phố, KDC Caric, P An Khánh, TP HCM — ảnh 6",
+     "sort_order": 5
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/CA6LbM4Bho9pZJxTRAplySG7.jpg",
+     "caption": "Nhà phố, KDC Caric, P An Khánh, TP HCM — ảnh 7",
+     "sort_order": 6
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/GbHVbijS6obzl2x8ilLl9ESO.jpg",
+     "caption": "Nhà phố, KDC Caric, P An Khánh, TP HCM — ảnh 8",
+     "sort_order": 7
+    }
+   ],
+   "contractors": [
+    {
+     "slug": "huy-hoang",
+     "name": "Huy Hoàng",
+     "profile_url": "https://dezon.vn/nha-thau/huy-hoang/",
+     "role": "thi_cong"
+    }
+   ],
+   "extra": {
+    "meta_line": "Công trình thực tế do Huy Hoàng thi công · TP Hồ Chí Minh · 8 ảnh ghi nhận từ hồ sơ khảo sát · Đăng ngày 19/10/2026",
+    "posted_at": "2026-10-19"
+   },
+   "source_updated_at": "2026-08-26 02:22:20+00:00",
+   "_source": {
+    "url": "https://dezon.vn/nha-thau/huy-hoang/nha-pho-kdc-caric-p-an-khanh-tp-hcm/",
+    "fetched_at": "2026-11-02T07:11:25.244606+00:00",
+    "raw_hash": "36389b5970ca8f008f799a9651be32b956e7b81fa3dd1221724aef523ab5b0e4"
+   }
+  },
+  {
+   "kind": "project",
+   "slug": "kien-phong--solar-villa-ha-noi",
+   "external_id": "nha-thau/kien-phong/solar-villa-ha-noi",
+   "name": "Solar Villa Hà Nội",
+   "project_url": "https://dezon.vn/nha-thau/kien-phong/solar-villa-ha-noi/",
+   "building_type": "biet_thu",
+   "province": "TP. Hồ Chí Minh",
+   "district": null,
+   "floors": null,
+   "land_area_m2": null,
+   "floor_area_m2": null,
+   "start_date": null,
+   "end_date": null,
+   "status": null,
+   "description": null,
+   "images": [
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/EBOnbgoWwoFrnoxmtSVlZqmX.jpg",
+     "caption": "Solar Villa Hà Nội — ảnh 1",
+     "sort_order": 0
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/RPCTbzLvgoRMcsxhYwglBNFO.jpg",
+     "caption": "Solar Villa Hà Nội — ảnh 2",
+     "sort_order": 1
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/VKb8bWMHFoeU56xccO7lXqEH.jpg",
+     "caption": "Solar Villa Hà Nội — ảnh 3",
+     "sort_order": 2
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/KA2Rba5mboBcuYxQGsVl4Yyv.jpg",
+     "caption": "Solar Villa Hà Nội — ảnh 4",
+     "sort_order": 3
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/CNeDbj3WRoA55gxqGQVlf8hZ.jpg",
+     "caption": "Solar Villa Hà Nội — ảnh 5",
+     "sort_order": 4
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/E2ZQbaHRrot1wwxph8mlVoPO.jpg",
+     "caption": "Solar Villa Hà Nội — ảnh 6",
+     "sort_order": 5
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/WROVbV5mJoMKQnxKwvFlxLHD.jpg",
+     "caption": "Solar Villa Hà Nội — ảnh 7",
+     "sort_order": 6
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/RA1TbWy3SovB2axKJ31l85Lm.jpg",
+     "caption": "Solar Villa Hà Nội — ảnh 8",
+     "sort_order": 7
+    }
+   ],
+   "contractors": [
+    {
+     "slug": "kien-phong",
+     "name": "Kiến Phong",
+     "profile_url": "https://dezon.vn/nha-thau/kien-phong/",
+     "role": "thi_cong"
+    }
+   ],
+   "extra": {
+    "meta_line": "Công trình thực tế do Kiến Phong thi công · TP. HCM · 8 ảnh ghi nhận từ hồ sơ khảo sát · Đăng ngày 22/10/2026",
+    "posted_at": "2026-10-22"
+   },
+   "source_updated_at": "2026-08-26 02:22:20+00:00",
+   "_source": {
+    "url": "https://dezon.vn/nha-thau/kien-phong/solar-villa-ha-noi/",
+    "fetched_at": "2026-11-02T07:11:27.244981+00:00",
+    "raw_hash": "3d958571a5a759a02a692d21721ab8a8f541a28dbc159dce05b359a9d1ecd0ed"
+   }
+  },
+  {
+   "kind": "project",
+   "slug": "smartcons-tech--biet-thu-tan-co-dien-duong-g9-kdc-vinh-loc-p-binh-hung-hoa-t",
+   "external_id": "nha-thau/smartcons-tech/biet-thu-tan-co-dien-duong-g9-kdc-vinh-loc-p-binh-hung-hoa-t",
+   "name": "Biệt thự Tân Cổ Điển, đường G9, KDC Vĩnh Lộc, P Bình Hưng Hòa, TP HCM",
+   "project_url": "https://dezon.vn/nha-thau/smartcons-tech/biet-thu-tan-co-dien-duong-g9-kdc-vinh-loc-p-binh-hung-hoa-t/",
+   "building_type": "biet_thu",
+   "province": "TP. Hồ Chí Minh",
+   "district": null,
+   "floors": null,
+   "land_area_m2": null,
+   "floor_area_m2": null,
+   "start_date": null,
+   "end_date": null,
+   "status": null,
+   "description": null,
+   "images": [
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/IUeNbepRMoAqlKxgezglgdDO.jpg",
+     "caption": "Biệt thự Tân Cổ Điển, đường G9, KDC Vĩnh Lộc, P Bình Hưng Hòa, TP HCM — ảnh 1",
+     "sort_order": 0
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/ZK2JbE8dgo805Vx0mCSlJ3n3.jpg",
+     "caption": "Biệt thự Tân Cổ Điển, đường G9, KDC Vĩnh Lộc, P Bình Hưng Hòa, TP HCM — ảnh 2",
+     "sort_order": 1
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/MqB0bqcInoq9fuxdX3LlLpsX.jpg",
+     "caption": "Biệt thự Tân Cổ Điển, đường G9, KDC Vĩnh Lộc, P Bình Hưng Hòa, TP HCM — ảnh 3",
+     "sort_order": 2
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/PU6cb8UckoP9izxDOEel6QCg.jpg",
+     "caption": "Biệt thự Tân Cổ Điển, đường G9, KDC Vĩnh Lộc, P Bình Hưng Hòa, TP HCM — ảnh 4",
+     "sort_order": 3
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/Zg8bbZ2SXoFTzYxqxMjluiP0.jpg",
+     "caption": "Biệt thự Tân Cổ Điển, đường G9, KDC Vĩnh Lộc, P Bình Hưng Hòa, TP HCM — ảnh 5",
+     "sort_order": 4
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/P4LpbXe0godXBPx4qiGldr93.jpg",
+     "caption": "Biệt thự Tân Cổ Điển, đường G9, KDC Vĩnh Lộc, P Bình Hưng Hòa, TP HCM — ảnh 6",
+     "sort_order": 5
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/JgVmbrSfnozRApxSgTsloMKk.jpg",
+     "caption": "Biệt thự Tân Cổ Điển, đường G9, KDC Vĩnh Lộc, P Bình Hưng Hòa, TP HCM — ảnh 7",
+     "sort_order": 6
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/QuN6bJZKHozwO2x8IMjlfMCo.jpg",
+     "caption": "Biệt thự Tân Cổ Điển, đường G9, KDC Vĩnh Lộc, P Bình Hưng Hòa, TP HCM — ảnh 8",
+     "sort_order": 7
+    }
+   ],
+   "contractors": [
+    {
+     "slug": "smartcons-tech",
+     "name": "Smartcons Tech",
+     "profile_url": "https://dezon.vn/nha-thau/smartcons-tech/",
+     "role": "thi_cong"
+    }
+   ],
+   "extra": {
+    "meta_line": "Công trình thực tế do Smartcons Tech thi công · TP Hồ Chí Minh · 8 ảnh ghi nhận từ hồ sơ khảo sát · Đăng ngày 19/10/2026",
+    "posted_at": "2026-10-19"
+   },
+   "source_updated_at": "2026-08-26 02:22:20+00:00",
+   "_source": {
+    "url": "https://dezon.vn/nha-thau/smartcons-tech/biet-thu-tan-co-dien-duong-g9-kdc-vinh-loc-p-binh-hung-hoa-t/",
+    "fetched_at": "2026-11-02T07:11:29.245768+00:00",
+    "raw_hash": "d908aee30d042c6597c97877c51703fce7ea402156ee1be2fe892f96665f301b"
+   }
+  },
+  {
+   "kind": "project",
+   "slug": "huy-hoang--van-phong-kdc-caric-p-an-khanh-tp-hcm",
+   "external_id": "nha-thau/huy-hoang/van-phong-kdc-caric-p-an-khanh-tp-hcm",
+   "name": "Văn Phòng, KDC Caric, P An Khánh, TP HCM",
+   "project_url": "https://dezon.vn/nha-thau/huy-hoang/van-phong-kdc-caric-p-an-khanh-tp-hcm/",
+   "building_type": "van_phong",
+   "province": "TP. Hồ Chí Minh",
+   "district": null,
+   "floors": null,
+   "land_area_m2": null,
+   "floor_area_m2": null,
+   "start_date": null,
+   "end_date": null,
+   "status": null,
+   "description": null,
+   "images": [
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/ZPQ4bZFvqothlaxMbMwlIcyI.jpg",
+     "caption": "Văn Phòng, KDC Caric, P An Khánh, TP HCM — ảnh 1",
+     "sort_order": 0
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/Sep3bEieWoI919xJzZoly9Gn.jpg",
+     "caption": "Văn Phòng, KDC Caric, P An Khánh, TP HCM — ảnh 2",
+     "sort_order": 1
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/OcjVbIyf7oyhRZxpog1lkLy1.jpg",
+     "caption": "Văn Phòng, KDC Caric, P An Khánh, TP HCM — ảnh 3",
+     "sort_order": 2
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/Ss54bnu8GoXMiLxaaRClm9jM.jpg",
+     "caption": "Văn Phòng, KDC Caric, P An Khánh, TP HCM — ảnh 4",
+     "sort_order": 3
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/QSysbB2k2orPaQxCUVAl0apZ.jpg",
+     "caption": "Văn Phòng, KDC Caric, P An Khánh, TP HCM — ảnh 5",
+     "sort_order": 4
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/JYWbb5pzPoe6soxNwHAlLqLn.jpg",
+     "caption": "Văn Phòng, KDC Caric, P An Khánh, TP HCM — ảnh 6",
+     "sort_order": 5
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/TJS1bK6DxoWeRAx63TPlc4mb.jpg",
+     "caption": "Văn Phòng, KDC Caric, P An Khánh, TP HCM — ảnh 7",
+     "sort_order": 6
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/LYhgbOp0VogYeOxDcrVl4sqQ.jpg",
+     "caption": "Văn Phòng, KDC Caric, P An Khánh, TP HCM — ảnh 8",
+     "sort_order": 7
+    }
+   ],
+   "contractors": [
+    {
+     "slug": "huy-hoang",
+     "name": "Huy Hoàng",
+     "profile_url": "https://dezon.vn/nha-thau/huy-hoang/",
+     "role": "thi_cong"
+    }
+   ],
+   "extra": {
+    "meta_line": "Công trình thực tế do Huy Hoàng thi công · TP Hồ Chí Minh · 8 ảnh ghi nhận từ hồ sơ khảo sát · Đăng ngày 19/10/2026",
+    "posted_at": "2026-10-19"
+   },
+   "source_updated_at": "2026-08-26 02:22:20+00:00",
+   "_source": {
+    "url": "https://dezon.vn/nha-thau/huy-hoang/van-phong-kdc-caric-p-an-khanh-tp-hcm/",
+    "fetched_at": "2026-11-02T07:11:31.250344+00:00",
+    "raw_hash": "206ae1127f923da810b7285231d577cfd0a27861cd8434163e642820670a1737"
+   }
+  },
+  {
+   "kind": "project",
+   "slug": "kien-phong--the-opera-duplex",
+   "external_id": "nha-thau/kien-phong/the-opera-duplex",
+   "name": "The Opera Duplex",
+   "project_url": "https://dezon.vn/nha-thau/kien-phong/the-opera-duplex/",
+   "building_type": "can_ho",
+   "province": "TP. Hồ Chí Minh",
+   "district": null,
+   "floors": null,
+   "land_area_m2": null,
+   "floor_area_m2": null,
+   "start_date": null,
+   "end_date": null,
+   "status": null,
+   "description": null,
+   "images": [
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/Zslwb9sRXoEXcyxyHaDlykcf.jpg",
+     "caption": "The Opera Duplex — ảnh 1",
+     "sort_order": 0
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/O9h5bRZ4Joa851xEzqHlXw6p.jpg",
+     "caption": "The Opera Duplex — ảnh 2",
+     "sort_order": 1
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/OS9pbhcFropbskx67BBldyum.jpg",
+     "caption": "The Opera Duplex — ảnh 3",
+     "sort_order": 2
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/TgAqbRG3lozbQmxWNP4lhStn.jpg",
+     "caption": "The Opera Duplex — ảnh 4",
+     "sort_order": 3
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/LRcKbu8U3oUqXCx9JHNlA7TJ.jpg",
+     "caption": "The Opera Duplex — ảnh 5",
+     "sort_order": 4
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/GeLcbRI71oWh0Uxqt4slIQV9.jpg",
+     "caption": "The Opera Duplex — ảnh 6",
+     "sort_order": 5
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/XSLcbAEGIoBJcOxHKfOlPYtF.jpg",
+     "caption": "The Opera Duplex — ảnh 7",
+     "sort_order": 6
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/Ym6ebGx7solArLxmjFelfsPf.jpg",
+     "caption": "The Opera Duplex — ảnh 8",
+     "sort_order": 7
+    }
+   ],
+   "contractors": [
+    {
+     "slug": "kien-phong",
+     "name": "Kiến Phong",
+     "profile_url": "https://dezon.vn/nha-thau/kien-phong/",
+     "role": "thi_cong"
+    }
+   ],
+   "extra": {
+    "meta_line": "Công trình thực tế do Kiến Phong thi công · TP. HCM · 8 ảnh ghi nhận từ hồ sơ khảo sát · Đăng ngày 22/10/2026",
+    "posted_at": "2026-10-22"
+   },
+   "source_updated_at": "2026-08-26 02:22:20+00:00",
+   "_source": {
+    "url": "https://dezon.vn/nha-thau/kien-phong/the-opera-duplex/",
+    "fetched_at": "2026-11-02T07:11:33.262874+00:00",
+    "raw_hash": "ac5855b10a984a997a2268358276afda312940eed7c9c84bb82da4af755da7b0"
+   }
+  },
+  {
+   "kind": "project",
+   "slug": "smartcons-tech--biet-thu-tan-co-dien-duong-6b-kdc-vinh-loc-p-binh-hung-hoa-t",
+   "external_id": "nha-thau/smartcons-tech/biet-thu-tan-co-dien-duong-6b-kdc-vinh-loc-p-binh-hung-hoa-t",
+   "name": "Biệt thự Tân Cổ Điển, đường 6B, KDC Vĩnh Lộc, P Bình Hưng Hòa, TP HCM",
+   "project_url": "https://dezon.vn/nha-thau/smartcons-tech/biet-thu-tan-co-dien-duong-6b-kdc-vinh-loc-p-binh-hung-hoa-t/",
+   "building_type": "biet_thu",
+   "province": "TP. Hồ Chí Minh",
+   "district": null,
+   "floors": null,
+   "land_area_m2": null,
+   "floor_area_m2": null,
+   "start_date": null,
+   "end_date": null,
+   "status": null,
+   "description": null,
+   "images": [
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/KoFxbncg1oIIKzxp7JClMSFP.jpg",
+     "caption": "Biệt thự Tân Cổ Điển, đường 6B, KDC Vĩnh Lộc, P Bình Hưng Hòa, TP HCM — ảnh 1",
+     "sort_order": 0
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/L3bcbhYw5ooSavxswVjl49zk.jpg",
+     "caption": "Biệt thự Tân Cổ Điển, đường 6B, KDC Vĩnh Lộc, P Bình Hưng Hòa, TP HCM — ảnh 2",
+     "sort_order": 1
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/Jnfmbyfb3oUTLex5e8RlzeEe.jpg",
+     "caption": "Biệt thự Tân Cổ Điển, đường 6B, KDC Vĩnh Lộc, P Bình Hưng Hòa, TP HCM — ảnh 3",
+     "sort_order": 2
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/UTrdbP0A9oSt5sx4u9mlZ61i.jpg",
+     "caption": "Biệt thự Tân Cổ Điển, đường 6B, KDC Vĩnh Lộc, P Bình Hưng Hòa, TP HCM — ảnh 4",
+     "sort_order": 3
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/JJgnbpvoRoMXOFxl0ahlYvYZ.jpg",
+     "caption": "Biệt thự Tân Cổ Điển, đường 6B, KDC Vĩnh Lộc, P Bình Hưng Hòa, TP HCM — ảnh 5",
+     "sort_order": 4
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/D78DbrMwJoeaGmxxzDglTB0n.jpg",
+     "caption": "Biệt thự Tân Cổ Điển, đường 6B, KDC Vĩnh Lộc, P Bình Hưng Hòa, TP HCM — ảnh 6",
+     "sort_order": 5
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/JSexbl3c0oEB9fxT9DXl1qk8.jpg",
+     "caption": "Biệt thự Tân Cổ Điển, đường 6B, KDC Vĩnh Lộc, P Bình Hưng Hòa, TP HCM — ảnh 7",
+     "sort_order": 6
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/smartcons-tech/o/Zfjdbtlv9oMbdYxtCsvlfrTA.jpg",
+     "caption": "Biệt thự Tân Cổ Điển, đường 6B, KDC Vĩnh Lộc, P Bình Hưng Hòa, TP HCM — ảnh 8",
+     "sort_order": 7
+    }
+   ],
+   "contractors": [
+    {
+     "slug": "smartcons-tech",
+     "name": "Smartcons Tech",
+     "profile_url": "https://dezon.vn/nha-thau/smartcons-tech/",
+     "role": "thi_cong"
+    }
+   ],
+   "extra": {
+    "meta_line": "Công trình thực tế do Smartcons Tech thi công · TP Hồ Chí Minh · 8 ảnh ghi nhận từ hồ sơ khảo sát · Đăng ngày 19/10/2026",
+    "posted_at": "2026-10-19"
+   },
+   "source_updated_at": "2026-08-26 02:22:20+00:00",
+   "_source": {
+    "url": "https://dezon.vn/nha-thau/smartcons-tech/biet-thu-tan-co-dien-duong-6b-kdc-vinh-loc-p-binh-hung-hoa-t/",
+    "fetched_at": "2026-11-02T07:11:35.243456+00:00",
+    "raw_hash": "20640c480406bf5827a8563bd8251fb7b15dfa5d0a7388d6c41dd62900d63595"
+   }
+  },
+  {
+   "kind": "project",
+   "slug": "huy-hoang--van-phong-kdc-caric-p-an-khanh-tphcm",
+   "external_id": "nha-thau/huy-hoang/van-phong-kdc-caric-p-an-khanh-tphcm",
+   "name": "Văn phòng KDC Caric, P An Khánh, TPHCM",
+   "project_url": "https://dezon.vn/nha-thau/huy-hoang/van-phong-kdc-caric-p-an-khanh-tphcm/",
+   "building_type": "van_phong",
+   "province": "TP. Hồ Chí Minh",
+   "district": null,
+   "floors": null,
+   "land_area_m2": null,
+   "floor_area_m2": null,
+   "start_date": null,
+   "end_date": null,
+   "status": null,
+   "description": null,
+   "images": [
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/OyXxb7qt2o9dyyx17Z1lV3UV.jpg",
+     "caption": "Văn phòng KDC Caric, P An Khánh, TPHCM — ảnh 1",
+     "sort_order": 0
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/WKJdbl5fNoyK5yxcG2GlKdF4.jpg",
+     "caption": "Văn phòng KDC Caric, P An Khánh, TPHCM — ảnh 2",
+     "sort_order": 1
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/SNMHbttpnoUuCRx89OMlWeuY.jpg",
+     "caption": "Văn phòng KDC Caric, P An Khánh, TPHCM — ảnh 3",
+     "sort_order": 2
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/QYuMbqfjfoWZxmxCB73lIMwv.jpg",
+     "caption": "Văn phòng KDC Caric, P An Khánh, TPHCM — ảnh 4",
+     "sort_order": 3
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/OiWtbtYo3oocAZxK5czlNg7S.jpg",
+     "caption": "Văn phòng KDC Caric, P An Khánh, TPHCM — ảnh 5",
+     "sort_order": 4
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/IL8xb6SkDoa72UxRqXxlLWCi.jpg",
+     "caption": "Văn phòng KDC Caric, P An Khánh, TPHCM — ảnh 6",
+     "sort_order": 5
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/XYIrbOzcdog1nnxx8mYl1zQT.jpg",
+     "caption": "Văn phòng KDC Caric, P An Khánh, TPHCM — ảnh 7",
+     "sort_order": 6
+    },
+    {
+     "url": "https://dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/Enklbxmmzo4khcxtNv8lNyPt.jpg",
+     "caption": "Văn phòng KDC Caric, P An Khánh, TPHCM — ảnh 8",
+     "sort_order": 7
+    }
+   ],
+   "contractors": [
+    {
+     "slug": "huy-hoang",
+     "name": "Huy Hoàng",
+     "profile_url": "https://dezon.vn/nha-thau/huy-hoang/",
+     "role": "thi_cong"
+    }
+   ],
+   "extra": {
+    "meta_line": "Công trình thực tế do Huy Hoàng thi công · TP Hồ Chí Minh · 8 ảnh ghi nhận từ hồ sơ khảo sát · Đăng ngày 27/10/2026",
+    "posted_at": "2026-10-27"
+   },
+   "source_updated_at": "2026-08-26 02:22:20+00:00",
+   "_source": {
+    "url": "https://dezon.vn/nha-thau/huy-hoang/van-phong-kdc-caric-p-an-khanh-tphcm/",
+    "fetched_at": "2026-11-02T07:11:37.251698+00:00",
+    "raw_hash": "66212d6d1d2b623140f9085ab970e4287e2df8590078ad6ff9b91a3d7f70de9f"
+   }
+  }
+ ]
+}
