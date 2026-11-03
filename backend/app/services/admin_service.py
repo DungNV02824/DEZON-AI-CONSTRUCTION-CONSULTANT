@@ -37,6 +37,7 @@ from app.engines.matching.scorer import CRITERIA_KEYS, CRITERIA_LABEL_VI
 from app.evidence import SourceType, VerificationStatus
 from app.ingestion.csv_import import MAX_PRICE_PER_M2, MIN_PRICE_PER_M2, RULE_BASES, RULE_GROUPS, import_table
 from app.schemas.common import BuildingType, QualityTier, WorkScope
+from app.services.market_rates import displace_market_rate, is_market_label
 
 WEIGHT_SUM_TOLERANCE = 0.001
 MAX_COEFFICIENT = Decimal("99.999")  # NUMERIC(5,3)
@@ -184,14 +185,30 @@ def _validate_rate(price_min: int, price_max: int, eff_from: date, eff_to: date 
         raise AdminError(422, "Ngày hết hiệu lực phải sau ngày hiệu lực.")
 
 
-def _rate_key_taken(db: Session, r: dict[str, Any], exclude_id: int | None = None) -> bool:
-    q = select(ConstructionRate.id).where(
+def _rate_at_key(db: Session, r: dict[str, Any], exclude_id: int | None = None) -> ConstructionRate | None:
+    q = select(ConstructionRate).options(selectinload(ConstructionRate.source)).where(
         ConstructionRate.building_type == r["building_type"], ConstructionRate.province == r["province"],
         ConstructionRate.work_scope == r["work_scope"], ConstructionRate.quality_tier == r["quality_tier"],
         ConstructionRate.effective_from == r["effective_from"])
     if exclude_id is not None:
         q = q.where(ConstructionRate.id != exclude_id)
-    return db.scalar(q.limit(1)) is not None
+    return db.scalars(q.limit(1)).first()
+
+
+def _key_blocker(db: Session, r: dict[str, Any], exclude_id: int | None = None
+                 ) -> tuple[bool, ConstructionRate | None]:
+    """(khóa bị chặn?, dòng tổng hợp cần nhường khóa) cho đơn giá chính thức tại khóa
+    (loại, tỉnh, phạm vi, mức, ngày hiệu lực).
+
+    Dòng tổng hợp từ hồ sơ nhà thầu (`market_rates`) đang giữ khóa không chặn: đơn giá chính thức luôn đứng trước
+    đơn giá tổng hợp — người gọi nhường khóa bằng `displace_market_rate` SAU khi đã kiểm tra hợp lệ xong (dòng đã có
+    khái toán tham chiếu không bị đổi giá/nguồn). Khóa thuộc đơn giá chính thức khác -> bị chặn."""
+    existing = _rate_at_key(db, r, exclude_id)
+    if existing is None:
+        return False, None
+    if is_market_label(existing.source.label if existing.source is not None else None):
+        return False, existing
+    return True, None
 
 
 def _norm_province(p: str) -> str:
@@ -232,11 +249,14 @@ def create_rate(db: Session, data: RateIn) -> RateOut:
     values = {"building_type": data.building_type.value, "province": _norm_province(data.province),
               "work_scope": data.work_scope.value, "quality_tier": data.quality_tier.value,
               "effective_from": data.effective_from}
-    if _rate_key_taken(db, values):
+    blocked, market_row = _key_blocker(db, values)
+    if blocked:
         raise AdminError(409, "Đã có đơn giá cùng loại công trình, tỉnh, phạm vi, mức chất lượng và ngày hiệu lực.")
+    if data.source_id is not None and db.get(DataSource, data.source_id) is None:
+        raise _not_found("nguồn dữ liệu")
+    if market_row is not None:
+        displace_market_rate(db, market_row)
     if data.source_id is not None:
-        if db.get(DataSource, data.source_id) is None:
-            raise _not_found("nguồn dữ liệu")
         source_id = data.source_id
     else:
         source_id = _new_admin_source(
@@ -264,7 +284,10 @@ def update_rate(db: Session, rate_id: int, data: RateUpdate) -> RateOut:
     tier = data.quality_tier.value if data.quality_tier else str(r.quality_tier)
     key = {"building_type": str(r.building_type), "province": province, "work_scope": str(r.work_scope),
            "quality_tier": tier, "effective_from": eff_from}
-    if _rate_key_taken(db, key, exclude_id=r.id):
+    blocked, market_row = _key_blocker(db, key, exclude_id=r.id)
+    if market_row is not None and is_market_label(r.source.label if r.source is not None else None):
+        blocked, market_row = True, None  # dòng tổng hợp không giành khóa của dòng tổng hợp khác
+    if blocked:
         raise AdminError(409, "Đã có đơn giá khác cùng khóa (loại công trình, tỉnh, phạm vi, mức, ngày hiệu lực).")
     if data.source_id is not None and db.get(DataSource, data.source_id) is None:
         raise _not_found("nguồn dữ liệu")
@@ -275,6 +298,8 @@ def update_rate(db: Session, rate_id: int, data: RateUpdate) -> RateOut:
         # Khái toán đã lưu giữ snapshot con số, nhưng sửa giá/khóa của bản ghi đã dùng làm mất dấu vết (rate_id).
         raise AdminError(409, f"Đơn giá đã được dùng trong {used} khái toán; chỉ được đặt ngày hết hiệu lực — "
                               "hãy tạo đơn giá mới thay vì sửa giá, tỉnh, mức hoặc ngày hiệu lực.")
+    if market_row is not None:
+        displace_market_rate(db, market_row)
     r.province, r.quality_tier = province, tier
     r.price_min, r.price_max = price_min, price_max
     r.effective_from, r.effective_to = eff_from, eff_to

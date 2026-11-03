@@ -19,6 +19,9 @@ os.environ["LLM_PROVIDER"] = "mock"
 os.environ["EMBEDDING_PROVIDER"] = "hash"
 # Fixture nhà thầu mục 11.3 phải giữ nguyên: không nạp snapshot crawl kể cả khi shell dev đặt SEED_SNAPSHOT=1.
 os.environ["SEED_SNAPSHOT"] = "0"
+# Đơn giá fixture (seed.seed_rates, nhãn "Đơn giá tham khảo (seed dev …") chỉ được select_rate dùng khi bật cờ này;
+# môi trường thật không bao giờ dùng bảng giá tự đặt.
+os.environ["ALLOW_SEED_DEV_RATES"] = "1"
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
@@ -69,7 +72,10 @@ def db_engine():
     except ImportError:
         pass
     with Session(engine) as s:
-        seed.run(s)
+        # Fixture nhà thầu mục 11.3 + đơn giá fixture cho test khái toán: seed.run() mặc định (môi trường thật)
+        # không nạp dữ liệu mẫu, test bật tường minh.
+        seed.run(s, fixtures=True)
+        s.commit()
     yield engine
     engine.dispose()
     with admin.connect() as conn:

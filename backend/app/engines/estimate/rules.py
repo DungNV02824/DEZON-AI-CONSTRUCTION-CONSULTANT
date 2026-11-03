@@ -3,7 +3,7 @@
 Chỉ chứa logic thuần: chọn mã rule theo input, thứ tự trạng thái xác minh, nhãn tiếng Việt.
 """
 from app.evidence import VerificationStatus
-from app.schemas.common import QualityTier, WorkScope
+from app.schemas.common import WorkScope
 
 # --- Mã rule (khớp seed estimate_rules) --------------------------------------------------------
 FLOOR = "floor_standard"
@@ -45,11 +45,6 @@ ROOF_LABEL_VI = {
 }
 ROOFTOP_LABEL_VI = {"covered": "sân thượng có mái che", "open": "sân thượng không mái"}
 
-# Thứ tự mức chất lượng từ rẻ đến đắt.
-QUALITY_ORDER: list[QualityTier] = [
-    QualityTier.tiet_kiem, QualityTier.trung_binh, QualityTier.kha, QualityTier.cao_cap,
-]
-
 # Phạm vi chỉ làm phần bên trong: không tính móng, mái, hầm, sân thượng, sân.
 INTERIOR_ONLY_SCOPES = {WorkScope.noi_that}
 
@@ -85,9 +80,3 @@ def basement_rule_for_depth(depth_m: float | None) -> str:
     if depth_m <= 2.0:
         return BASEMENT_1_7_2_0
     return BASEMENT_GT_2_0
-
-
-def lower_quality(tier: QualityTier | str) -> QualityTier | None:
-    """Mức chất lượng thấp hơn một bậc; None nếu đã là tiết kiệm."""
-    idx = QUALITY_ORDER.index(QualityTier(tier))
-    return QUALITY_ORDER[idx - 1] if idx > 0 else None

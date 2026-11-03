@@ -13,7 +13,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from app.formatting import NO_DATA
-from app.schemas.common import BUILDING_TYPE_VI, QUALITY_TIER_VI, WORK_SCOPE_VI
+from app.schemas.common import BUILDING_TYPE_VI, WORK_SCOPE_VI
 
 log = logging.getLogger(__name__)
 
@@ -25,11 +25,16 @@ GENERIC_APOLOGY = (
 ESTIMATE_NOTE = "Đây là khái toán sơ bộ, không phải báo giá thi công."
 PROJECT_COUNT_NOTE = "Số công trình là số công trình ghi nhận trên Dezon, không đồng nghĩa với số công trình đã hoàn thành."
 
+# Ghi chú mức đầu tư trong giả định khái toán (schemas.slots.investment_note).
+INVESTMENT_NOTE_PREFIX = "Mức đầu tư "
 SLOT_LABEL_VI: dict[str, str] = {
     "building_type": "loại công trình", "province": "tỉnh/thành phố", "district": "quận/huyện",
     "land_area_m2": "diện tích đất (hoặc chiều rộng × chiều dài)", "land_width_m": "chiều rộng đất",
     "land_length_m": "chiều dài đất", "floors": "số tầng", "work_scope": "phạm vi thi công",
-    "quality_tier": "mức hoàn thiện", "budget_vnd": "ngân sách dự kiến", "start_time": "thời gian dự kiến khởi công",
+    "building_area_m2": "diện tích xây dựng mỗi tầng", "basement": "tầng hầm", "has_mezzanine": "tầng lửng",
+    "mezzanine_area_m2": "diện tích tầng lửng", "basement_depth_m": "độ sâu tầng hầm", "roof_type": "loại mái",
+    "budget_vnd": "ngân sách dự kiến", "start_time": "thời gian dự kiến khởi công",
+    "design_style": "phong cách thiết kế", "investment_level": "mức đầu tư mong muốn",
 }
 INFO_LABEL_VI: dict[str, str] = {
     "province": "Khu vực", "founded_year": "Năm thành lập", "years_experience": "Kinh nghiệm",
@@ -119,7 +124,6 @@ def _estimate(r: dict) -> str:
         _vi(BUILDING_TYPE_VI, inp.get("building_type")).lower(),
         f"tại {inp['province']}" if inp.get("province") else "",
         f"— {_vi(WORK_SCOPE_VI, inp.get('work_scope')).lower()}" if inp.get("work_scope") else "",
-        f"mức {_vi(QUALITY_TIER_VI, inp.get('quality_tier')).lower()}" if inp.get("quality_tier") else "",
     ] if x)
     lines = [f"Dạ, em gửi anh/chị khái toán sơ bộ cho công trình {what}:".replace("  ", " ")]
     if _has(r.get("cost")):
@@ -135,6 +139,9 @@ def _estimate(r: dict) -> str:
         lines.append(f"- Yếu tố có thể làm tăng chi phí: {'; '.join(str(x) for x in drivers[:MAX_ITEMS])}.")
     for w in (r.get("warnings") or [])[:MAX_ITEMS]:
         lines.append(f"- Lưu ý: {w}")
+    invest = next((str(a) for a in r.get("assumptions") or [] if str(a).startswith(INVESTMENT_NOTE_PREFIX)), None)
+    if invest:  # mức đầu tư khách chọn chỉ được ghi nhận, không vào khái toán
+        lines.append(f"- Lưu ý: {invest}")
     lines.append(f"{ESTIMATE_NOTE} Chi tiết hệ số, giả định và nguồn đơn giá có trong bảng khái toán; "
                  "anh/chị nên yêu cầu báo giá từ nhà thầu để có con số sát thực tế.")
     return "\n".join(lines)

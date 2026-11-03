@@ -43,10 +43,7 @@ export function StatusBadge({ status, source, isStale, variant = 'full', label, 
       {variant === 'dot' ? (
         <span className={`dz-dot dz-dot--${st}`} aria-hidden="true" />
       ) : (
-        <>
-          <span className={`dz-dot dz-dot--${st}`} aria-hidden="true" />
-          <span>{label ?? statusLabel}</span>
-        </>
+        <span>{label ?? statusLabel}</span>
       )}
       {isStale && (
         <span className="dz-badge__stale" aria-hidden="true">

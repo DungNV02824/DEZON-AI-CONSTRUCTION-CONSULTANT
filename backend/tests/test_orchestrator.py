@@ -5,7 +5,7 @@ import uuid
 import pytest
 from sqlalchemy import func, select
 
-from app.ai import blocks, orchestrator, tools
+from app.ai import blocks, dialog, orchestrator, tools
 from app.ai.providers import LLMError
 from app.ai.providers.base import LLMResponse, ToolCall
 from app.ai.providers.mock import MockProvider
@@ -15,8 +15,11 @@ from app.db.models import AnalyticsEvent, ChatMessage, ChatSession, EstimateSess
 from app.evidence import EvidenceValue, SourceRef
 from app.schemas.slots import Slots
 from app.services import chat_service
+from tests.wizard import SKIP_OPTIONAL, question, step
 
-FULL = "nhà phố 5x20 Thủ Đức 1 trệt 3 lầu xây thô"
+# Câu đầy đủ kèm chi tiết (diện tích xây dựng, hầm/lửng, mái) -> đi thẳng tới tóm tắt.
+DETAILS = ", xây kín đất, không hầm, không lửng, mái bằng"
+FULL = "nhà phố 5x20 Thủ Đức 1 trệt 3 lầu xây thô" + DETAILS
 CONFIRM = "Đúng rồi, tính khái toán giúp tôi"
 
 
@@ -68,6 +71,16 @@ def test_tool_specs_cover_section_9_2_with_strict_schemas():
         assert s.input_schema.get("additionalProperties") is False
         assert len(s.description) > 30 and any(ch in s.description for ch in "ăâđêôơư")
     assert set(specs["create_quote_request"].input_schema["required"]) == {"customer_name", "customer_phone"}
+    # Không phân mức hoàn thiện: không tool nào nhận quality_tier.
+    for s in specs.values():
+        assert "quality_tier" not in s.input_schema.get("properties", {}), s.name
+        assert "mức hoàn thiện" not in s.description
+    assert "basement_depth_m" in specs["update_project_requirements"].input_schema["properties"]
+
+
+def test_mock_hypothetical_overrides_have_no_quality_tier():
+    from app.ai.providers.mock import hypothetical_overrides
+    assert hypothetical_overrides("nếu làm cao cấp 3 tầng thì sao?") == {"floors": 3}
 
 
 def test_system_prompt_contains_section_9_3():
@@ -146,7 +159,8 @@ def test_session_not_found(db):
 def test_create_session_greeting_and_analytics(db):
     out = chat_service.create_session(db, user_id="u1")
     assert out.stage == "collect" and len(out.messages) == 1
-    assert out.messages[0].ui_blocks[0]["type"] == "quick_replies"
+    assert out.messages[0].ui_blocks[0]["type"] == "question_step"
+    assert question(out.messages[0].ui_blocks) == "Loại công trình anh/chị dự định xây dựng?"
     assert "Xin chào anh/chị" in out.messages[0].content
     ev = db.scalars(select(AnalyticsEvent).where(AnalyticsEvent.session_id == out.session_id)).all()
     assert [e.event for e in ev] == ["session_started"]
@@ -164,6 +178,9 @@ def test_slots_completed_event_logged_once_with_turns(db):
     sid = _new(db)
     _say(db, sid, "Nhà phố")
     _say(db, sid, "Ở Thủ Đức, đất 5x20, 1 trệt 3 lầu, xây thô")
+    # Đủ thông tin = đủ 5 slot cốt lõi (chi tiết hỏi thêm không làm ghi lại sự kiện).
+    for msg in (dialog.MORE_VALUE, "Xây kín đất", "Không hầm, không lửng", "Mái bằng bê tông"):
+        _say(db, sid, msg)
     _say(db, sid, CONFIRM)
     ev = db.scalars(select(AnalyticsEvent).where(AnalyticsEvent.session_id == sid,
                                                  AnalyticsEvent.event == "slots_completed")).all()
@@ -229,7 +246,7 @@ def test_llm_error_without_tools_gives_friendly_text(db):
 def test_llm_error_in_collect_stage_keeps_question(db):
     sid = _new(db)
     r = _say(db, sid, "Nhà phố", provider=ScriptedProvider([LLMError("down", "connection")]))
-    assert "khu vực nào" in r.text and "quick_replies" in _types(r)
+    assert question(r) == "Khu vực xây dựng?" and _types(r) == ["question_step"] and "?" not in r.text
 
 
 @pytest.mark.db
@@ -280,9 +297,51 @@ def test_llm_cannot_estimate_before_confirmation(db):
     sid = _new(db)
     p = ScriptedProvider([LLMResponse(text="", tool_calls=[ToolCall("c", "calculate_estimate", {})])])
     r = _say(db, sid, FULL, provider=p)
+    # Đủ thông tin bắt buộc -> bản tóm tắt chờ xác nhận; LLM gọi tool khái toán bị chặn.
     assert "estimate_table" not in _types(r) and "summary_confirm" in _types(r)
+    r = _say(db, sid, dialog.MORE_VALUE, provider=ScriptedProvider(
+        [LLMResponse(text="", tool_calls=[ToolCall("c", "calculate_estimate", {})])]))
+    assert "estimate_table" not in _types(r)
     assert db.scalar(select(func.count()).select_from(EstimateSession)
                      .where(EstimateSession.chat_session_id == sid)) == 0
+
+
+@pytest.mark.db
+def test_detail_questions_flow_and_edit_detail_from_summary(db):
+    sid = _new(db)
+    r = _say(db, sid, "nhà phố 5x20 Thủ Đức 1 trệt 3 lầu xây thô")
+    assert r.stage == "estimate" and _types(r) == ["summary_confirm"]  # chi tiết không chặn bản tóm tắt
+    r = _say(db, sid, dialog.MORE_VALUE)
+    assert r.stage == "collect" and question(r) == "Diện tích xây dựng mỗi tầng (m²)?"
+    assert (step(r).step, step(r).total) == (1, 3) and step(r).hint == "Phần sàn xây, không tính sân."
+    r = _say(db, sid, "Tôi chưa biết diện tích xây dựng")
+    assert question(r) == "Nhà có tầng hầm hoặc tầng lửng không?"
+    r = _say(db, sid, "không")  # = không hầm, không lửng (không phải ý muốn sửa)
+    assert r.slots["basement"] is False and r.slots["has_mezzanine"] is False
+    assert question(r) == "Loại mái dự kiến?"
+    r = _say(db, sid, "ok")  # đáp câu hỏi mái bằng "ok" -> KHÔNG phải xác nhận tóm tắt
+    assert r.slots["confirmed"] is False and _types(r) == ["summary_confirm"]
+    assert "estimate_table" not in _types(r)
+    summary = next(b for b in r.ui_blocks if b.type == "summary_confirm")
+    assert summary.assumptions[0] == ("Tạm tính: xây kín đất (100 m²/tầng), mái bê tông cốt thép — anh/chị bấm Sửa "
+                                      "hoặc Cung cấp thêm thông tin để thay đổi.")
+    # Sửa hầm/lửng từ bản tóm tắt -> hỏi đúng mục, có hầm -> hỏi thêm độ sâu.
+    r = _say(db, sid, "Tôi muốn sửa lại thông tin")
+    labels = [o.label for o in r.ui_blocks[0].options]
+    assert {"Diện tích xây dựng", "Hầm, lửng", "Mái"} <= set(labels) and "Mức hoàn thiện" not in labels
+    r = _say(db, sid, "Tôi muốn sửa thông tin hầm, lửng của nhà")
+    assert question(r) == "Nhà có tầng hầm hoặc tầng lửng không?" and r.text == orchestrator.EDIT_ACK
+    r = _say(db, sid, "Có tầng hầm, không lửng")
+    # Sửa một dòng: trả lời xong quay lại bản tóm tắt; độ sâu hầm dùng mặc định có nêu rõ.
+    assert r.slots["basement"] is True and _types(r) == ["summary_confirm"]
+    summary = next(b for b in r.ui_blocks if b.type == "summary_confirm")
+    assert "hầm sâu 1,7–2 m" in summary.assumptions[0]
+    r = _say(db, sid, "Hầm sâu 1,5 m")
+    summary = next(b for b in r.ui_blocks if b.type == "summary_confirm")
+    assert {i.label: i.value for i in summary.items}["Tầng hầm"] == "Có (sâu 1,5 m)"
+    r = _say(db, sid, CONFIRM)
+    table = next(b for b in r.ui_blocks if b.type == "estimate_table").data
+    assert table.input.basement is True and table.input.basement_depth_m == 1.5
 
 
 @pytest.mark.db
@@ -295,7 +354,9 @@ def test_update_requirements_tool_replans_question(db):
                                               "work_scope": "xay_tho"})])],
         default=LLMResponse(text="Dạ, em đã ghi nhận."))
     r = _say(db, sid, "đất năm nhân hai mươi, bốn tầng, làm phần thô", provider=p)
-    assert r.missing_required == [] and "summary_confirm" in _types(r) and "Em tóm tắt lại" in r.text
+    # Tool đổi slot giữa lượt -> dựng lại kế hoạch: đủ 5 câu cốt lõi nên hiện bản tóm tắt.
+    assert r.missing_required == []
+    assert _types(r) == ["summary_confirm"]
 
 
 @pytest.mark.db
@@ -367,8 +428,8 @@ def test_llm_question_dropped_on_collect_turn(db):
     sid = _new(db)
     p = ScriptedProvider([], default=LLMResponse(text="Dạ, em ghi nhận nhà phố. Anh/chị muốn xây loại công trình gì ạ?"))
     r = _say(db, sid, "Nhà phố", provider=p)
-    assert "loại công trình gì" not in r.text and "Dạ, em ghi nhận nhà phố." in r.text
-    assert r.text.count("?") == 1 and "khu vực" in r.text
+    assert "loại công trình gì" not in r.text and r.text == "Dạ, em ghi nhận nhà phố."
+    assert question(r) == "Khu vực xây dựng?"
 
 
 @pytest.mark.db
@@ -398,7 +459,8 @@ def test_question_after_estimate_does_not_overwrite_profile(db):
 @pytest.mark.db
 def test_edit_without_new_info_asks_what_to_change(db):
     sid = _new(db)
-    _say(db, sid, FULL)
+    for msg in [FULL, *SKIP_OPTIONAL]:
+        _say(db, sid, msg)
     r = _say(db, sid, "Sửa lại")
     # C-F9: chỉ hỏi mục cần sửa, không kèm tóm tắt/xác nhận (hai ý mâu thuẫn trong một tin).
     assert r.text == orchestrator.EDIT_PROMPT and "Em tóm tắt lại" not in r.text and "xác nhận" not in r.text

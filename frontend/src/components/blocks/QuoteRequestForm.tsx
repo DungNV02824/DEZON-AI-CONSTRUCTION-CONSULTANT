@@ -15,7 +15,7 @@ interface Errors {
 }
 
 export function QuoteRequestForm({ block }: { block: QuoteRequestFormBlock }) {
-  const { submitQuote, quoteSubmitted, estimateSessionId } = useWidget();
+  const { submitQuote, quoteSubmitted, estimateSessionId, chatSessionId } = useWidget();
   const uid = useId();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -54,6 +54,8 @@ export function QuoteRequestForm({ block }: { block: QuoteRequestFormBlock }) {
       const res = await submitQuote({
         contractor_ids: chosen,
         estimate_session_id: estimateId ?? null,
+        // Có cả khi chưa có khái toán: backend lấy phong cách / mức đầu tư của phiên để ghi kèm yêu cầu.
+        chat_session_id: chatSessionId ?? null,
         customer_name: name.trim(),
         customer_phone: toNationalPhone(phone),
         customer_email: email.trim() || null,

@@ -25,12 +25,11 @@ from app.ai.normalize import (
     parse_building_type,
     parse_location,
     parse_message,
-    parse_quality_tier,
     parse_work_scope,
 )
 from app.ai.providers.base import LLMResponse, Message, ToolCall, ToolSpec
 from app.formatting import NO_DATA, format_m2
-from app.schemas.common import QUALITY_TIER_VI, WORK_SCOPE_VI
+from app.schemas.common import WORK_SCOPE_VI
 
 ESTIMATE_NOTE = "Đây là khái toán sơ bộ, không phải báo giá thi công."
 PROJECT_NOTE = ("Số công trình là số công trình ghi nhận trên Dezon, không đồng nghĩa với số công trình đã hoàn "
@@ -76,7 +75,7 @@ _PROFILE_TOPICS: list[tuple[re.Pattern[str], list[str], str]] = [
 ]
 _ESTIMATE_OVERRIDE_KEYS = ("building_type", "province", "district", "land_width_m", "land_length_m", "land_area_m2",
                            "building_area_m2", "floors", "has_mezzanine", "basement", "basement_depth_m", "roof_type",
-                           "rooftop_terrace", "foundation_type", "work_scope", "quality_tier")
+                           "rooftop_terrace", "foundation_type", "work_scope")
 
 
 def _ev(d: Any) -> dict:
@@ -174,8 +173,6 @@ def _describe_overrides(ov: dict[str, Any]) -> str:
     parts: list[str] = []
     if "floors" in ov:
         parts.append(f"xây {ov['floors']} tầng")
-    if "quality_tier" in ov:
-        parts.append(f"chọn mức hoàn thiện {QUALITY_TIER_VI.get(str(ov['quality_tier']), '').lower()}")
     if "work_scope" in ov:
         parts.append(f"phạm vi {WORK_SCOPE_VI.get(str(ov['work_scope']), '').lower()}")
     if ov.get("basement") is True:
@@ -299,7 +296,6 @@ class MockProvider:
             # Tham số khách nói trong câu hỏi ưu tiên hơn slots ("đơn giá hoàn thiện ở HCM" khi slot là xây thô).
             rate_args: dict[str, Any] = {}
             for key, val in (("building_type", parse_building_type(message)), ("work_scope", parse_work_scope(message)),
-                             ("quality_tier", parse_quality_tier(message)),
                              ("province", parse_location(message).get("province"))):
                 if val:
                     rate_args[key] = str(val)
@@ -439,6 +435,9 @@ class MockProvider:
         drivers = [str(x).replace(": ", " — ", 1) for x in (r.get("cost_drivers") or [])[:2]]
         if drivers:
             lines.append("Chi phí có thể tăng nếu: " + "; ".join(_lc_first(d) for d in drivers) + ".")
+        invest = next((a for a in assumptions if a.startswith(fallback.INVESTMENT_NOTE_PREFIX)), None)
+        if invest:  # mức đầu tư chỉ ghi nhận — nói rõ chưa tính vào khái toán
+            lines.append(invest)
         lines.append("Chi tiết hệ số, giả định và nguồn đơn giá ở bảng bên dưới. " + ESTIMATE_NOTE)
         return "\n".join(lines)
 

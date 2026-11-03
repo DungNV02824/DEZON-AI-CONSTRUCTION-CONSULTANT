@@ -27,6 +27,7 @@ from app.schemas.ui_blocks import (
     ContractorDetailBlock,
     ContractorListBlock,
     EstimateTableBlock,
+    QuestionStepBlock,
     QuickRepliesBlock,
     QuickReply,
     QuoteFormContractor,
@@ -94,7 +95,7 @@ MAX_OVERVIEW_CONTRACTORS = 5
 # Cột của bảng tổng quan (mục 8.4) — dùng block comparison_table (frontend đã hiển thị được): mọi số trong câu trả
 # lời tổng quan truy được trên UI, nguồn hiển thị bằng chấm màu/badge thay vì lặp trong câu.
 _OVERVIEW_ROWS = (("dezon_project_count", "Công trình ghi nhận trên Dezon"), ("rough_price", "Đơn giá xây thô"),
-                  ("finish_price", "Đơn giá hoàn thiện"), ("warranty", "Bảo hành"))
+                  ("finish_price", "Đơn giá trọn gói (hoàn thiện cơ bản)"), ("warranty", "Bảo hành"))
 
 
 def projects_of_type_evidence(entry: Any, bt_label: str) -> EvidenceValue:
@@ -135,9 +136,10 @@ def quote_form(contractors: Sequence[ContractorRef], estimate_session_id: str | 
 
 def build_ui_blocks(outcomes: Sequence[ToolOutcome], *, estimate_session_id: str | UUID | None = None,
                     summary: SummaryConfirmBlock | None = None, quick_replies: QuickRepliesBlock | None = None,
-                    quote_request: QuoteRequestFormBlock | None = None) -> list[BaseModel]:
+                    quote_request: QuoteRequestFormBlock | None = None,
+                    question_step: QuestionStepBlock | None = None) -> list[BaseModel]:
     """Thứ tự: bảng dữ liệu (khái toán, phương án ngân sách, nhà thầu, so sánh, hồ sơ) → form báo giá → chip nguồn
-    → tóm tắt xác nhận → nút chọn nhanh."""
+    → tóm tắt xác nhận → nút chọn nhanh → thẻ câu hỏi từng bước."""
     blocks: list[BaseModel] = []
     est_id = UUID(str(estimate_session_id)) if estimate_session_id else None
 
@@ -179,4 +181,6 @@ def build_ui_blocks(outcomes: Sequence[ToolOutcome], *, estimate_session_id: str
         blocks.append(summary)
     if quick_replies is not None:
         blocks.append(quick_replies)
+    if question_step is not None:
+        blocks.append(question_step)
     return blocks

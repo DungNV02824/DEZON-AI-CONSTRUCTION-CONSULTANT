@@ -42,6 +42,7 @@ export interface EvidenceValue {
 
 export type BuildingType = 'nha_pho' | 'biet_thu' | 'can_ho' | 'van_phong' | 'khach_san' | 'khac';
 export type WorkScope = 'xay_tho' | 'hoan_thien' | 'tron_goi' | 'noi_that';
+/** Đã bỏ (không có dữ liệu thật) — giữ kiểu để dung nạp payload cũ, KHÔNG hiển thị. */
 export type QualityTier = 'tiet_kiem' | 'trung_binh' | 'kha' | 'cao_cap';
 
 // ---------------------------------------------------------------- schemas/estimate.py
@@ -76,7 +77,8 @@ export interface EstimateInput {
   foundation_type?: FoundationType | null;
   yard_area_m2?: number | null;
   work_scope: WorkScope;
-  quality_tier?: QualityTier;
+  /** Đã bỏ — có thể còn trong payload, không hiển thị. */
+  quality_tier?: QualityTier | null;
 }
 
 export interface RuleData {
@@ -95,7 +97,8 @@ export interface RateData {
   building_type: BuildingType;
   province: string;
   work_scope: WorkScope;
-  quality_tier: QualityTier;
+  /** Đã bỏ — có thể còn trong payload, không hiển thị. */
+  quality_tier?: QualityTier | null;
   price_min: number;
   price_max: number;
   effective_from: ISODate;
@@ -206,6 +209,10 @@ export interface ImageRef {
   url: string;
   caption?: string | null;
   project_slug?: string | null;
+  /** Tên công trình chứa ảnh (chú thích lightbox). */
+  project_name?: string | null;
+  /** Trang công trình trên dezon.vn (link trong lightbox; thiếu -> hồ sơ nhà thầu, rồi URL ảnh gốc). */
+  project_url?: string | null;
 }
 
 /** Khóa chuẩn trong ContractorCard.evidence. */
@@ -363,15 +370,25 @@ export interface Slots {
   building_area_m2?: number | null;
   floors?: number | null;
   has_mezzanine?: boolean | null;
+  /** Diện tích tầng lửng (chỉ có nghĩa khi has_mezzanine = true). */
+  mezzanine_area_m2?: number | null;
   basement?: boolean | null;
   basement_depth_m?: number | null;
   roof_type?: RoofType | null;
   rooftop_terrace?: RooftopType | null;
   foundation_type?: FoundationType | null;
   work_scope?: WorkScope | null;
+  /** Đã bỏ — có thể còn trong payload, không hiển thị. */
   quality_tier?: QualityTier | null;
+  /** Trần ngân sách (VND); null khi khách chỉ nêu cận dưới ("Trên 10 tỷ" — xem budget_label). */
   budget_vnd?: number | null;
+  /** Nhãn ngân sách khách chọn ("2–4 tỷ", "Dưới 2 tỷ", "Trên 10 tỷ") — hiển thị thay cho budget_vnd. */
+  budget_label?: string | null;
   start_time?: string | null;
+  /** Phong cách thiết kế (câu hỏi tùy chọn) — chỉ ghi nhận, KHÔNG ảnh hưởng khái toán. */
+  design_style?: string | null;
+  /** Mức đầu tư mong muốn (câu hỏi tùy chọn) — chỉ ghi nhận, KHÔNG ảnh hưởng khái toán. */
+  investment_level?: string | null;
   confirmed?: boolean;
   /** Các slot đã hỏi khách (kể cả khi khách chưa trả lời). */
   asked?: string[];
@@ -390,9 +407,40 @@ export interface QuickRepliesBlock {
   allow_free_text?: boolean;
 }
 
+/**
+ * Thẻ câu hỏi từng bước khi thu thập thông tin (thay quick_replies cho câu hỏi slot).
+ * Chọn một dòng/chip -> gửi `value` như tin nhắn của khách; ô nhập tự do -> gửi chữ đã gõ.
+ */
+export interface QuestionStepBlock {
+  type: 'question_step';
+  /** Tiêu đề câu hỏi in đậm, vd "Ngân sách dự kiến?" */
+  question: string;
+  /** Dòng gợi ý (UI tự thêm 💡 phía trước). */
+  hint?: string | null;
+  /** Lựa chọn dạng dòng đánh số 1..n. */
+  options: QuickReply[];
+  /** Lựa chọn dạng chip gọn (vd kích thước đất "5 × 20"); có thể rỗng. */
+  chips?: QuickReply[];
+  /** null = không có dòng nhập tự do. */
+  input_placeholder?: string | null;
+  /** Số thứ tự câu hỏi (bắt đầu từ 1). */
+  step: number;
+  total: number;
+  /** Câu hỏi tùy chọn -> hiện "Bỏ qua". */
+  skippable?: boolean;
+  /** Tin nhắn gửi khi bấm "Bỏ qua". */
+  skip_value?: string | null;
+  /** Tin nhắn gửi khi bấm "Trước"/‹; null = câu đầu tiên (nút bị khóa). */
+  back_value?: string | null;
+  /** Slot đang hỏi (chỉ để tham khảo). */
+  slots?: string[];
+}
+
 export interface SummaryItem {
   label: string;
   value: string;
+  /** Tin nhắn gửi khi bấm "Sửa" ở dòng này (trợ lý hỏi lại mục đó). null -> không có nút Sửa. */
+  edit_value?: string | null;
 }
 
 export interface SummaryConfirmBlock {
@@ -401,6 +449,14 @@ export interface SummaryConfirmBlock {
   assumptions?: string[];
   confirm?: QuickReply;
   edit?: QuickReply;
+  /** vd "Xác nhận thông tin — Nhà phố"; null -> "Thông tin công trình". */
+  title?: string | null;
+  /** Nhãn/giá trị nút xác nhận lớn; null -> dùng `confirm`. */
+  confirm_label?: string | null;
+  confirm_value?: string | null;
+  /** Nút "Cung cấp thêm thông tin..." (hỏi lại câu tùy chọn khách đã bỏ qua); null -> ẩn. */
+  more_label?: string | null;
+  more_value?: string | null;
 }
 
 export interface EstimateTableBlock {
@@ -455,6 +511,7 @@ export interface QuoteRequestFormBlock {
 
 export type UIBlock =
   | QuickRepliesBlock
+  | QuestionStepBlock
   | SummaryConfirmBlock
   | EstimateTableBlock
   | BudgetOptionsBlock
@@ -468,6 +525,7 @@ export type UIBlockType = UIBlock['type'];
 
 export const UI_BLOCK_TYPES: readonly UIBlockType[] = [
   'quick_replies',
+  'question_step',
   'summary_confirm',
   'estimate_table',
   'budget_options',
@@ -532,6 +590,8 @@ export interface CompareRequest {
 export interface QuoteRequestBody {
   contractor_ids: number[];
   estimate_session_id?: UUID | null;
+  /** Phiên chat: backend lấy phong cách / mức đầu tư khách đã chọn để ghi kèm yêu cầu (khi chưa có khái toán). */
+  chat_session_id?: UUID | null;
   customer_name: string;
   customer_phone: string;
   customer_email?: string | null;

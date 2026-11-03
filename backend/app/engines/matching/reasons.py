@@ -19,7 +19,7 @@ from app.engines.matching.scorer import (
 )
 from app.evidence import EvidenceValue, SourceRef, VerificationStatus, make_evidence
 from app.formatting import format_price_per_m2_range, format_vnd, vi_number
-from app.schemas.common import BUILDING_TYPE_VI
+from app.schemas.common import BUILDING_TYPE_VI, WORK_SCOPE_VI
 from app.schemas.matching import Caution, MatchCriteria, Reason
 
 EVIDENCE_KEYS: tuple[str, ...] = (
@@ -153,7 +153,7 @@ def build_reasons(scored: ScoredContractor, evidence: dict[str, EvidenceValue],
             text = f"Hoạt động tại {prov} — khu vực lân cận {criteria.province}"
         elif scored.location_kind == "district" and criteria.district:
             text = f"Hoạt động tại {prov}, có ghi nhận tại {criteria.district}"
-        elif scored.location_kind == "province" and not same_province:
+        elif scored.location_kind in ("province", "project") and not same_province:
             # Hồ sơ ghi tỉnh chính khác, nhưng có năng lực/dự án tại tỉnh của khách.
             text = f"Hoạt động tại {prov}, có ghi nhận năng lực hoặc công trình tại {criteria.province}"
         else:
@@ -173,7 +173,7 @@ def build_reasons(scored: ScoredContractor, evidence: dict[str, EvidenceValue],
             text += ", chi phí ước phù hợp ngân sách của anh/chị"
         reasons.append(Reason(text=text, evidence=key))
     elif not key and FLAG_SCOPE_NO_PRICE not in scored.flags:
-        # Chưa rõ phạm vi thi công -> nêu đơn giá có trên hồ sơ. Nội thất: đơn giá thô/hoàn thiện không áp dụng.
+        # Chưa rõ phạm vi thi công -> nêu đơn giá có trên hồ sơ. Hoàn thiện / nội thất: chưa có đơn giá riêng.
         for k, kind in (("rough_price", "rough"), ("finish_price", "finish")):
             if _has(evidence, k):
                 reasons.append(Reason(text=f"Đơn giá {PRICE_KIND_VI[kind]} {evidence[k].display}", evidence=k))
@@ -198,7 +198,9 @@ def build_cautions(scored: ScoredContractor, evidence: dict[str, EvidenceValue],
     out: list[Caution] = []
     key = PRICE_EVIDENCE_KEY.get(scored.price_kind or "")
     if FLAG_SCOPE_NO_PRICE in scored.flags:
-        out.append(Caution(text="Đơn giá trên hồ sơ không áp dụng cho phạm vi nội thất — cần yêu cầu báo giá riêng"))
+        scope_vi = WORK_SCOPE_VI.get(str(criteria.work_scope), "này").lower()
+        out.append(Caution(text=f"Nhà thầu chưa công bố đơn giá riêng cho phạm vi {scope_vi} trên Dezon — "
+                                "cần yêu cầu báo giá riêng"))
     elif key and not _has(evidence, key):
         out.append(Caution(text="Chưa có thông tin đơn giá — cần đối chiếu", evidence=key))
     elif not key and not (_has(evidence, "rough_price") or _has(evidence, "finish_price")):
@@ -210,6 +212,10 @@ def build_cautions(scored: ScoredContractor, evidence: dict[str, EvidenceValue],
     if FLAG_OVER_BUDGET in scored.flags:
         out.append(Caution(text="Chi phí ước theo đơn giá nhà thầu vượt ngân sách của anh/chị — cần trao đổi thêm",
                            evidence=key))
+    elif (scored.cost_upper_only and scored.estimated_cost and (criteria.budget_vnd or 0) > 0
+          and scored.estimated_cost[1] > criteria.budget_vnd):
+        out.append(Caution(text="Hồ sơ chỉ công bố mức đơn giá tối đa; chi phí ước tối đa cao hơn ngân sách của "
+                                "anh/chị — cần đối chiếu báo giá", evidence=key))
     if FLAG_UNDER_BUDGET in scored.flags:
         out.append(Caution(text="Chi phí ước thấp hơn nhiều so với ngân sách — cần đối chiếu phạm vi và vật liệu",
                            evidence=key))

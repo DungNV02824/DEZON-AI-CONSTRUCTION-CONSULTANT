@@ -3,7 +3,6 @@ import { useWidget } from '../../state/context';
 import { NO_DATA } from '../../utils/format';
 import { EvidenceCell } from '../common/EvidenceCell';
 import { ExternalLink } from '../common/ExternalLink';
-import { StatusLegend } from '../common/StatusLegend';
 
 const UNAVAILABLE: EvidenceValue = { value: null, display: NO_DATA, status: 'unavailable', source: null, is_stale: false };
 
@@ -52,7 +51,7 @@ export function ComparisonTable({ block }: { block: ComparisonTableBlock }) {
                 </th>
                 {contractors.map((c, i) => (
                   <td key={c.id}>
-                    <EvidenceCell ev={row.cells[i] ?? UNAVAILABLE} badge="dot" title={`${row.label_vi} — ${c.name}`} />
+                    <EvidenceCell ev={row.cells[i] ?? UNAVAILABLE} badge="none" />
                   </td>
                 ))}
               </tr>
@@ -60,8 +59,6 @@ export function ComparisonTable({ block }: { block: ComparisonTableBlock }) {
           </tbody>
         </table>
       </div>
-      <StatusLegend />
-      <p className="dz-muted dz-small">Bấm vào chấm màu để xem nguồn và ngày cập nhật; bấm tên nhà thầu để xem hồ sơ mở rộng.</p>
     </section>
   );
 }

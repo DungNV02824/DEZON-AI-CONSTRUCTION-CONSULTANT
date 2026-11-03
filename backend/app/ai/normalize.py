@@ -12,7 +12,8 @@ import re
 import unicodedata
 from typing import Any, Literal
 
-from app.schemas.common import BuildingType, QualityTier, WorkScope
+from app.formatting import format_vnd
+from app.schemas.common import BuildingType, WorkScope
 
 HCM = "TP. Hồ Chí Minh"
 HN = "Hà Nội"
@@ -320,7 +321,7 @@ def parse_budget(text: str) -> int | None:
 
     "2 tỷ"/"2 tỉ"/"2.000 triệu" -> 2_000_000_000; "2,5 tỷ"; "1 tỷ 8" -> 1,8 tỷ; "1 tỷ 800 triệu";
     "1 tỷ rưỡi"; "850 triệu"/"850tr". Khoảng giá: "Dưới 1,5 tỷ" -> 1,5 tỷ; "1,5–2,5 tỷ" -> 2,5 tỷ (cận trên);
-    "Trên 4 tỷ" -> 4 tỷ (cận dưới). Bỏ qua đơn giá theo m² ("5 triệu/m²").
+    "Trên 4 tỷ" -> 4 tỷ (cận dưới — hội thoại dùng parse_budget_info: "trên" không có trần). Bỏ qua đơn giá theo m² ("5 triệu/m²").
     """
     f = fold(text)
 
@@ -366,6 +367,57 @@ def parse_budget(text: str) -> int | None:
     if m:
         return bare_budget(_num(m.group(1)))
     return None
+
+
+# "trên 10 tỷ", "hơn 5 tỷ", "từ 3 tỷ" (không kèm cận trên), "5 tỷ trở lên": cận DƯỚI — không có trần ngân sách.
+_BUDGET_LOWER_RE = re.compile(
+    rf"\b(?:tren|hon|it nhat|toi thieu|tu)\s+({NUM}){_NUM_END}\s*({_TY}|{_TR})(?!\s*(?:-|den|toi|~))"
+    rf"|{_NUM_START}({NUM}){_NUM_END}\s*({_TY}|{_TR})\s*(?:tro len|tro di|tro ra)\b"
+)
+# "dưới 2 tỷ", "tối đa 3 tỷ": cận trên (dùng làm trần), nhãn giữ nguyên cách khách nói.
+_BUDGET_UPPER_RE = re.compile(
+    rf"\b(?:duoi|toi da|khong qua|chua toi|chua den)\s+({NUM}){_NUM_END}\s*({_TY}|{_TR})(?!\s*(?:-|den|toi|~))"
+)
+
+
+def parse_budget_info(text: str) -> tuple[int | None, str | None] | None:
+    """Ngân sách khách nói -> (trần ngân sách VND | None, nhãn hiển thị | None). None: tin nhắn không nêu ngân sách.
+
+    - "Ngân sách trên 10 tỷ" / "10 tỷ trở lên" -> (None, "Trên 10 tỷ"): chỉ có cận dưới -> KHÔNG có trần (không so
+      ngân sách với khái toán, không chấm mức vừa ngân sách của nhà thầu); nhãn hiển thị trên bản xác nhận.
+    - "Ngân sách 2–4 tỷ" -> (4 tỷ, "2–4 tỷ"): cận trên làm trần, nhãn giữ khoảng khách chọn.
+    - "Ngân sách dưới 2 tỷ" -> (2 tỷ, "Dưới 2 tỷ").
+    - "3,5 tỷ" -> (3,5 tỷ, None): hiển thị bằng format_vnd.
+    """
+    f = fold(text)
+    for m in _BUDGET_LOWER_RE.finditer(f):
+        num, unit = (m.group(1), m.group(2)) if m.group(1) else (m.group(3), m.group(4))
+        if _PER_M2.match(f, m.end()):
+            continue
+        v = _ok_budget(_num(num) * _unit_value(unit))
+        if v:
+            return None, f"Trên {format_vnd(v)}"
+    for m in _RANGE_RE.finditer(f):
+        if _PER_M2.match(f, m.end()):
+            continue
+        hi_unit = _unit_value(m.group(4))
+        hi = _ok_budget(_num(m.group(3)) * hi_unit)
+        if hi:
+            lo = _num(m.group(1)) * (_unit_value(m.group(2)) if m.group(2) else hi_unit)
+            if not 0 < lo < hi:
+                return hi, None
+            lo_txt, hi_txt = format_vnd(lo), format_vnd(hi)
+            lo_num, _, lo_unit = lo_txt.rpartition(" ")
+            # Cùng đơn vị: "2–4 tỷ"; khác đơn vị: "800 triệu–1 tỷ" (không đệm số 0 như format_vnd_range).
+            return hi, f"{lo_num}–{hi_txt}" if hi_txt.endswith(f" {lo_unit}") else f"{lo_txt}–{hi_txt}"
+    for m in _BUDGET_UPPER_RE.finditer(f):
+        if _PER_M2.match(f, m.end()):
+            continue
+        v = _ok_budget(_num(m.group(1)) * _unit_value(m.group(2)))
+        if v:
+            return v, f"Dưới {format_vnd(v)}"
+    v = parse_budget(text)
+    return (v, None) if v else None
 
 
 def bare_budget(v: float) -> int | None:
@@ -507,7 +559,7 @@ def province_of_district(district: str | None) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# Loại công trình, phạm vi, mức hoàn thiện, thời gian
+# Loại công trình, phạm vi, thời gian
 # ---------------------------------------------------------------------------
 
 _BUILDING_PATTERNS: list[tuple[BuildingType, str]] = [
@@ -539,7 +591,8 @@ def parse_building_type(text: str) -> BuildingType | None:
 
 def parse_work_scope(text: str) -> WorkScope | None:
     """"xây thô"/"phần thô" -> xay_tho; "hoàn thiện" -> hoan_thien; "trọn gói"/"chìa khóa trao tay"
-    hoặc "thô + hoàn thiện" -> tron_goi; "nội thất" -> noi_that. "mức hoàn thiện ..." là mức chất lượng."""
+    hoặc "thô + hoàn thiện" -> tron_goi; "nội thất" -> noi_that. "mức hoàn thiện ..." không phải phạm vi (hội thoại
+    không phân mức hoàn thiện)."""
     f = fold(text)
     if re.search(r"\b(?:tron goi|chia khoa trao tay|turnkey)\b", f):
         return WorkScope.tron_goi
@@ -553,20 +606,6 @@ def parse_work_scope(text: str) -> WorkScope | None:
         return WorkScope.hoan_thien
     if re.search(r"(?<!khong gom )(?<!chua gom )\bnoi that\b", f):
         return WorkScope.noi_that
-    return None
-
-
-def parse_quality_tier(text: str) -> QualityTier | None:
-    f = fold(text)
-    if re.search(r"\b(?:cao cap|sang trong|luxury|hang sang)\b", f):
-        return QualityTier.cao_cap
-    if re.search(r"\btrung binh kha\b|\b(?:muc|loai|hang|vat tu|hoan thien|chat luong|phan khuc)\s+"
-                 r"(?:o\s+)?(?:muc\s+)?kha\b|^\s*kha\s*$", f):
-        return QualityTier.kha
-    if re.search(r"\b(?:tiet kiem|binh dan|gia re)\b", f):
-        return QualityTier.tiet_kiem
-    if re.search(r"\b(?:trung binh|pho thong|tieu chuan)\b", f):
-        return QualityTier.trung_binh
     return None
 
 
@@ -597,6 +636,54 @@ def parse_start_time(text: str) -> str | None:
         if g:
             s = orig[g.start():g.end()]
             return s[:1].upper() + s[1:]
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Phong cách thiết kế, mức đầu tư (chỉ ghi nhận — không vào khái toán)
+# ---------------------------------------------------------------------------
+
+_STYLE_WORDS: list[tuple[str, str]] = [
+    ("tan_co_dien", r"tan co dien|neo ?classic"),
+    ("hien_dai", r"hien dai|modern"),
+    ("toi_gian", r"toi gian|minimal(?:ism|ist)?"),
+    ("indochine", r"indochine|dong duong"),
+]
+_STYLE_CTX = (r"\b(?:phong cach|kieu|style|thiet ke|loi kien truc)\s+(?:(?:sang|thanh|la|theo)\s+)?"
+              r"(?:thiet ke\s+|kien truc\s+|nha\s+)?")
+_INVEST_WORDS: list[tuple[str, str]] = [
+    ("sieu_cao_cap", r"sieu cao cap|cao cap|sang trong|hang sang|luxury"),
+    ("trung_cap", r"trung cap|tam trung"),
+    ("pho_thong", r"pho thong|co ban|trung binh|binh thuong"),
+    ("tiet_kiem", r"tiet kiem|binh dan|gia re"),
+]
+_INVEST_CTX = (r"\b(?:muc dau tu|dau tu|phan khuc|goi dau tu)(?:\s+mong muon)?\s+(?:(?:o|sang|thanh|la|chon)\s+)?"
+               r"(?:muc\s+|phan khuc\s+|goi\s+)?")
+
+
+def parse_design_style(text: str, *, bare: bool = False) -> str | None:
+    """Phong cách thiết kế: "phong cách hiện đại" -> hien_dai; "kiểu Indochine" -> indochine.
+
+    `bare=True` (đang hỏi phong cách): nhận cả câu trả lời trần ("hiện đại", "tân cổ điển")."""
+    f = re.sub(r"[!.,;:?]+", " ", fold(text))
+    for code, words in _STYLE_WORDS:
+        if re.search(_STYLE_CTX + rf"(?:{words})\b", f):
+            return code
+        if bare and re.fullmatch(rf"\s*(?:phong cach\s+|kieu\s+|style\s+)?(?:{words})(?:\s+(?:a|nhe|nha))?\s*", f):
+            return code
+    return None
+
+
+def parse_investment_level(text: str, *, bare: bool = False) -> str | None:
+    """Mức đầu tư: "mức đầu tư phổ thông" -> pho_thong; "đầu tư cao cấp" -> sieu_cao_cap.
+
+    `bare=True` (đang hỏi mức đầu tư): nhận cả câu trả lời trần ("tiết kiệm", "trung cấp")."""
+    f = re.sub(r"[!.,;:?]+", " ", fold(text))
+    for code, words in _INVEST_WORDS:
+        if re.search(_INVEST_CTX + rf"(?:{words})\b", f):
+            return code
+        if bare and re.fullmatch(rf"\s*(?:muc\s+|goi\s+|phan khuc\s+)?(?:{words})(?:\s+(?:a|nhe|nha))?\s*", f):
+            return code
     return None
 
 
@@ -666,26 +753,62 @@ def detect_intent(text: str) -> Intent | None:
 # ---------------------------------------------------------------------------
 
 
+_AREA_UNIT = r"\s*(?:m2|m 2|met vuong|m vuong)(?![a-z0-9])"
+# "tầng lửng 40 m2", "lửng khoảng 50m2", "lửng rộng 40 m²", "diện tích lửng: 40" — số phải đứng ngay sau "lửng" (không
+# vượt qua chữ số/dấu phẩy: "1 lửng 3 lầu, 80m2" không phải diện tích lửng).
+_MEZZ_AREA_RE = re.compile(
+    rf"\b(?:tang\s+|gac\s+)?lung\b[^\d,;]{{0,20}}?{_NUM_START}({NUM}){_NUM_END}{_AREA_UNIT}"
+    rf"|\bdien tich\s+(?:tang\s+|gac\s+)?lung\s*(?:la|khoang|tam|chung|:)?\s*{_NUM_START}({NUM}){_NUM_END}"
+    rf"(?:{_AREA_UNIT})?")
+
+
+def parse_mezzanine_area(text: str) -> tuple[float | int | None, tuple[int, int] | None]:
+    """Diện tích tầng lửng khách nói ("tầng lửng 40 m2") -> (40, vị trí trong chuỗi). Không có -> (None, None)."""
+    m = _MEZZ_AREA_RE.search(fold(text))
+    if not m:
+        return None, None
+    v = _num(m.group(1) or m.group(2))
+    if not 3 <= v <= 1_000_000:
+        return None, None
+    return _clean_number(v), m.span()
+
+
 def parse_message(text: str) -> dict[str, Any]:
-    """Trích mọi slot nhận diện được bằng quy tắc. Chỉ trả khóa có giá trị (tên khớp `Slots`)."""
+    """Trích mọi slot nhận diện được bằng quy tắc. Chỉ trả khóa có giá trị (tên khớp `Slots`).
+
+    Không trích mức hoàn thiện (quality_tier): chưa có dữ liệu đơn giá thật theo mức nên hội thoại không phân mức."""
     out: dict[str, Any] = {}
     bt = parse_building_type(text)
     if bt:
         out["building_type"] = bt
     out.update(parse_location(text))
-    out.update(parse_dimensions(text))
+    mezz, span = parse_mezzanine_area(text)
+    dims_text = text
+    if span is not None:  # diện tích lửng không phải diện tích đất/xây dựng (fold giữ nguyên độ dài so với nfc)
+        t = nfc(text)
+        dims_text = t[:span[0]] + " " * (span[1] - span[0]) + t[span[1]:]
+    out.update(parse_dimensions(dims_text))
     out.update(parse_floors(text))
     out.update(parse_structure(text))
+    if mezz is not None:
+        out["mezzanine_area_m2"] = mezz
+        out["has_mezzanine"] = True
     ws = parse_work_scope(text)
     if ws:
         out["work_scope"] = ws
-    qt = parse_quality_tier(text)
-    if qt:
-        out["quality_tier"] = qt
-    budget = parse_budget(text)
-    if budget:
-        out["budget_vnd"] = budget
+    budget = parse_budget_info(text)
+    if budget is not None:
+        # "trên X tỷ": budget_vnd = None (bỏ trần cũ) + nhãn. Không có nhãn -> slot_filling bỏ nhãn cũ khi gộp.
+        out["budget_vnd"] = budget[0]
+        if budget[1]:
+            out["budget_label"] = budget[1]
     st = parse_start_time(text)
     if st:
         out["start_time"] = st
+    style = parse_design_style(text)
+    if style:
+        out["design_style"] = style
+    level = parse_investment_level(text)
+    if level:
+        out["investment_level"] = level
     return out

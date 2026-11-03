@@ -1,11 +1,12 @@
 import { useId } from 'react';
-import type { MatchedContractor } from '../../api/types';
-import { viNumber } from '../../utils/format';
-import { FIT_CLASS } from '../../utils/labels';
+import type { EvidenceValue, MatchedContractor, WorkScope } from '../../api/types';
+import { NO_DATA, viNumber } from '../../utils/format';
+import { FINISH_PRICE_LABEL_VI, FIT_CLASS, SCOPES_WITHOUT_CONTRACTOR_PRICE } from '../../utils/labels';
+import { ContactStaffButton } from '../common/ContactStaffButton';
 import { EvidenceCell } from '../common/EvidenceCell';
 import { ExternalLink } from '../common/ExternalLink';
+import { GalleryTiles } from '../common/Lightbox';
 import { SafeImage } from '../common/SafeImage';
-import { StatusBadge } from '../common/StatusBadge';
 
 export interface ContractorCardProps {
   item: MatchedContractor;
@@ -16,7 +17,11 @@ export interface ContractorCardProps {
   onQuote?: () => void;
   /** Ghi nhận lượt bấm (recommendation_logs). */
   onClickTrack?: () => void;
+  /** Phạm vi thi công khách chọn (MatchResult.criteria.work_scope). */
+  workScope?: WorkScope | null;
 }
+
+const NO_COST: EvidenceValue = { value: null, display: NO_DATA, status: 'unavailable', source: null, is_stale: false };
 
 function initials(name: string): string {
   return name
@@ -36,22 +41,28 @@ export function ContractorCardView({
   onDetail,
   onQuote,
   onClickTrack,
+  workScope,
 }: ContractorCardProps) {
   const c = item.contractor;
   const ev = c.evidence ?? {};
-  const covers = (c.cover_images ?? []).slice(0, 3);
+  const covers = c.cover_images ?? [];
   const headingId = useId();
   const fitCls = FIT_CLASS[item.fit_label] ?? 'review';
+  // Hoàn thiện / Nội thất: hồ sơ nhà thầu không có đơn giá riêng (đơn giá hoàn thiện cơ bản là giá trọn gói)
+  // -> không hiển thị chi phí ước tính từ đơn giá đó, kể cả khi payload cũ còn gửi.
+  const noScopePrice = !!workScope && SCOPES_WITHOUT_CONTRACTOR_PRICE.includes(workScope);
+  const estimatedCost = noScopePrice ? NO_COST : item.estimated_cost;
 
   return (
     <article className={`dz-ccard${selected ? ' dz-ccard--selected' : ''}`} aria-labelledby={headingId}>
-      {covers.length > 0 && (
-        <div className={`dz-ccard__covers dz-ccard__covers--${covers.length}`}>
-          {covers.map((img, i) => (
-            <SafeImage key={`${img.url}-${i}`} src={img.url} alt={img.caption ?? `Ảnh dự án của ${c.name}`} />
-          ))}
-        </div>
-      )}
+      <GalleryTiles
+        images={covers}
+        max={3}
+        contractorName={c.name}
+        fallbackUrl={c.profile_url}
+        className="dz-ccard__covers"
+        fallbackAlt={() => `Ảnh dự án của ${c.name}`}
+      />
       <div className="dz-ccard__body">
         <header className="dz-ccard__head">
           {c.avatar_url ? (
@@ -90,36 +101,14 @@ export function ContractorCardView({
 
         {item.reasons.length > 0 && (
           <div className="dz-ccard__section">
-            <h5>Vì sao em đề xuất</h5>
+            <h5>Vì sao đề xuất</h5>
             <ul className="dz-reasons">
-              {item.reasons.map((r, i) => {
-                const rev = ev[r.evidence];
-                return (
-                  <li key={i}>
-                    <span className="dz-reasons__icon" aria-hidden="true">
-                      ✓
-                    </span>
-                    <span>{r.text}</span>
-                    {rev && rev.status !== 'unavailable' && (
-                      <StatusBadge status={rev.status} source={rev.source} isStale={rev.is_stale} variant="dot" title={r.text} />
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        )}
-
-        {item.cautions.length > 0 && (
-          <div className="dz-ccard__section">
-            <h5>Điểm cần lưu ý</h5>
-            <ul className="dz-cautions">
-              {item.cautions.map((ct, i) => (
+              {item.reasons.map((r, i) => (
                 <li key={i}>
-                  <span className="dz-cautions__icon" aria-hidden="true">
-                    !
+                  <span className="dz-reasons__icon" aria-hidden="true">
+                    ✓
                   </span>
-                  <span>{ct.text}</span>
+                  <span>{r.text}</span>
                 </li>
               ))}
             </ul>
@@ -146,15 +135,15 @@ export function ContractorCardView({
             </dd>
           </div>
           <div>
-            <dt>Đơn giá hoàn thiện</dt>
+            <dt>{FINISH_PRICE_LABEL_VI}</dt>
             <dd>
-              <EvidenceCell ev={ev.finish_price} title="Đơn giá hoàn thiện" />
+              <EvidenceCell ev={ev.finish_price} title={FINISH_PRICE_LABEL_VI} />
             </dd>
           </div>
           <div className="dz-facts__wide">
             <dt>Chi phí ước tính theo đơn giá nhà thầu</dt>
             <dd>
-              <EvidenceCell ev={item.estimated_cost} title="Chi phí ước tính theo đơn giá nhà thầu" />
+              <EvidenceCell ev={estimatedCost} title="Chi phí ước tính theo đơn giá nhà thầu" />
             </dd>
           </div>
         </dl>
@@ -226,6 +215,7 @@ export function ContractorCardView({
           >
             Yêu cầu báo giá
           </button>
+          <ContactStaffButton />
         </div>
       </div>
     </article>

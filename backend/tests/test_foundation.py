@@ -30,6 +30,8 @@ def test_vi_number():
 def test_format_money():
     assert format_vnd_range(2_058_000_000, 2_352_000_000) == "2,058–2,352 tỷ"
     assert format_price_per_m2_range(4_300_000, 4_700_000) == "4,3–4,7 triệu/m²"
+    assert format_price_per_m2_range(None, 4_300_000) == "tối đa 4,3 triệu/m²"
+    assert format_price_per_m2_range(4_300_000, None) == "4,3 triệu/m²"
     assert format_vnd(850_000_000) == "850 triệu"
     assert format_vnd_range(850_000_000, 1_200_000_000) == "850 triệu–1,2 tỷ"
     assert format_vnd(None) == "Chưa có dữ liệu"
@@ -52,6 +54,7 @@ def test_slots_to_input():
               floors=4, work_scope="xay_tho")
     assert missing_required(s) == ["land_area_m2"]
     s.land_area_m2 = 100
+    # Đủ 5 slot cốt lõi -> không còn thiếu (chi tiết dùng mặc định có nêu rõ, không chặn bản tóm tắt).
     assert missing_required(s) == []
     inp = to_estimate_input(s)
     assert inp.land_area_m2 == 100 and inp.quality_tier == "trung_binh"

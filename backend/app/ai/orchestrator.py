@@ -5,11 +5,13 @@
 1. Lưu tin nhắn khách; nạp slots + stage + trạng thái phiên (`chat_sessions.slots["_state"]`, xem `app.ai.state`).
 2. `slot_filling.extract` (expected_slots = slot câu hỏi trước) -> cập nhật slots; ghi analytics "slots_completed".
 3. LUỒNG CHÍNH DO CODE ĐẢM BẢO (không phụ thuộc LLM nhớ gọi tool):
-   - thiếu slot bắt buộc -> hỏi đúng slot thiếu (dialog.next_question) + quick replies;
-   - đủ slot, chưa xác nhận -> tóm tắt + summary_confirm, không tính;
+   - thiếu slot bắt buộc -> hỏi đúng slot thiếu (dialog.next_question, 5 câu cốt lõi i/5) bằng thẻ question_step;
+   - đủ slot, chưa xác nhận -> tóm tắt + summary_confirm (chi tiết dùng mặc định có nêu rõ), không tính; "Cung cấp
+     thêm thông tin" -> hỏi lần lượt các mục chi tiết (state.more_mode) rồi quay lại bản tóm tắt;
    - đã xác nhận, chưa có khái toán cho slot hiện tại -> orchestrator TỰ gọi calculate_estimate;
    - ngân sách < cost_min -> tự gọi suggest_budget_adjustments; sau khái toán -> tự gọi search_contractors
-     (kèm estimate_session_id) và hỏi ngân sách nếu chưa có (dialog.budget_question).
+     (kèm estimate_session_id) và hỏi ngân sách nếu chưa có (dialog.budget_question — ngân sách chỉ hỏi SAU
+     khái toán).
    Tool tự gọi được đưa vào hội thoại như lượt tool-call để LLM giải thích kết quả.
 4. Gọi LLM (system prompt + khối trạng thái + lịch sử rút gọn + tools), tối đa `max_tool_rounds` vòng tool.
 5. Văn bản LLM qua `validator.run_guarded` (sinh lại 1 lần, vẫn sai -> câu dự phòng từ dữ liệu tool); vi phạm ghi
@@ -35,13 +37,26 @@ from sqlalchemy.orm import Session
 from app.ai import blocks as ui
 from app.ai import fallback, slot_filling, validator
 from app.ai.dialog import (
-    EDIT_FIELD_REPLIES,
+    DETAIL_KEYS,
     GREETING_EXPECTED_SLOTS,
+    OPTIONAL_KEYS,
+    NextQuestion,
+    basement_mezz_clarify_question,
     budget_question,
     build_summary,
+    current_key,
+    detail_keys,
     edit_field_question,
+    edit_field_replies,
+    key_done,
+    more_plan,
+    more_slots,
+    nav_command,
     next_question,
     no_match_replies,
+    previous_key,
+    question_for_key,
+    step_block,
 )
 from app.ai.normalize import detect_intent, fold, is_hypothetical
 from app.ai.providers import LLMError, get_provider
@@ -61,8 +76,8 @@ from app.config import get_settings
 from app.db.models import AnalyticsEvent, ChatMessage, ChatSession
 from app.schemas.estimate import BudgetAdjustmentResult, EstimateResult
 from app.schemas.matching import ContractorProfile
-from app.schemas.slots import Slots, missing_required
-from app.schemas.ui_blocks import QuickRepliesBlock, SummaryConfirmBlock
+from app.schemas.slots import DETAIL_SLOTS, Slots, missing_core, missing_required
+from app.schemas.ui_blocks import QuestionStepBlock, QuickRepliesBlock, SummaryConfirmBlock
 
 log = logging.getLogger(__name__)
 
@@ -74,11 +89,18 @@ BUDGET_TAIL = ("Anh/chị cho em biết ngân sách dự kiến để em đánh 
                "chính xác hơn nhé.")
 LLM_UNAVAILABLE_TEXT = ("Dạ, hệ thống tư vấn đang bận, em chưa trả lời được câu này. Anh/chị vui lòng thử lại sau "
                         "ít phút giúp em nhé.")
+# Lời dẫn ngắn khi thẻ câu hỏi (question_step) mang câu hỏi và LLM không viết gì (văn bản không lặp lại câu hỏi).
+STEP_ACK = "Dạ, anh/chị chọn hoặc nhập thông tin bên dưới giúp em nhé."
+BACK_ACK = "Dạ, anh/chị chọn lại thông tin bên dưới nhé."
+MORE_ACK = "Dạ, anh/chị bổ sung thêm thông tin bên dưới giúp em nhé."
+EDIT_ACK = "Dạ, anh/chị cập nhật lại thông tin bên dưới giúp em nhé."
+# Khách bấm/nhắn "Bỏ qua" ở câu bắt buộc (thẻ không có nút Bỏ qua) -> hiện lại đúng câu đó.
+REQUIRED_SKIP_ACK = ("Dạ, thông tin này cần để em tính khái toán, anh/chị chọn hoặc nhập giúp em ở bên dưới nhé.")
 EDIT_PROMPT = ("Dạ, anh/chị muốn sửa thông tin nào ạ? Anh/chị chọn mục bên dưới hoặc nhắn luôn thông tin mới (vd "
                "\"1 trệt 2 lầu\"), em sẽ cập nhật lại bản tóm tắt.")
 # Nút "Chọn phương án này" của budget_options gửi "Tôi chọn phương án: <label_vi>".
 _CHOOSE_OPTION_RE = re.compile(r"\bchon phuong an\b\s*:?\s*(.+)$")
-# Khách hỏi đơn giá tham chiếu ("đơn giá xây thô ở HCM?") — không phải mô tả phạm vi/mức hoàn thiện công trình của mình.
+# Khách hỏi đơn giá tham chiếu ("đơn giá xây thô ở HCM?") — không phải mô tả phạm vi công trình của mình.
 _RATE_Q_RE = re.compile(r"\bdon gia\b")
 # Yêu cầu tìm nhà thầu ở khu vực khác ("Tìm nhà thầu tại Hà Nội") — không đổi khu vực của công trình.
 _FIND_CONTRACTOR_RE = re.compile(r"\b(?:tim|de xuat|goi y|gioi thieu|liet ke)\b.{0,30}\bnha thau\b")
@@ -86,8 +108,22 @@ _QUOTE_INTENT_RE = re.compile(r"\bbao gia\b")
 _NOT_QUOTE_RE = re.compile(r"khong (?:phai|duoc xem la|thay the) (?:la )?bao gia")
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?…])\s+")
 _ABBR_END_RE = re.compile(r"(?:^|\s)(?:TP|Tp|tp|Q|P|TX|TT|v\.v|St|NXB)\.$")
+_TRAILING_PAREN_RE = re.compile(r"\s*\([^()]*\)[\s.!…]*$")
+_PAREN_ONLY_RE = re.compile(r"\([^()]*\)[\s.!…]*")
+_PAREN_RE = re.compile(r"\s*\(([^()]*)\)")
+_BULLET_RE = re.compile(r"^\s*(?:[-*•+–]|\d{1,2}[.)])\s+")
+# Nhãn mục của bản tóm tắt (đã gập dấu) — dòng "Loại công trình: Nhà phố" ở lượt tóm tắt là tóm tắt LLM tự viết.
+_SUMMARY_LABEL_RE = re.compile(
+    r"(?:loai )?cong trinh|loai nha|khu vuc|dia diem|vi tri|dien tich(?: [a-z ]+)?|kich thuoc|so tang|quy mo"
+    r"|pham vi(?: [a-z ]+)?|hang muc|tang ham|ham|tang lung|lung|mai|loai mai|mong|san thuong|ngan sach"
+    r"|thoi gian(?: [a-z ]+)?")
+# Câu tóm tắt / mời xác nhận LLM tự viết ở lượt tóm tắt (code đã dựng câu tương ứng).
+_SUMMARY_SENTENCE_RE = re.compile(r"\btom (?:tat|luoc)\b|\bxac nhan\b")
+# Câu gợi ý ví dụ cho câu hỏi ("Ví dụ: mái tôn, mái ngói...") — vô nghĩa khi câu hỏi của LLM đã bị bỏ.
+_EXAMPLE_HINT_RE = re.compile(r"^[(\s]*(?:vi du|chang han|vd)\b")
 
 STAGES = ("collect", "estimate", "match", "present")
+_BASEMENT_MEZZ = frozenset({"basement", "has_mezzanine"})
 
 
 class SessionNotFoundError(LookupError):
@@ -115,7 +151,21 @@ class CodePlan:
     summary: SummaryConfirmBlock | None = None
     quick: QuickRepliesBlock | None = None
     expected: list[str] = field(default_factory=list)
-    is_collect: bool = False  # tail là câu hỏi slot / tóm tắt
+    is_collect: bool = False  # lượt hỏi slot (thẻ câu hỏi) / tóm tắt
+    step: QuestionStepBlock | None = None  # thẻ câu hỏi từng bước (câu hỏi KHÔNG nối vào văn bản)
+    question: str | None = None  # câu hỏi văn xuôi của thẻ (cho LLM biết, khử câu LLM chép lại)
+    key: str | None = None  # khóa câu hỏi của thẻ (state.current_question)
+    ack: str | None = None  # lời dẫn khi LLM không viết gì
+
+
+def _step_plan(q: NextQuestion, slots: Slots, ack: str | None = None, plan: list[str] | None = None) -> CodePlan:
+    return CodePlan(step=step_block(q, slots, plan), question=q.text, key=q.key, expected=list(q.slots),
+                    is_collect=True, ack=ack)
+
+
+def _round_plan(slots: Slots, state: SessionState) -> list[str] | None:
+    """Câu của lượt "Cung cấp thêm thông tin" đang chạy (bước i/N tính trên danh sách này); None: không ở lượt đó."""
+    return more_plan(slots, state.more_keys) if state.more_mode else None
 
 
 @lru_cache
@@ -126,11 +176,12 @@ def system_prompt() -> str:
 # ============================================================================================
 # Luồng chính do code đảm bảo
 # ============================================================================================
-def _collect_plan(slots: Slots) -> CodePlan | None:
-    if missing_required(slots):
-        q = next_question(slots)
-        if q is not None:
-            return CodePlan(tail=q.text, quick=q.quick_replies, expected=list(q.slots), is_collect=True)
+def _collect_plan(slots: Slots, state: SessionState) -> CodePlan | None:
+    # 5 câu cốt lõi (i/5); khách đã bấm "Cung cấp thêm thông tin" -> thêm các câu chi tiết -> thẻ question_step.
+    plan = _round_plan(slots, state)
+    q = next_question(slots, more=state.more_mode, plan=plan)
+    if q is not None:
+        return _step_plan(q, slots, plan=plan)
     if not missing_required(slots) and not slots.confirmed:
         text, block = build_summary(slots)
         return CodePlan(tail=text, summary=block, expected=[], is_collect=True)
@@ -144,7 +195,7 @@ def _forced(ctx: ToolContext, outcomes: list[ToolOutcome], name: str, args: dict
 
 
 def _pre_llm(ctx: ToolContext, outcomes: list[ToolOutcome]) -> CodePlan:
-    plan = _collect_plan(ctx.slots)
+    plan = _collect_plan(ctx.slots, ctx.state)
     if plan is not None:
         return plan
     plan = CodePlan()
@@ -183,10 +234,18 @@ def _next_step(slots: Slots, plan: CodePlan, outcomes: list[ToolOutcome]) -> str
     missing = missing_required(slots)
     if missing:
         labels = ", ".join(fallback.SLOT_LABEL_VI.get(k, k) for k in missing)
-        return f"Khách còn thiếu: {labels}. Hệ thống sẽ tự hỏi; em chỉ ghi nhận ngắn hoặc trả lời câu hỏi của khách."
+        return (f"Khách còn thiếu: {labels}. Hệ thống sẽ tự hiển thị thẻ câu hỏi (kèm gợi ý, lựa chọn); em chỉ ghi "
+                "nhận ngắn hoặc trả lời câu hỏi của khách, KHÔNG chép lại câu hỏi, gợi ý hay lựa chọn của hệ thống.")
+    if plan.step is not None:
+        labels = ", ".join(fallback.SLOT_LABEL_VI.get(k, k) for k in plan.step.slots)
+        return (f"Hệ thống đang hỏi bổ sung / sửa thông tin: {labels} — bằng thẻ câu hỏi (mục chi tiết khách trả lời "
+                "\"chưa biết\" được, khi đó dùng mặc định có nêu rõ). Em chỉ ghi nhận ngắn hoặc trả lời câu hỏi của "
+                "khách, KHÔNG chép lại câu hỏi. Phong cách thiết kế và mức đầu tư chỉ được ghi nhận để gửi nhà thầu, "
+                "KHÔNG làm thay đổi khái toán.")
     if not slots.confirmed:
-        return ("Đã đủ thông tin bắt buộc. Hệ thống tự hiển thị bản tóm tắt; chờ khách xác nhận, KHÔNG gọi "
-                "calculate_estimate.")
+        return ("Đã đủ thông tin bắt buộc. Hệ thống tự hiển thị bản tóm tắt và câu mời xác nhận; em KHÔNG tự viết tóm "
+                "tắt, không liệt kê lại thông tin, chỉ 1 câu ghi nhận ngắn (có thể để trống). Chờ khách xác nhận, "
+                "KHÔNG gọi calculate_estimate.")
     done = {o.name for o in outcomes if o.forced and not o.is_error}
     steps: list[str] = []
     # W-F7: bảng/thẻ do hệ thống hiển thị ngay sau câu trả lời -> văn bản chỉ là lời dẫn ngắn + giải thích (mục 6.5),
@@ -218,24 +277,35 @@ def _keep_changes(prev: Slots, u: SlotUpdate, kept: list[str]) -> SlotUpdate:
                                 "missing_required": missing_required(slots)})
 
 
-def _protect_profile(prev: Slots, u: SlotUpdate, content: str) -> SlotUpdate:
-    """Câu HỎI khi khách đã cung cấp đủ thông tin (vd "nhà thầu nào thi công biệt thự tốt?", "đơn giá xây thô bao
-    nhiêu?", "nếu chỉ xây 3 tầng thì hết bao nhiêu?", "tìm nhà thầu tại Hà Nội") không được ghi đè thông tin công
+def _protect_profile(prev: Slots, u: SlotUpdate, content: str, expected: list[str] | None = None) -> SlotUpdate:
+    """Câu HỎI khi khách đã cung cấp đủ thông tin cốt lõi (vd "nhà thầu nào thi công biệt thự tốt?", "đơn giá xây thô
+    bao nhiêu?", "nếu chỉ xây 3 tầng thì hết bao nhiêu?", "tìm nhà thầu tại Hà Nội") không được ghi đè thông tin công
     trình; chỉ nhận ngân sách/thời gian. Muốn đổi thì khách nói rõ ("đổi sang ...", "sửa lại ...") -> intent = edit.
+    Áp dụng cả khi đang hỏi chi tiết ("Cung cấp thêm thông tin": diện tích xây dựng, hầm/lửng, mái): lượt được bảo
+    vệ không tính câu hỏi chi tiết đang chờ là "đã hỏi" -> lượt sau hỏi lại (không âm thầm dùng mặc định). Câu trả
+    lời dạng hỏi cho đúng mục đang hỏi ("mái tôn được không?") vẫn được nhận.
 
-    Khi còn đang thu thập: câu hỏi đơn giá ("đơn giá xây thô ở HCM bao nhiêu?") không ngầm điền phạm vi/mức hoàn
-    thiện của công trình (C-F6)."""
+    Khi còn thiếu thông tin cốt lõi: câu hỏi đơn giá ("đơn giá xây thô ở HCM bao nhiêu?") không ngầm điền phạm vi của
+    công trình (C-F6)."""
     intent = detect_intent(content)
     if intent == "edit":
         return u
     f = fold(content)
-    if missing_required(prev):
+    if missing_core(prev):
         if intent == "question" and _RATE_Q_RE.search(f):
-            return _keep_changes(prev, u, [c for c in u.changed if c not in ("work_scope", "quality_tier")])
+            return _keep_changes(prev, u, [c for c in u.changed if c != "work_scope"])
         return u
-    if intent != "question" and not is_hypothetical(content) and not _FIND_CONTRACTOR_RE.search(f):
+    hypothetical, find_contractor = is_hypothetical(content), bool(_FIND_CONTRACTOR_RE.search(f))
+    if intent != "question" and not hypothetical and not find_contractor:
         return u
-    return _keep_changes(prev, u, [c for c in u.changed if c in NON_ESTIMATE_SLOTS])
+    if intent == "question" and not hypothetical and not find_contractor and set(u.changed) & set(expected or []):
+        return u
+    out = _keep_changes(prev, u, [c for c in u.changed if c in NON_ESTIMATE_SLOTS])
+    asked = [a for a in out.slots.asked if a in prev.asked or a not in DETAIL_SLOTS]
+    if asked != out.slots.asked:
+        out = out.model_copy(update={"slots": out.slots.model_copy(update={"asked": asked})})
+        out.missing_required = missing_required(out.slots)
+    return out
 
 
 def _budget_options(db: Session, sid: uuid.UUID) -> list[dict[str, Any]]:
@@ -273,25 +343,82 @@ def apply_budget_option(prev: Slots, option: dict[str, Any]) -> SlotUpdate:
     """Áp đúng `changes` (do engine tính) của phương án vào slot. Khách đã chủ động chọn phương án nên giữ trạng thái
     xác nhận để tính lại ngay theo phương án."""
     changes = {k: v for k, v in (option.get("changes") or {}).items()
-               if k in Slots.model_fields and k not in ("confirmed", "asked")}
+               if k in Slots.model_fields and k not in ("confirmed", "asked", "quality_tier")}
     slots = Slots.model_validate({**prev.model_dump(), **changes, "confirmed": prev.confirmed})
     changed = [k for k in changes if getattr(slots, k) != getattr(prev, k)]
     return SlotUpdate(slots=slots, changed=changed, intent="provide_info" if changed else "confirm",
                       missing_required=missing_required(slots))
 
 
-def _drop_questions(text: str) -> str:
-    """Bỏ câu hỏi LLM tự đặt ở lượt thu thập: câu hỏi slot/tóm tắt do code dựng là câu hỏi duy nhất (không hỏi lại
-    slot đã có, không hỏi trùng)."""
+def _sentences(line: str) -> list[str]:
+    """Tách một dòng thành câu. "TP. Hồ Chí Minh" không phải hai câu; ghi chú trong ngoặc đứng sau một câu ("...m² ạ?
+    (phần sàn xây, không tính sân)") thuộc về câu đó."""
+    out: list[str] = []
+    for piece in _SENTENCE_SPLIT_RE.split(line.strip()):
+        if out and (_ABBR_END_RE.search(out[-1]) or piece.startswith("(")):
+            out[-1] = f"{out[-1]} {piece}"
+        else:
+            out.append(piece)
+    return [x for x in out if x]
+
+
+def _is_question(sentence: str) -> bool:
+    core = sentence.strip()
+    while (stripped := _TRAILING_PAREN_RE.sub("", core)) != core:  # bỏ ghi chú trong ngoặc ở cuối câu
+        core = stripped
+    return any(x.rstrip(" )»\"'”").endswith("?") for x in (sentence, core))
+
+
+def _norm_words(text: str) -> str:
+    return " ".join(re.sub(r"[^0-9a-z]+", " ", fold(text)).split())
+
+
+def _duplicates_tail(sentence: str, tail_norm: str, tail_words: set[str]) -> bool:
+    """Câu LLM chép lại (nguyên văn hoặc gần như nguyên văn) câu hỏi/tóm tắt do code dựng."""
+    norm = _norm_words(sentence)
+    if not norm or not tail_norm:
+        return False
+    if len(norm) >= 10 and norm in tail_norm:
+        return True
+    words = norm.split()
+    return len(words) >= 6 and sum(w in tail_words for w in words) / len(words) >= 0.8
+
+
+def _is_summary_line(line: str) -> bool:
+    """Dòng liệt kê kiểu tóm tắt: gạch đầu dòng hoặc "Loại công trình: Nhà phố"."""
+    if _BULLET_RE.match(line):
+        return True
+    label, sep, _ = line.partition(":")
+    return bool(sep) and len(label) <= 40 and bool(_SUMMARY_LABEL_RE.fullmatch(_norm_words(label)))
+
+
+def _drop_questions(text: str, tail: str | None = None, *, questions: bool = True, summary: bool = False) -> str:
+    """Làm sạch văn bản LLM ở lượt thu thập: câu hỏi slot/tóm tắt do code dựng (`tail`) là câu hỏi/tóm tắt DUY NHẤT.
+
+    - `questions`: bỏ câu hỏi LLM tự đặt (không hỏi lại slot đã có, không hỏi trùng) — kể cả ghi chú trong ngoặc đi
+      kèm câu hỏi; ghi chú trong ngoặc / câu gợi ý "Ví dụ ..." đứng riêng (mồ côi sau khi bỏ câu hỏi) cũng bỏ.
+    - `tail`: bỏ câu LLM chép lại câu hỏi/tóm tắt do code dựng.
+    - `summary` (lượt hiển thị bản tóm tắt): bỏ tóm tắt LLM tự viết ("Em tóm tắt lại: ...", danh sách "Loại công trình:
+      ...") và lời mời xác nhận — bản tóm tắt + câu mời xác nhận do code dựng được nối vào cuối."""
+    tail_norm = _norm_words(tail or "")
+    tail_words = set(tail_norm.split())
     lines = []
     for line in (text or "").splitlines():
-        sentences: list[str] = []
-        for piece in _SENTENCE_SPLIT_RE.split(line.strip()):
-            if sentences and _ABBR_END_RE.search(sentences[-1]):  # "TP. Hồ Chí Minh" không phải hai câu
-                sentences[-1] = f"{sentences[-1]} {piece}"
-            else:
-                sentences.append(piece)
-        kept = [x for x in sentences if x and not x.rstrip(" )»\"'”").endswith("?")]
+        if summary and _is_summary_line(line):
+            continue
+        kept: list[str] = []
+        for x in _sentences(line):
+            x = _PAREN_RE.sub(lambda m: "" if _duplicates_tail(m.group(1), tail_norm, tail_words) else m.group(0),
+                              x).strip()  # ghi chú trong ngoặc chép từ câu hỏi của code
+            if not x:
+                continue
+            if questions and (_is_question(x) or _PAREN_ONLY_RE.fullmatch(x) or _EXAMPLE_HINT_RE.match(fold(x))):
+                continue
+            if _duplicates_tail(x, tail_norm, tail_words):
+                continue
+            if summary and _SUMMARY_SENTENCE_RE.search(fold(x)):
+                continue
+            kept.append(x)
         joined = " ".join(kept).strip()
         if joined or not line.strip():
             lines.append(joined)
@@ -299,7 +426,8 @@ def _drop_questions(text: str) -> str:
 
 
 def _stage(slots: Slots, state: SessionState) -> str:
-    if missing_required(slots):
+    if missing_required(slots) or (not slots.confirmed
+                                   and current_key(slots, state.more_mode, _round_plan(slots, state)) is not None):
         return "collect"
     if not slots.confirmed:
         return "estimate"
@@ -363,7 +491,7 @@ def _state_block(slots: Slots, state: SessionState, u: SlotUpdate, plan: CodePla
         "nha_thau_luot_truoc": list(prev_contractor_ids or []),
         "cong_cu_he_thong_da_chay": [o.name for o in outcomes if o.forced],
         "buoc_tiep_theo": _next_step(slots, plan, outcomes),
-        "he_thong_se_tu_them": plan.tail,
+        "he_thong_se_tu_them": plan.tail or plan.question,
     }
 
 
@@ -429,6 +557,13 @@ def handle_message(db: Session, session_id: uuid.UUID | str, content: str,
     if sess is None:
         raise SessionNotFoundError(str(sid))
     prev_slots, state = split_raw(sess.slots)
+    if prev_slots.confirmed and missing_required(prev_slots):
+        # Phòng hờ (dữ liệu phiên cũ): đã xác nhận mà thiếu thông tin cốt lõi -> hỏi tiếp rồi tóm tắt và xác nhận lại;
+        # bỏ khái toán cũ.
+        prev_slots = prev_slots.model_copy(update={"confirmed": False})
+        state.estimate = None
+        state.budget_checked_for = state.matched_for = None
+        state.presented = False
     history = _history(db, sid)
 
     # 1. Lưu tin nhắn khách (commit sớm: lỗi về sau không làm mất tin nhắn).
@@ -443,12 +578,32 @@ def handle_message(db: Session, session_id: uuid.UUID | str, content: str,
     expected = state.expected_slots if state.expected_slots is not None else list(GREETING_EXPECTED_SLOTS)
     chosen = (chosen_budget_option(content, _budget_options(db, sid))
               if prev_slots.confirmed and state.estimate is not None else None)
+    # Nút điều hướng của thẻ câu hỏi / bản xác nhận (trước khi xác nhận): không trích slot từ tin nhắn này.
+    nav = nav_command(content) if not prev_slots.confirmed else None
     if chosen is not None:  # W-F1: áp đúng thay đổi của phương án, không đoán lại từ chữ ("Giảm 1 tầng" ≠ 1 tầng)
         u = apply_budget_option(prev_slots, chosen)
+    elif nav == "more":  # "Cung cấp thêm thông tin": hỏi lần lượt các mục chi tiết đang dùng mặc định
+        redo = set(more_slots(prev_slots))
+        more = prev_slots.model_copy(update={"asked": [a for a in prev_slots.asked if a not in redo]})
+        u = SlotUpdate(slots=more, intent="other", missing_required=missing_required(more))
+        state.more_mode = True
+        # Bước i/N của lượt này chỉ tính các câu còn thiếu lúc bấm nút (câu đã có thông tin không hỏi, không đếm).
+        state.more_keys = [k for k in detail_keys(more) if not key_done(more, k)]
+    elif nav == "back":  # "Quay lại câu trước": giữ nguyên thông tin, hiện lại câu hỏi trước
+        u = SlotUpdate(slots=prev_slots, intent="other", missing_required=missing_required(prev_slots))
     else:
         u = _protect_profile(prev_slots, slot_filling.extract(content, prev_slots, provider,
-                                                              expected_slots=expected), content)
+                                                              expected_slots=expected), content, expected)
     slots = u.slots
+    # Đã xác nhận (đã có khái toán) + "Tôi muốn sửa phong cách / ngân sách / mức đầu tư" (nút Sửa, chưa nêu giá trị
+    # mới): các mục này không đổi con số khái toán -> giữ xác nhận, hỏi lại đúng mục đó; câu trả lời cập nhật thẳng
+    # (như khi khách nhắn giá trị mới), không bắt xác nhận lại bản tóm tắt.
+    keep_edit: NextQuestion | None = None
+    if prev_slots.confirmed and chosen is None and u.intent == "edit" and not u.changed:
+        q = edit_field_question(content, prev_slots)
+        if q is not None and q.key in OPTIONAL_KEYS:
+            keep_edit = q
+            slots = slots.model_copy(update={"confirmed": True})
     est_changed = [c for c in u.changed if c not in NON_ESTIMATE_SLOTS]
     if prev_slots.confirmed and not slots.confirmed and u.changed and not est_changed:
         slots = slots.model_copy(update={"confirmed": True})  # chỉ đổi ngân sách/thời gian: không xác nhận lại
@@ -469,15 +624,42 @@ def handle_message(db: Session, session_id: uuid.UUID | str, content: str,
     ctx = ToolContext(db=db, chat_session_id=sid, slots=slots, state=state, user_texts=user_texts)
     outcomes: list[ToolOutcome] = []
     plan = _pre_llm(ctx, outcomes)
-    if u.intent == "edit" and not u.changed and plan.summary is not None:
-        # C-F9: khách muốn sửa nhưng chưa nói sửa gì -> CHỈ hỏi mục cần sửa (kèm nút theo từng mục); không gắn lại bản
-        # tóm tắt cũ và câu đòi xác nhận trong cùng tin.
-        q = edit_field_question(content)
+    if keep_edit is not None:
+        plan = _step_plan(keep_edit, ctx.slots, ack=EDIT_ACK)
+        if plan.step is not None:  # đã qua bước hỏi: không có "câu trước" để quay lại
+            plan.step = plan.step.model_copy(update={"back_value": None})
+    elif nav == "back":
+        # Câu trước trong danh sách dự kiến; đang ở câu đầu -> hiện lại câu đang hỏi.
+        # Câu chi tiết ngoài lượt hỏi thêm (đang sửa một dòng): không có câu trước -> hiện lại đúng câu đó.
+        round_plan = _round_plan(ctx.slots, state)
+        if round_plan is None and state.current_question in DETAIL_KEYS:
+            round_plan = [state.current_question]
+        back_key = previous_key(ctx.slots, state.current_question, round_plan) or state.current_question
+        if back_key is not None:
+            plan = _step_plan(question_for_key(back_key, ctx.slots), ctx.slots, ack=BACK_ACK, plan=round_plan)
+        elif plan.step is not None:
+            plan.ack = BACK_ACK
+    elif nav == "more" and plan.step is not None:
+        plan.ack = MORE_ACK
+    elif u.intent == "edit" and not u.changed and (plan.summary is not None or plan.step is not None):
+        # C-F9: khách muốn sửa (nút "Sửa" trên bản xác nhận, hoặc nhắn khi đang hỏi) nhưng chưa nói giá trị mới ->
+        # CHỈ hỏi lại mục cần sửa bằng thẻ câu hỏi; không gắn lại bản tóm tắt cũ và câu đòi xác nhận trong cùng tin.
+        q = edit_field_question(content, ctx.slots)
         if q is not None:
-            plan = CodePlan(tail=q.text, quick=q.quick_replies, expected=list(q.slots), is_collect=True)
-        else:
-            plan = CodePlan(tail=EDIT_PROMPT, quick=QuickRepliesBlock(options=list(EDIT_FIELD_REPLIES)),
+            # Sửa một dòng chi tiết: chỉ hỏi lại đúng câu đó (bước 1/1, không có "Quay lại câu trước").
+            plan = _step_plan(q, ctx.slots, ack=EDIT_ACK, plan=[q.key] if q.key in DETAIL_KEYS else None)
+        elif plan.summary is not None:
+            plan = CodePlan(tail=EDIT_PROMPT, quick=QuickRepliesBlock(options=edit_field_replies(ctx.slots)),
                             expected=[], is_collect=True)
+    elif (plan.is_collect and set(expected) == _BASEMENT_MEZZ and not _BASEMENT_MEZZ & set(u.changed)
+          and slot_filling.is_bare_yes(content)):
+        # "Có" cho câu hỏi chung "có tầng hầm hoặc tầng lửng không" -> hỏi rõ (không đoán, không dùng mặc định "không").
+        plan = _step_plan(basement_mezz_clarify_question(), ctx.slots,
+                          plan=_round_plan(ctx.slots, state) if state.more_mode else ["basement_mezz"])
+    elif (plan.step is not None and not plan.step.skippable and plan.key is not None
+          and plan.key == state.current_question and not u.changed and slot_filling.is_skip_answer(content)):
+        # "Bỏ qua" ở câu bắt buộc: không ghi gì (vd không nhận "Bỏ qua câu này" làm tên tỉnh), hiện lại đúng câu đó.
+        plan.ack = REQUIRED_SKIP_ACK
     stage_now = _stage(ctx.slots, state)
 
     # 4. Gọi LLM.
@@ -521,7 +703,7 @@ def handle_message(db: Session, session_id: uuid.UUID | str, content: str,
 
     # Tool update_project_requirements có thể đổi slot giữa lượt -> dựng lại câu hỏi/tóm tắt.
     if any(o.name == "update_project_requirements" and not o.is_error for o in outcomes):
-        replan = _collect_plan(ctx.slots)
+        replan = _collect_plan(ctx.slots, state)
         if replan is not None:
             plan = replan
         elif plan.is_collect:
@@ -536,7 +718,7 @@ def handle_message(db: Session, session_id: uuid.UUID | str, content: str,
     if llm_failed:
         used_fallback = True
         llm_part = fallback.build_fallback_text(turn_named) if turn_named else ""
-        if not turn_named and not plan.tail:
+        if not turn_named and not plan.tail and plan.step is None:
             llm_part = LLM_UNAVAILABLE_TEXT
     else:
         retry_failed = False
@@ -562,24 +744,36 @@ def handle_message(db: Session, session_id: uuid.UUID | str, content: str,
         violations = guarded.violations
         used_fallback = guarded.used_fallback or retry_failed
         llm_part = guarded.text
-        if guarded.used_fallback and llm_part == fallback.GENERIC_APOLOGY and plan.tail:
-            llm_part = ""  # câu hỏi/tóm tắt do code dựng đã đủ
-        elif plan.is_collect and plan.tail and u.intent != "question":
-            llm_part = _drop_questions(llm_part)
+        code_text = plan.tail or plan.question
+        if guarded.used_fallback and llm_part == fallback.GENERIC_APOLOGY and code_text:
+            llm_part = ""  # câu hỏi (thẻ câu hỏi) / tóm tắt do code dựng đã đủ
+        elif code_text:
+            # Câu hỏi slot (trên thẻ question_step), tóm tắt, câu hỏi ngân sách do code dựng là bản duy nhất: bỏ phần LLM
+            # chép lại. Lượt thu thập bỏ thêm câu hỏi LLM tự đặt — trừ khi khách hỏi (intent question): giữ câu trả lời.
+            llm_part = _drop_questions(llm_part, code_text, questions=plan.is_collect and u.intent != "question",
+                                       summary=plan.summary is not None)
 
     parts = [llm_part, *_guarantees(llm_part, outcomes), plan.tail or ""]
-    text = "\n\n".join(p.strip() for p in parts if p and p.strip()) or fallback.GENERIC_APOLOGY
+    text = "\n\n".join(p.strip() for p in parts if p and p.strip())
+    if not text and plan.step is not None:  # thẻ câu hỏi mang câu hỏi: văn bản chỉ là lời dẫn ngắn
+        text = plan.ack or STEP_ACK
+    text = text or fallback.GENERIC_APOLOGY
 
     # 6. UI block + lưu.
     est_id = state.estimate.id if state.estimate else None
     blocks = ui.build_ui_blocks(outcomes, estimate_session_id=est_id, summary=plan.summary,
-                                quick_replies=plan.quick, quote_request=_quote_form(content, state, outcomes))
+                                quick_replies=plan.quick, quote_request=_quote_form(content, state, outcomes),
+                                question_step=plan.step)
     for o in outcomes:
         db.add(ChatMessage(session_id=sid, role="tool", tool_name=o.name, tool_payload=o.payload))
     assistant = ChatMessage(session_id=sid, role="assistant", content=text,
                             ui_blocks=[b.model_dump(mode="json") for b in blocks])
     db.add(assistant)
     state.expected_slots = plan.expected
+    state.current_question = plan.key if plan.step is not None else None
+    if plan.summary is not None or ctx.slots.confirmed:
+        state.more_mode = False  # hết câu hỏi thêm (đã quay lại bản tóm tắt) / đã xác nhận
+        state.more_keys = []
     stage = _stage(ctx.slots, state)
     sess = db.get(ChatSession, sid)
     sess.slots = to_raw(ctx.slots, state)

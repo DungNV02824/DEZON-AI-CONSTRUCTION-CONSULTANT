@@ -65,6 +65,13 @@ def test_select_rate_exact_hcm(db):
     assert rate.source.updated_at == date(2026, 10, 31)
 
 
+def test_select_rate_ignores_quality_tier(db):
+    """Không phân mức chất lượng: mọi mức đều dùng dòng 'trung_binh'."""
+    for tier in ("tiet_kiem", "kha", "cao_cap", None):
+        rate = svc.select_rate(db, "nha_pho", HCM, "xay_tho", tier)
+        assert rate.quality_tier == "trung_binh" and (rate.price_min, rate.price_max) == (3_550_000, 4_200_000)
+
+
 def test_select_rate_province_normalized(db):
     rate = svc.select_rate(db, "nha_pho", "  tp.   hồ chí MINH ", "xay_tho", "trung_binh")
     assert rate is not None and rate.province == HCM and not rate.is_fallback
@@ -162,7 +169,9 @@ def test_get_estimate_without_snapshot_recomputes(db):
 def test_create_estimate_fallback_province(db):
     res = svc.create_estimate(db, hcm_input(province="Cần Thơ"))
     assert res.rate.status == "reference"
-    assert "Dùng đơn giá mặc định toàn quốc do chưa có đơn giá riêng cho Cần Thơ" in res.assumptions
+    # Dòng '*' fixture không phải đơn giá tổng hợp -> câu giả định nêu đúng nguồn, không nhắc hồ sơ nhà thầu
+    assert any(a.startswith("Dùng đơn giá mặc định toàn quốc (nguồn: Đơn giá tham khảo (seed dev")
+               and "chưa có đơn giá riêng tại Cần Thơ" in a and "hồ sơ" not in a for a in res.assumptions)
     assert res.cost_min == 1_666_000_000  # 490 × 3,4 triệu
 
 
@@ -186,9 +195,9 @@ def test_budget_adjustments_hcm_1_2_ty(db):
     assert out.current_cost.display == res.cost.display
     assert len(out.options) >= 2
     codes = {o.code for o in out.options}
-    assert {"reduce_floor", "lower_quality"} <= codes
-    lq = next(o for o in out.options if o.code == "lower_quality")
-    assert lq.cost_min == 1_568_000_000  # 490 × 3,2 triệu (đơn giá tiết kiệm HCM trong seed)
+    assert {"reduce_floor", "change_roof"} <= codes and "lower_quality" not in codes
+    rf = next(o for o in out.options if o.code == "reduce_floor")
+    assert rf.cost_min == 1_420_000_000  # 400 m² quy đổi × 3,55 triệu (đơn giá HCM trong fixture)
     for o in out.options:
         assert o.cost_min is not None and o.cost.status in ("reference", "on_dezon", "verified")
         if o.code != "combined":

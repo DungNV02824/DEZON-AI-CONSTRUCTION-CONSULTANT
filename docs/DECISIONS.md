@@ -770,3 +770,260 @@ Test hồi quy chính: `tests/test_chat_fixes.py` (luồng thật qua orchestrat
 - Crawler: tỉnh/quận của công trình ưu tiên địa danh trong tên công trình (`apply_location_from_name`), vì dòng meta
   trang công trình trên dezon.vn ghi khu vực của nhà thầu. `extra.location_source` = `project_name` | `page_meta`.
   Snapshot `dezon_snapshot.json` đã chạy lại bước này (8 công trình được sửa tỉnh/quận).
+- Đơn giá/m² trên hồ sơ nhà thầu ngoài khoảng 0,5–40 triệu/m², hoặc cận trên lớn hơn 10 lần cận dưới, coi là gõ nhầm
+  (vd Huy Hoàng "hoàn thiện cơ bản: Từ 2 đến 80 tr/m²"). Crawler không đưa vào `*_price_min/max` (khách thấy "Chưa có
+  dữ liệu", matching tính trung tính + "cần đối chiếu đơn giá"); chuỗi gốc lưu ở `extra.implausible_prices`.
+- Snapshot crawl lại toàn bộ 41 nhà thầu của `/nha-thau/tiem-nang/` (trang 1 đã chứa đủ, phân trang làm phía trình
+  duyệt) cùng **mọi** công trình thực tế của từng nhà thầu (`--works-per-contractor 50`). Nhà thầu không ghi tỉnh trên
+  hồ sơ (vd Châu Phương Thịnh, Minh Gia Phát) vẫn được lọc theo tỉnh nhờ tỉnh của công trình.
+- Cận dưới "2 tr/m²" trên hồ sơ nhà thầu dezon.vn là giá trị mặc định của form (20/41 hồ sơ ghi "Từ 2 đến X tr/m²",
+  kể cả xây thô — thấp hơn nhiều mặt bằng 3,8–5 tr/m²). Crawler bỏ cận dưới này: chỉ lưu cận trên
+  (`*_price_min = None`), hiển thị "tối đa X triệu/m²", chi phí ước theo cận trên (thận trọng) — tránh việc khoảng
+  2–X luôn "vừa ngân sách" và vượt mặt nhà thầu khai giá cụ thể. Chuỗi gốc ở `extra.default_min_prices` của snapshot.
+  Khai đúng "Từ 2 tr/m²" (không có cận trên) vẫn giữ. **Cần Dezon xác nhận** hoặc sửa form/hồ sơ.
+- Matching — tiêu chí khu vực: khớp tỉnh qua tỉnh trên hồ sơ / năng lực đăng ký = 0,8 (như đặc tả); khớp **chỉ qua
+  công trình** = 0,6 (`location_kind = "project"`). Lý do: Kiến Phong (TP HCM) có 1 công trình ở Hà Nội từng đứng đầu
+  đề xuất nhà phố Hà Nội, trên các nhà thầu sở tại. Bộ lọc cứng 7.2 giữ nguyên (vẫn là ứng viên).
+
+## Đơn giá khái toán lấy từ đơn giá nhà thầu công bố trên Dezon
+
+- Dezon không công bố bảng giá. Bảng giá tự đặt trong `seed.py` (`BASE_RATES`/`TIER_FACTOR`/`PROVINCE_FACTOR`) chỉ
+  còn là fixture test (`tests/conftest.py` gọi `seed.seed_rates`); `seed.run()` không nạp nữa.
+- Đơn giá/m² = tổng hợp đơn giá các nhà thầu **tự công bố** trên hồ sơ dezon.vn
+  (`app/services/market_rates.py::rebuild_market_rates`, chạy sau nạp snapshot và sau mỗi lần đồng bộ `_after_sync`):
+  - `xay_tho` <- `rough_price_*`; `tron_goi` <- `finish_price_*` (mục "Đơn giá hoàn thiện cơ bản" trên hồ sơ = trọn
+    gói thô + hoàn thiện). `hoan_thien`, `noi_that`: không có dữ liệu -> không có đơn giá ("Chưa có dữ liệu"), engine
+    gợi ý chọn Xây thô/Trọn gói hoặc xin báo giá.
+  - Mỗi nhà thầu: cận dưới = min (thiếu thì max), cận trên = max (thiếu thì min). Khoảng tổng hợp = (P25 các cận
+    dưới, P75 các cận trên), nội suy tuyến tính, làm tròn 50.000 đ (`app/engines/estimate/market.py`).
+  - Nhà thầu thuộc loại công trình X nếu có năng lực loại X (bất kỳ tỉnh). Tỉnh nhà thầu = tỉnh hồ sơ + tỉnh năng
+    lực; không có thì tỉnh các công trình. Mỗi (loại, tỉnh, phạm vi) cần ≥ 3 nhà thầu có giá; thêm dòng toàn quốc
+    `province='*'` tổng hợp mọi nhà thầu của loại đó (cũng cần ≥ 3).
+  - Mỗi dòng có `data_sources` riêng: `crawl_public`/`on_dezon`, nhãn "Tổng hợp đơn giá … do N nhà thầu … công bố
+    trên Dezon", URL = trang `/nha-thau/tiem-nang/` + fragment riêng (`#don-gia-<loại>-<phạm vi>-<tỉnh>-<yyyymmdd>`) vì
+    `data_sources.url` là UNIQUE; `source_updated_at` = ngày cập nhật hồ sơ mới nhất trong nhóm.
+  - Dựng lại: dòng tổng hợp cũ và dòng seed dev được đặt `effective_to = hôm qua` (không xóa — `estimate_sessions`
+    tham chiếu). Chạy lại trong ngày cập nhật tại chỗ (ràng buộc UNIQUE theo `effective_from`).
+- Bỏ mức chất lượng (tiết kiệm/trung bình/khá/cao cấp): không có dữ liệu thật. `select_rate` luôn dùng dòng
+  `trung_binh`; engine không ghi giả định/so khớp mức, không còn phương án ngân sách "Hạ mức chất lượng" và yếu tố chi
+  phí theo mức. Trường `quality_tier` của schema giữ nguyên (chỉ thêm, không xóa).
+- Ưu tiên: trong cùng tỉnh (và cùng `'*'`), đơn giá chính thức (Dezon nhập qua CSV/admin, nhãn không bắt đầu bằng
+  "Tổng hợp đơn giá ") đứng trước đơn giá tổng hợp. Fallback `'*'` vẫn mang trạng thái `reference`; câu giả định vẫn
+  bắt đầu "Dùng đơn giá mặc định toàn quốc" (lớp AI nhận diện tiền tố này) và nói rõ chưa đủ dữ liệu đơn giá nhà thầu
+  tại tỉnh (cần ≥ 3 hồ sơ).
+
+## Hội thoại: hỏi chi tiết công trình trước khi khái toán, không tự giả định
+
+- Sau 5 slot cốt lõi (`REQUIRED_SLOTS`), trước bản tóm tắt, trợ lý hỏi thêm các slot chi tiết (`DETAIL_SLOTS`, theo
+  thứ tự): diện tích xây dựng mỗi tầng -> có hầm/lửng (một câu) -> độ sâu hầm (chỉ khi có hầm) -> loại mái. Không áp
+  dụng cho căn hộ hoặc phạm vi Nội thất. `missing_required()` trả slot cốt lõi còn thiếu, đủ cốt lõi thì trả slot chi
+  tiết còn trống và CHƯA hỏi (`slots.asked`); `missing_core()` chỉ slot cốt lõi (tool `calculate_estimate` dùng để tính
+  thử).
+- Khách trả lời "chưa biết"/không liên quan -> slot đã hỏi, không hỏi lại; tóm tắt nêu "Anh/chị chưa có thông tin …,
+  em tạm tính …" (mặc định engine: bằng diện tích đất, không hầm, không lửng, hầm sâu 1,7–2 m, mái BTCT). Móng không
+  hỏi, nêu là quy ước "Móng tính theo thông lệ: …".
+- Đang hỏi diện tích xây dựng mà khách nhắn "80 m2"/"80" -> là diện tích xây dựng (không đổi diện tích đất, trừ khi
+  nói rõ "đất …" hoặc ngang × dài). "Xây kín đất" -> bằng diện tích đất. "Không" trả lời câu hỏi hầm/lửng = không có
+  (không phải ý muốn sửa). "ok" trả lời câu hỏi chi tiết không phải xác nhận tóm tắt.
+- Bỏ mức hoàn thiện khỏi hội thoại: không hỏi, không trích (`parse_message`, LLM extract, tham số tool), không hiển
+  thị trong tóm tắt; phương án ngân sách cũ có `quality_tier` bị bỏ qua khi áp dụng. `Slots.quality_tier` giữ để tương
+  thích schema nhưng không bao giờ được đặt.
+
+## Review sửa lỗi — matching
+
+- **budget_fit theo phạm vi (thay mục budget_fit cũ "`hoan_thien`/`tron_goi` → đơn giá hoàn thiện")**: `xay_tho` →
+  đơn giá thô; `tron_goi` → `finish_price_*` ("Đơn giá hoàn thiện cơ bản" trên hồ sơ = giá trọn gói);
+  **`hoan_thien` và `noi_that` → không có đơn giá riêng** → trung tính 0,5, cờ `scope_no_contractor_price`, chi phí
+  ước "Chưa có dữ liệu", lưu ý "Nhà thầu chưa công bố đơn giá riêng cho phạm vi … trên Dezon — cần yêu cầu báo giá riêng".
+- Nhãn hiển thị cho `finish_price` (thẻ/so sánh/bảng tổng quan, lý do đề xuất, nguồn chi phí ước):
+  "Đơn giá trọn gói (hoàn thiện cơ bản)" / "đơn giá trọn gói (hoàn thiện cơ bản)".
+- **Khớp quận/huyện** (location 1,0) chỉ khi capability ở đúng quận, hoặc dự án ở đúng quận **và** nhà thầu đã đăng ký
+  tỉnh đó (tỉnh hồ sơ/capability). Dự án tại quận của nhà thầu ngoại tỉnh vẫn là "project" 0,6 (< sở tại 0,8).
+- **Đơn giá chỉ có cận trên** (cận dưới mặc định của form bị bỏ): chi phí ước = diện tích × cận trên, giá trị số giữ
+  `[hi, hi]` nhưng hiển thị "tối đa X" (thẻ, ghi chú budget_fit, nguồn ghi "đơn giá … tối đa"). Chấm budget_fit: mức tối
+  đa ≤ ngân sách → như quy tắc cũ (1,0 hoặc 0,8 "thấp hơn nhiều"); mức tối đa > ngân sách → trung tính 0,5, **không**
+  gắn cờ vượt ngân sách (cận dưới chưa rõ), kèm lưu ý "Hồ sơ chỉ công bố mức đơn giá tối đa … cần đối chiếu báo giá".
+
+## Review sửa lỗi — crawl
+
+- Sàn đơn giá/m² theo loại trên hồ sơ nhà thầu (`PRICE_PER_M2_FLOOR_BY_KIND` trong `app/ingestion/parse_vi.py`):
+  xây thô 2,5 tr/m², "hoàn thiện cơ bản" (= trọn gói) 4 tr/m² — thận trọng, dưới mức thấp nhất thực tế trên dezon.vn
+  (xây thô 3,8 tr; trọn gói 6 tr, 02/11/2026). Cận dưới thấp hơn sàn -> bỏ cận dưới như trường hợp mặc định của form
+  (lưu "tối đa X", chuỗi gốc ở `extra.implausible_min_prices`); cận trên cũng dưới sàn -> bỏ cả khoảng ("Chưa có
+  dữ liệu", chuỗi gốc ở `extra.implausible_prices`). Vd An Phú xây thô "0,5–4,2 tr" -> tối đa 4,2 tr; KHP "hoàn thiện
+  cơ bản 0,7–2 tr" -> Chưa có dữ liệu. Không truyền loại (`kind=None`) thì chỉ kiểm tra chung 0,5–40 tr như trước.
+- Quy tắc chéo: đơn giá trọn gói gồm phần thô, nên cận trên trọn gói < cận dưới xây thô -> trọn gói vô lý, bỏ
+  (`parsers.apply_spec_prices`).
+- Tỉnh của công trình suy từ tên (`parsers.province_from_name`): tách tên theo dấu phẩy/`;`/`|`/` - `, xét các đoạn
+  từ CUỐI lên (địa chỉ tiếng Việt ghi tỉnh sau cùng), trong mỗi đoạn lấy lần nhắc tỉnh cuối cùng; bỏ qua địa danh
+  trùng tên tỉnh khi là tên đường/phường/xã ("Điện Biên Phủ"; đứng sau "đường", "xã", "ấp", "phường", "P", "thôn"…).
+  Quận/huyện chỉ nhận khi thuộc đúng tỉnh tìm được. Không thấy tỉnh -> giữ tỉnh dòng meta (khu vực nhà thầu).
+- Snapshot làm sạch lại KHÔNG crawl: `python -m app.ingestion.crawler.runner --reclean-snapshot <file>` tính lại đơn
+  giá từ `extra.spec` và tỉnh/quận công trình nhà thầu từ `extra.meta_line` + tên, giữ `_source`. Lần chạy 02/11/2026
+  đổi: An Phú (xây thô min 0,5 tr -> bỏ), KHP (trọn gói 0,7–2 tr -> bỏ), 2 công trình về Tây Ninh (TTPCons "Nhà phố
+  số 30, Điện Biên Phủ…", Smartcons "Biệt thự ấp Lập Khánh, Khánh Hòa…"). `_source.raw_hash` không đổi nên DB đã nạp
+  snapshot cũ cần cơ chế cập nhật của #4 (upsert theo parser version / backfill) rồi `rebuild_market_rates`.
+
+## Review sửa lỗi — dialog
+
+- Bảo vệ hồ sơ (`orchestrator._protect_profile`) áp dụng ngay khi đủ 5 slot cốt lõi (`missing_core`), kể cả lúc đang
+  hỏi chi tiết: câu hỏi / câu giả định ("nếu…") / "tìm nhà thầu tại X" chỉ nhận ngân sách, thời gian; không đổi số tầng,
+  khu vực… Lượt được bảo vệ không đánh dấu câu hỏi chi tiết đang chờ là "đã hỏi" -> lượt sau hỏi lại. Ngoại lệ: câu
+  trả lời dạng hỏi cho đúng mục đang hỏi ("mái tôn được không?") vẫn được nhận.
+- Slot chi tiết chỉ vào `asked` (dùng mặc định, nêu rõ trong tóm tắt) khi khách trả lời được, nói "chưa biết"/"không"/
+  "tùy em"/"ok"… Câu trả lời không hiểu được -> hỏi lại, không âm thầm dùng mặc định.
+- "Có" chung chung cho câu hỏi "có tầng hầm hoặc tầng lửng không" -> hỏi rõ "Dạ, nhà có tầng hầm, tầng lửng hay cả
+  hai ạ?" (bỏ nút "Không hầm, không lửng"); áp dụng cả trong luồng sửa.
+- "Không" trả lời câu hỏi chi tiết (vd mái) là "không có ý kiến" -> dùng mặc định và hiện bản tóm tắt, không phải ý
+  muốn sửa.
+- Câu trả lời ngắn cho câu hỏi mái: "tôn" -> mái tôn; "ngói kèo thép", "mái Thái", "mái Nhật" -> ngói kèo thép;
+  "ngói" / "ngói đổ bê tông" -> ngói đổ BTCT (như `parse_structure`); "bê tông", "BTCT", "mái bằng" -> BTCT.
+- Sửa diện tích đất mà không nói lại diện tích xây dựng: diện tích xây dựng cũ = đất cũ ("xây kín đất") -> theo đất mới;
+  lớn hơn đất mới -> bỏ, hỏi lại. Tóm tắt (không phải căn hộ) cảnh báo khi diện tích xây dựng > diện tích đất.
+- Đang hỏi diện tích xây dựng, tin nhắn không có từ chỉ đất / ngang × dài -> bỏ diện tích đất do LLM trích.
+- "đất 100m2, xây 80m2" / "xây 80m2 trên đất 100m2" -> số m² ngay sau "xây" là diện tích xây dựng (chỉ khi có từ chỉ
+  đất, có ngang × dài, hoặc đang hỏi diện tích xây dựng; "muốn xây 100m2" đứng một mình vẫn là diện tích đất).
+- Phiên đã xác nhận TRƯỚC khi có câu hỏi chi tiết (confirmed=True nhưng còn chi tiết chưa hỏi): lượt kế tiếp bỏ xác
+  nhận và bỏ khái toán/kết quả tìm nhà thầu cũ -> hỏi chi tiết -> tóm tắt -> khách xác nhận lại rồi mới tính.
+
+## Review sửa lỗi — frontend
+
+- Nhãn giao diện cho `finish_price` (thẻ nhà thầu, hồ sơ, bảng so sánh mẫu): "Đơn giá trọn gói (hoàn thiện cơ bản)"
+  (`utils/labels.FINISH_PRICE_LABEL_VI`). Thẻ nhà thầu nhận `workScope` từ `MatchResult.criteria.work_scope`; phạm vi
+  Hoàn thiện / Nội thất -> ô "Chi phí ước tính theo đơn giá nhà thầu" luôn "Chưa có dữ liệu" (kể cả payload cũ có số).
+- Miễn trừ khi không có đơn giá (frontend `fallbackDisclaimer`, fixture mock) dùng đúng câu no-rate của backend
+  (`utils/labels.NO_RATE_DISCLAIMER`): "Đây là khái toán sơ bộ: Dezon chưa có đủ đơn giá do nhà thầu công bố cho phạm
+  vi này nên em chỉ tính diện tích sàn quy đổi, chưa tính được chi phí. …". Backend `explain.build_disclaimer` cần trả
+  nguyên văn câu này khi không có đơn giá.
+- Chế độ mock bám backend: chỉ có đơn giá mẫu cho nhà phố tại TP. Hồ Chí Minh, phạm vi Xây thô (4,2–4,7 tr/m², 34 nhà
+  thầu) và Trọn gói (6,8–9 tr/m², 29 nhà thầu) — đúng số backend trả về ngày 02/11/2026 (P25/P75 đơn giá nhà thầu
+  công bố trên Dezon); loại công trình / tỉnh khác -> "Chưa có dữ liệu" kèm cảnh báo như `calculate_estimate`.
+  Không hỏi chi tiết cho căn hộ / Nội thất; không nêu quy ước móng cho Hoàn thiện / Nội thất / căn hộ; Hoàn thiện bỏ
+  móng (450 m²), Nội thất / căn hộ chỉ tính sàn (400 m²). Giả định trong tóm tắt chép nguyên văn
+  `dialog.default_assumptions` (hầm chưa rõ độ sâu -> 1,7–2 m). Phương án ngân sách mẫu là đầu ra thật của
+  `suggest_adjustments` (Giảm 1 tầng, Đổi sang mái tôn, Kết hợp) — với 1,5 tỷ không phương án nào vừa ngân sách.
+
+## Review sửa lỗi — rates
+
+- Nhận diện nguồn đơn giá ở engine: `MARKET_LABEL_PREFIX`, `SEED_DEV_LABEL_PREFIX`, `is_market_label` chuyển về
+  `app/engines/estimate/market.py` (thuần; `services/market_rates` re-export).
+- Câu giả định khi dùng dòng toàn quốc nêu đúng nguồn của dòng đó (giữ tiền tố "Dùng đơn giá mặc định toàn quốc"):
+  dòng tổng hợp -> giữ câu "tổng hợp đơn giá do các nhà thầu trên Dezon công bố … cần ít nhất 3 hồ sơ"; dòng khác
+  (CSV/admin) -> "Dùng đơn giá mặc định toàn quốc (nguồn: <nhãn nguồn>) vì chưa có đơn giá riêng tại <tỉnh>".
+- Không có đơn giá (vd Hoàn thiện, Nội thất) -> ghi chú miễn trừ `explain.NO_RATE_DISCLAIMER`, không nói "dựa trên
+  đơn giá tham chiếu": "Đây là khái toán sơ bộ: Dezon chưa có đủ đơn giá do nhà thầu công bố cho phạm vi này nên em chỉ
+  tính diện tích sàn quy đổi, chưa tính được chi phí. Không phải báo giá thi công. Vui lòng yêu cầu báo giá từ nhà
+  thầu để có con số chính xác." (`build_disclaimer(source, has_rate=False)`; frontend dùng đúng chuỗi này).
+- `select_rate` so khớp tỉnh qua `parse_vi.normalize_province` trước (cùng bộ chuẩn hóa gắn tỉnh cho dòng tổng hợp):
+  quận/huyện ("Thủ Đức", "Quận 7", "Cầu Giấy") khớp dòng của tỉnh/thành, không rơi về toàn quốc.
+- Đơn giá mẫu seed dev (nhãn "Đơn giá tham khảo (seed dev …") không bao giờ được `select_rate` dùng; chỉ test bật
+  `ALLOW_SEED_DEV_RATES=1` (conftest). Migration dữ liệu `0002_retire_seed_dev_rates` hết hiệu lực các dòng này trên DB
+  cũ, đặt lại `building_type = NULL` cho công trình fixture "France Indochine 22 Hà Nội" (dezon.vn không ghi loại) và
+  gỡ ảnh/ảnh đại diện placeholder (placehold.co).
+- `seed.run()` không nạp fixture (nhà thầu/công trình mẫu + bảng giá tự đặt) nữa; `run(db, fixtures=True)` (conftest)
+  hoặc `SEED_FIXTURES=1` (máy dev không nạp snapshot) mới nạp (`seed.seed_fixtures`).
+- Đơn giá chính thức (CSV/admin) luôn đứng trước đơn giá tổng hợp, kể cả cùng ngày: admin tạo/sửa đơn giá trùng khóa
+  UNIQUE với dòng tổng hợp -> dòng tổng hợp nhường khóa (`market_rates.displace_market_rate`: chưa có khái toán dùng
+  -> xóa; đã dùng -> giữ nguyên giá/nguồn, lùi ngày hiệu lực về ngày trống gần nhất trước đó và hết hiệu lực ngay ngày
+  đó). Dựng lại trong ngày gặp dòng chính thức -> bỏ qua (`skipped_official`).
+- Không bao giờ sửa giá/nhãn của dòng đơn giá đã có khái toán tham chiếu: dựng lại trong ngày mà số liệu đổi -> giữ
+  nguyên dòng (`kept_in_use`), số mới áp dụng từ lần dựng lại ngày sau. Dòng chưa dùng vẫn cập nhật tại chỗ.
+- Duyệt dòng tổng hợp được giữ khi giá không đổi: dựng lại trong ngày giữ `verified`/`verified_by`/`verified_at`;
+  dòng ngày mới cùng giá với dòng trước đã duyệt thì kế thừa duyệt. Giá đổi -> về `on_dezon`, xóa thông tin duyệt.
+- Phát hiện thay đổi khi nạp trang: `data_sources.raw_hash` = "<hash trang>:<hash bản ghi đã parse>". Trang không đổi
+  nhưng bộ parse/làm sạch cho kết quả khác (hoặc khóa kiểu cũ chỉ có hash trang) -> vẫn ghi lại thực thể (đây cũng là
+  backfill làm sạch đơn giá cho DB đã nạp snapshot/crawl cũ); xác minh của nguồn chỉ bị bỏ khi thực thể thật sự đổi.
+  `fetched_at` khi nội dung không đổi không bị lùi về trước.
+- Snapshot không ghi đè dữ liệu crawl mới hơn: bản ghi có nguồn cùng URL đã nạp từ dữ liệu thật (có raw_hash) với
+  `fetched_at` SAU `_source.fetched_at` của snapshot -> bỏ qua (`newer_in_db`). Cùng thời điểm (DB nạp từ snapshot
+  cũ) -> vẫn nạp để áp dụng bản làm sạch mới. `seed_hook` chỉ dựng lại đơn giá tổng hợp khi snapshot tạo/cập nhật dữ
+  liệu hoặc chưa có dòng tổng hợp còn hiệu lực.
+- Đơn giá chính thức (CSV/admin) cùng khóa + cùng ngày với dòng tổng hợp từ hồ sơ nhà thầu: dòng tổng hợp nhường khóa
+  (`market_rates.displace_market_rate`). Chưa có khái toán dùng -> xóa. Đã có khái toán dùng -> KHÔNG đổi giá, nguồn,
+  `effective_from`/`effective_to`; chỉ chuyển `quality_tier` sang một mức không dùng (`RETIRED_TIERS`: tiet_kiem/kha/
+  cao_cap) để nhả ràng buộc UNIQUE — hệ thống không phân mức, select_rate/rebuild chỉ đọc 'trung_binh' nên dòng này
+  không bao giờ được chọn lại. (Cách sạch hơn cần migration đổi UNIQUE; chưa làm.) Nhập CSV: dòng tổng hợp cùng khóa
+  không bao giờ bị ghi giá đè (kể cả `force=True`) — nhường khóa rồi THÊM dòng chính thức (`replaced_market` trong
+  báo cáo). Dòng đơn giá đã có khái toán dùng không bị CSV đổi giá (kể cả `force=True`), báo lỗi dòng. `_expire_old`
+  không đặt `effective_to` trước `effective_from` cho dòng đã có khái toán dùng (dòng hôm nay -> hết hiệu lực hôm nay).
+
+## Chạy với LLM thật — trùng lặp văn bản, diện tích tầng lửng
+
+- Lượt thu thập/tóm tắt: câu hỏi và bản tóm tắt do code dựng là bản DUY NHẤT. `orchestrator._drop_questions` bỏ trong
+  văn bản LLM: câu hỏi (kể cả ghi chú trong ngoặc đi sau câu hỏi, ghi chú trong ngoặc / câu "Ví dụ ..." đứng riêng),
+  câu hoặc ghi chú trong ngoặc chép lại câu hỏi/tóm tắt của code (nguyên văn hoặc ≥ 80% từ trùng, câu ≥ 6 từ); lượt
+  tóm tắt bỏ thêm câu có "tóm tắt"/"xác nhận" và dòng liệt kê ("- ...", "Loại công trình: ..."). Khách hỏi (intent
+  question) thì giữ câu trả lời, chỉ bỏ phần chép lại. Prompt/khối trạng thái cũng dặn LLM không tự tóm tắt.
+- Tầng lửng: thêm slot `mezzanine_area_m2` (mặc định None) vào DETAIL_SLOTS, chỉ hỏi khi `has_mezzanine = True` (như
+  độ sâu hầm chỉ hỏi khi có hầm): "Tầng lửng rộng khoảng bao nhiêu m² ạ?" kèm "Khoảng 1/2 sàn (<nửa> m²)", "Bằng cả
+  sàn (<sàn> m²)", "Chưa biết" (sàn = diện tích xây dựng mỗi tầng, chưa có thì diện tích đất — như engine). Khách
+  "chưa biết" -> giữ mặc định của engine (lửng = diện tích xây dựng mỗi tầng) và nêu rõ trong giả định của bản tóm
+  tắt. Khách đổi sang không có lửng -> bỏ diện tích lửng và lần sau có lửng thì hỏi lại; `to_estimate_input` chỉ
+  truyền diện tích lửng khi có lửng; `calculate_estimate` với `has_mezzanine=false` bỏ diện tích lửng của slot.
+- "Tầng lửng 40 m2"/"lửng 50m2"/"diện tích lửng 35" là diện tích lửng, không phải diện tích đất/xây dựng; đang hỏi
+  diện tích lửng thì số trần ("40", "40 m2") là diện tích lửng và giá trị đất/xây dựng LLM đọc ra bị bỏ qua.
+
+## Thẻ câu hỏi từng bước, câu hỏi tùy chọn (phong cách, ngân sách, mức đầu tư)
+
+- Lượt hỏi slot trả thẻ `question_step` thay `quick_replies` (kể cả tin chào). Văn bản không lặp câu hỏi: câu hỏi
+  văn xuôi (`NextQuestion.text`) chỉ dùng cho khối trạng thái gửi LLM (`he_thong_se_tu_them`) và để bỏ câu LLM chép
+  lại; LLM không viết gì -> lời dẫn cố định `STEP_ACK` (Quay lại: `BACK_ACK`, Cung cấp thêm: `MORE_ACK`, Sửa:
+  `EDIT_ACK`). Không dùng câu "em đã ghi nhận" khuôn mẫu (C-F8).
+- Hành vi chọn: backend coi MỌI tin nhắn là câu trả lời ngay (bấm dòng/chip gửi `value` ngay, "Tiếp" gửi lựa chọn
+  đang chọn hoặc chữ đã gõ) — frontend chọn một cách nhất quán; backend không cần trạng thái "đang chọn".
+- `step`/`total` tính từ danh sách câu hỏi dự kiến (`dialog.planned_keys`) cho slot hiện tại, không lưu lịch sử. "Quay
+  lại câu trước" = câu đứng trước câu đang hỏi trong danh sách (`state.current_question`), giữ nguyên giá trị; đang ở
+  bản tóm tắt -> câu cuối (mức đầu tư). Chỉ xử lý khi chưa xác nhận.
+- Diện tích đất + số tầng vẫn là MỘT thẻ khi cả hai còn thiếu (chip = kích thước đất, dòng = số tầng) để giữ tối đa
+  2 thông tin/lượt như trước; trong danh sách bước là hai câu (bước nhảy 2 khi khách trả lời cả hai). Căn hộ: hỏi diện
+  tích căn hộ (50/80/120/200/300 m²) và số tầng của căn hộ (1 tầng / 2 tầng duplex) riêng.
+- Câu hỏi tùy chọn `OPTIONAL_SLOTS = [design_style, budget_vnd, investment_level]` KHÔNG thuộc `missing_required`
+  (API `missing_required` giữ nghĩa "bắt buộc để khái toán"); `stage` = "collect" khi còn câu tùy chọn chưa hỏi trước
+  lần xác nhận đầu. Đánh dấu "đã hỏi" khi khách trả lời / bỏ qua / nói "chưa biết"; khách HỎI (intent question) hoặc
+  muốn sửa mục khác khi thẻ tùy chọn đang hiện -> chưa tính đã hỏi, thẻ hiện lại.
+- "ok"/"đúng rồi" khi thẻ tùy chọn đang hiện = bỏ qua câu đó, KHÔNG phải xác nhận tính khái toán (bản tóm tắt chưa
+  hiển thị). Riêng đúng tin nhắn của nút "Tính ngay" (`Đúng rồi, tính khái toán giúp tôi`) vẫn là xác nhận: các câu
+  tùy chọn còn lại bỏ qua, ngân sách chưa hỏi thì hỏi sau khái toán bằng nút chọn nhanh như cũ.
+- Sau lần xác nhận đầu (`state.optional_done`, phiên cũ đã xác nhận cũng tính), sửa thông tin đi thẳng tới bản xác
+  nhận — không hỏi lại câu tùy chọn. "Cung cấp thêm thông tin" hỏi lại câu tùy chọn đã bỏ qua VÀ câu chi tiết khách trả
+  lời "Chưa biết" (cả hai đều giúp báo giá sát hơn); không còn câu nào -> `more_label/more_value = null`.
+- Ngân sách: hỏi trước bản xác nhận (5 mức <2, 2–4, 4–6, 6–10, >10 tỷ; lưu cận trên như quy ước cũ của khoảng giá,
+  "dưới 2 tỷ" -> 2 tỷ, "trên 10 tỷ" -> 10 tỷ). Sau khái toán chỉ hỏi khi CHƯA từng hỏi (`budget_vnd` không có trong
+  `asked`).
+- Phong cách / mức đầu tư chỉ ghi nhận (quyết định của chủ sản phẩm): không vào `EstimateInput`, không đổi đơn giá,
+  không tái lập mức hoàn thiện. Mã chuẩn hoặc chữ khách tự nhập (≤ 60 ký tự) khi đang hỏi đúng câu đó; ngoài thẻ chỉ
+  nhận khi có ngữ cảnh rõ ("phong cách hiện đại", "mức đầu tư phổ thông") — "đầu tư khá nhiều", "nhà hiện đại giá bao
+  nhiêu" không được hiểu thành giá trị. Có mức đầu tư -> `estimate_service.create_estimate(notes=...)` thêm vào giả
+  định "Mức đầu tư <x> chưa được tính vào khái toán vì Dezon chưa có đơn giá theo mức đầu tư." (cũng hiện trong giả
+  định của bản xác nhận và văn bản mock/dự phòng). Mức đầu tư nằm trong hash khái toán (chỉ khi có giá trị — phiên cũ
+  giữ nguyên hash) để đổi mức đầu tư sau khái toán dựng lại bảng kèm ghi chú; con số không đổi. Cả hai thuộc
+  `NON_ESTIMATE_SLOTS` (đổi không bắt xác nhận lại).
+- Yêu cầu báo giá: ghi chú gửi nhà thầu nối thêm "Phong cách thiết kế: ...", "Mức đầu tư mong muốn: ..." (tool trong
+  hội thoại dùng slot hiện tại; REST lấy theo `chat_session_id` tùy chọn hoặc phiên chat của `estimate_session_id`).
+  Không thêm cột DB (ghi chú là kênh đã có tới nhà thầu).
+- Gợi ý ngân sách trong thẻ: "Có ngân sách giúp em tư vấn sát hơn và tự gợi ý phân khúc phù hợp ạ." (mockup ghi "báo
+  giá sát hơn" — đổi thành "tư vấn" vì khái toán không phải báo giá).
+
+## Phần hỏi rút còn ĐÚNG 5 câu (quyết định của chủ sản phẩm, thay quy tắc "hỏi mọi chi tiết")
+
+- Trước bản xác nhận chỉ hỏi 5 câu cốt lõi, mỗi câu một thẻ `question_step`, bước luôn "i/5" theo vị trí cố định:
+  1 Loại công trình · 2 Khu vực · 3 Diện tích đất (căn hộ: diện tích căn hộ) · 4 Số tầng (căn hộ: số tầng của căn
+  hộ, 1 / 2 "duplex") · 5 Phạm vi thi công. Diện tích đất và số tầng là HAI câu riêng (bỏ thẻ gộp cũ). Câu đã có thông
+  tin thì bỏ qua, không đánh số lại. `missing_required` = 5 slot cốt lõi (chi tiết không còn chặn bản tóm tắt).
+- Không hỏi trước bản xác nhận: diện tích xây dựng, hầm/lửng, độ sâu hầm, diện tích lửng, mái, phong cách, mức đầu
+  tư, ngân sách. Chi tiết dùng mặc định CÓ CÔNG BỐ của engine (xây kín đất, không hầm, không lửng, mái BTCT, móng theo
+  thông lệ; có hầm chưa rõ độ sâu -> 1,7–2 m; có lửng chưa rõ diện tích -> bằng diện tích sàn). Bản xác nhận gom các
+  mặc định thành một dòng "Tạm tính: ... — anh/chị bấm Sửa hoặc Cung cấp thêm thông tin để thay đổi." và luôn có 4 dòng
+  chi tiết (giá trị hoặc "(tạm tính)") kèm nút Sửa, để khách đổi được từng mặc định.
+- "Cung cấp thêm thông tin" (`state.more_mode`): hỏi lần lượt diện tích xây dựng → hầm/lửng → mái → độ sâu hầm (nếu
+  có hầm) → diện tích lửng (nếu có lửng), chỉ mục chưa có giá trị; bước "i/N" của nhóm này — N chỉ đếm các mục còn
+  thiếu lúc bấm nút (`state.more_keys`, `dialog.more_plan`; N tăng khi khách trả lời có hầm/lửng), như mock frontend. Hết nhóm -> bản xác nhận, tắt `more_mode`. Nút hiện khi còn mục chi tiết chưa có giá trị (kể cả "Chưa
+  biết"); căn hộ / phạm vi nội thất không có nhóm này.
+- "Sửa" một dòng: hỏi lại đúng mục đó (mục chi tiết: bước 1/1, không có "Quay lại câu trước") rồi quay lại bản xác nhận (không chạy tiếp nhóm câu hỏi thêm — vd sửa hầm thành
+  "có" thì độ sâu dùng mặc định có nêu rõ; muốn khai độ sâu thì bấm Sửa / Cung cấp thêm).
+- "ok"/"được" khi đang ở thẻ câu hỏi chi tiết không phải xác nhận tính khái toán (chỉ đúng tin nhắn nút "Tính ngay").
+- Ngân sách chỉ hỏi SAU khái toán (`budget_question`, như trước). Phong cách / mức đầu tư không hỏi; slot, trích xuất,
+  dòng trên bản xác nhận, nút Sửa và ghi chú gửi nhà thầu giữ nguyên khi khách tự nói. `state.optional_done` giữ trong
+  schema cho phiên cũ nhưng không còn dùng.
+- Phiên cũ đã xác nhận khi chưa có chi tiết: giữ xác nhận (chi tiết không còn bắt buộc); khái toán tính lại nếu hash
+  slot khác.

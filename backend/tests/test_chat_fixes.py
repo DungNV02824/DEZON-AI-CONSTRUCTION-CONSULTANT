@@ -12,9 +12,13 @@ from app.db.models import ChatSession, QuoteRequest
 from app.formatting import NO_DATA
 from app.schemas.slots import Slots
 from app.services import chat_service
+from tests.wizard import question
 
-PROFILE = "nhà phố 5x20 Thủ Đức 1 trệt 3 lầu xây thô"
-CONFIRM = "Đúng rồi"
+# Câu đầy đủ kèm chi tiết (diện tích xây dựng, hầm/lửng, mái) -> đi thẳng tới tóm tắt.
+DETAILS = ", xây kín đất, không hầm, không lửng, mái bằng"
+PROFILE = "nhà phố 5x20 Thủ Đức 1 trệt 3 lầu xây thô" + DETAILS
+# Nút "Tính ngay" (confirm_value) — xác nhận cả khi thẻ câu hỏi tùy chọn đang hiển thị (bỏ qua các câu tùy chọn).
+CONFIRM = dialog.CONFIRM_VALUE
 
 
 def _new(db) -> uuid.UUID:
@@ -47,22 +51,24 @@ def _matched(db, budget: str | None = None):
 # =============================================================================================
 def test_wf1_parse_remaining_floors_wins_over_relative_change():
     assert parse_message("Tôi chọn phương án: Giảm 1 tầng (còn 3 tầng)")["floors"] == 3
-    assert parse_message("Kết hợp: Giảm 1 tầng (còn 3 tầng) + hạ mức chất lượng xuống tiết kiệm")["floors"] == 3
+    assert parse_message("Kết hợp: Giảm 1 tầng (còn 3 tầng) + bỏ tầng hầm")["floors"] == 3
     assert "floors" not in parse_message("bớt 1 tầng giúp tôi")
     assert parse_message("1 trệt 3 lầu")["floors"] == 4
 
 
 def test_wf1_chosen_option_matches_label_exactly_before_partial():
     opts = [{"code": "reduce_floor", "label_vi": "Giảm 1 tầng (còn 3 tầng)", "changes": {"floors": 3}},
-            {"code": "combined", "label_vi": "Kết hợp: Giảm 1 tầng (còn 3 tầng) + hạ mức chất lượng xuống tiết kiệm",
-             "changes": {"floors": 3, "quality_tier": "tiet_kiem"}}]
+            {"code": "combined", "label_vi": "Kết hợp: Giảm 1 tầng (còn 3 tầng) + bỏ tầng hầm",
+             "changes": {"floors": 3, "basement": False, "basement_depth_m": None, "quality_tier": "tiet_kiem"}}]
     pick = orchestrator.chosen_budget_option
     assert pick("Tôi chọn phương án: Giảm 1 tầng (còn 3 tầng)", opts)["code"] == "reduce_floor"
     assert pick(f"Tôi chọn phương án: {opts[1]['label_vi']}", opts)["code"] == "combined"
     assert pick("tôi muốn xây 3 tầng", opts) is None
-    upd = orchestrator.apply_budget_option(Slots(floors=4, confirmed=True), opts[1])
-    assert upd.slots.floors == 3 and str(upd.slots.quality_tier) == "tiet_kiem" and upd.slots.confirmed
-    assert sorted(upd.changed) == ["floors", "quality_tier"]
+    upd = orchestrator.apply_budget_option(Slots(floors=4, basement=True, basement_depth_m=1.5, confirmed=True),
+                                           opts[1])
+    assert upd.slots.floors == 3 and upd.slots.basement is False and upd.slots.confirmed
+    assert upd.slots.quality_tier is None  # không phân mức hoàn thiện: bỏ qua nếu phương án cũ còn trường này
+    assert sorted(upd.changed) == ["basement", "basement_depth_m", "floors"]
 
 
 def test_cf9_edit_field_replies_are_understood():
@@ -73,6 +79,7 @@ def test_cf9_edit_field_replies_are_understood():
         assert detect_intent(qr.value) == expected
         if expected == "edit":
             assert dialog.edit_field_question(qr.value) is not None, qr.value
+    assert "Mức hoàn thiện" not in [qr.label for qr in dialog.EDIT_FIELD_REPLIES]
     q = dialog.edit_field_question("Tôi muốn sửa số tầng")
     assert q.slots == ["floors"] and q.quick_replies.options == dialog.FLOORS_REPLIES
     assert dialog.edit_field_question("Tôi muốn sửa lại thông tin") is None
@@ -177,7 +184,8 @@ def test_cf8_slot_question_single_da(db):
 @pytest.mark.db
 def test_cf11_no_contractor_suggests_next_steps(db):
     sid = _new(db)
-    for msg in ("Nhà phố", "Đà Nẵng", "Đất 5×20 m", "1 trệt 2 lầu", "Hoàn thiện"):
+    for msg in ("Nhà phố", "Đà Nẵng", "Đất 5×20 m", "1 trệt 2 lầu", "Hoàn thiện", "Tôi chưa biết diện tích xây dựng",
+                "Không hầm, không lửng", "Tôi chưa biết loại mái"):
         _say(db, sid, msg)
     r = _say(db, sid, CONFIRM)
     assert "contractor_list" not in _types(r)
@@ -212,7 +220,8 @@ def test_cf9_edit_specific_field_asks_that_field(db):
     sid, _ = _matched(db)
     _say(db, sid, "Tôi muốn sửa lại thông tin")
     r = _say(db, sid, "Tôi muốn sửa số tầng")
-    assert _types(r) == ["quick_replies"] and "mấy tầng" in r.text
+    assert _types(r) == ["question_step"] and question(r) == "Số tầng dự kiến?"
+    assert r.text == orchestrator.EDIT_ACK
     r = _say(db, sid, "1 trệt 2 lầu")
     assert r.slots["floors"] == 3 and "summary_confirm" in _types(r)
 

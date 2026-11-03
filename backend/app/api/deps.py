@@ -61,12 +61,13 @@ _FIELD_VI = {
     "kind": "loại dữ liệu", "code": "mã hệ số", "label_vi": "nhãn", "group_name": "nhóm hệ số",
     "base": "cơ sở tính", "approved": "trạng thái duyệt", "is_active": "trạng thái kích hoạt",
     "verified_by": "người xác minh", "offset": "vị trí bắt đầu", "rule": "loại vi phạm",
-    "q": "từ khóa", "basement_depth_m": "độ sâu tầng hầm",
+    "q": "từ khóa", "basement_depth_m": "độ sâu tầng hầm", "basement": "tầng hầm", "has_mezzanine": "tầng lửng",
     "building_area_m2": "diện tích xây dựng", "mezzanine_area_m2": "diện tích lửng",
     "basement_area_m2": "diện tích hầm", "roof_area_m2": "diện tích mái", "rooftop_area_m2": "diện tích sân thượng",
     "yard_area_m2": "diện tích sân", "roof_type": "loại mái", "foundation_type": "loại móng",
     "rooftop_terrace": "sân thượng", "converted_area_m2": "diện tích quy đổi",
     "content": "nội dung tin nhắn", "user_id": "mã người dùng",
+    "contractor_name": "tên nhà thầu", "request_id": "mã yêu cầu liên hệ",
 }
 
 

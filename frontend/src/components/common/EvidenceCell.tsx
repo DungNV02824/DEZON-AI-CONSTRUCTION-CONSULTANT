@@ -6,7 +6,7 @@ import { StatusBadge } from './StatusBadge';
 
 export interface EvidenceCellProps {
   ev: EvidenceValue | null | undefined;
-  /** Kiểu badge: "full" (nhãn chữ), "dot" (chấm màu), "none" (ẩn badge). */
+  /** Kiểu badge: "full" (nhãn chữ), "dot" (chấm màu), "none" (ẩn badge — mặc định: chủ sản phẩm bỏ nhãn trạng thái). */
   badge?: 'full' | 'dot' | 'none';
   /** Nhấn mạnh giá trị (vd chi phí sơ bộ). */
   emphasize?: boolean;
@@ -21,7 +21,7 @@ export interface EvidenceCellProps {
  * Hiển thị một EvidenceValue: LUÔN dùng `display` từ backend, không định dạng lại `value`.
  * Thiếu dữ liệu (status unavailable / null / display rỗng) -> chữ xám đúng "Chưa có dữ liệu".
  */
-export function EvidenceCell({ ev, badge = 'full', emphasize, showSourceLine, title, className }: EvidenceCellProps) {
+export function EvidenceCell({ ev, badge = 'none', emphasize, showSourceLine, title, className }: EvidenceCellProps) {
   const status = normalizeStatus(ev?.status);
   const display = ev && typeof ev.display === 'string' && ev.display.trim() !== '' ? ev.display : NO_DATA;
   const unavailable = status === 'unavailable' || display === NO_DATA;

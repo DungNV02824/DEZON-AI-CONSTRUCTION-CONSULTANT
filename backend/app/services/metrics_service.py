@@ -252,7 +252,8 @@ def guardrail_violation_rate(db: Session) -> Metric:
 def data_coverage(db: Session) -> list[Metric]:
     contractors = db.scalars(select(Contractor).where(Contractor.is_active.is_(True))).all()
     n = len(contractors)
-    with_price = sum(1 for c in contractors if c.rough_price_min is not None or c.finish_price_min is not None)
+    with_price = sum(1 for c in contractors if any(v is not None for v in (
+        c.rough_price_min, c.rough_price_max, c.finish_price_min, c.finish_price_max)))
     with_exp = sum(1 for c in contractors if c.years_experience is not None)
     status = dict(db.execute(select(DataSource.id, DataSource.status)).all())
     filled = verified = 0

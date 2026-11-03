@@ -65,7 +65,8 @@ def test_rates_list_and_filter(client):
 
 
 def test_rate_crud_and_approve(client, db):
-    r = client.post("/api/admin/rates", headers=H, json=_rate_body())
+    # Khái toán không phân mức chất lượng: chỉ dòng 'trung_binh' được dùng (mức yêu cầu bị bỏ qua).
+    r = client.post("/api/admin/rates", headers=H, json=_rate_body(quality_tier="trung_binh"))
     assert r.status_code == 201, r.text
     rate = r.json()
     assert rate["approved"] is False and rate["source_status"] == "reference"

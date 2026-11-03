@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { ContractorListBlock } from '../../api/types';
 import { useWidget } from '../../state/context';
-import { StatusLegend } from '../common/StatusLegend';
 import { ContractorCardView } from './ContractorCard';
 
 const MAX_COMPARE = 5;
@@ -18,13 +17,6 @@ export function ContractorList({ block }: { block: ContractorListBlock }) {
 
   const nameOf = (id: number) => d.results.find((r) => r.contractor.id === id)?.contractor.name ?? '';
   const allIds = d.results.map((r) => r.contractor.id).slice(0, MAX_COMPARE);
-  // Lý do có chấm trạng thái nguồn -> hiện chú giải màu (đọc được trên mobile, không cần hover).
-  const hasDots = d.results.some((r) =>
-    r.reasons.some((x) => {
-      const st = r.contractor.evidence?.[x.evidence]?.status;
-      return !!st && st !== 'unavailable';
-    }),
-  );
 
   if (d.results.length === 0) {
     return (
@@ -47,19 +39,13 @@ export function ContractorList({ block }: { block: ContractorListBlock }) {
           Trong {d.total_candidates} nhà thầu đạt điều kiện lọc. Điểm số chỉ để tham khảo, lý do đề xuất kèm nguồn là căn cứ chính.
         </p>
         {d.relaxed_to_neighbors && (
-          <p className="dz-note dz-note--info">Do ít nhà thầu trong khu vực, em đã mở rộng tìm kiếm sang tỉnh lân cận.</p>
+          <p className="dz-note dz-note--info">Do ít nhà thầu trong khu vực, kết quả đã mở rộng tìm kiếm sang tỉnh lân cận.</p>
         )}
         {(d.notes ?? []).map((n, i) => (
           <p key={i} className="dz-note dz-note--info">
             {n}
           </p>
         ))}
-        {hasDots && (
-          <div className="dz-legend-box">
-            <p className="dz-muted dz-small">Chấm màu cạnh mỗi lý do cho biết mức xác minh của nguồn (bấm chấm để xem nguồn):</p>
-            <StatusLegend />
-          </div>
-        )}
         {allIds.length >= 2 && (
           <button type="button" className="dz-linkbtn" onClick={() => compare(allIds, estimateId)}>
             So sánh {allIds.length} nhà thầu trong bảng
@@ -71,6 +57,7 @@ export function ContractorList({ block }: { block: ContractorListBlock }) {
           <ContractorCardView
             key={item.contractor.id}
             item={item}
+            workScope={d.criteria?.work_scope ?? null}
             selected={selected.includes(item.contractor.id)}
             canSelectMore={selected.length < MAX_COMPARE}
             onToggleCompare={toggle}

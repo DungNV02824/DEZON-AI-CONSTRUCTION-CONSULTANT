@@ -3,21 +3,18 @@ from app.engines.estimate import apply_changes, calculate_estimate, suggest_adju
 from app.schemas.estimate import EstimateInput
 from tests.test_estimate_engine import TODAY, make_input, make_rate, make_rules
 
-# Đơn giá test theo (work_scope, quality_tier) — VND/m²
+# Đơn giá test theo work_scope (không phân mức chất lượng) — VND/m²
 PRICES = {
-    ("xay_tho", "tiet_kiem"): (3_200_000, 3_800_000),
-    ("xay_tho", "trung_binh"): (3_550_000, 4_200_000),
-    ("xay_tho", "kha"): (4_100_000, 4_850_000),
-    ("tron_goi", "trung_binh"): (5_750_000, 7_150_000),
-    ("tron_goi", "tiet_kiem"): (5_200_000, 6_450_000),
+    "xay_tho": (3_550_000, 4_200_000),
+    "tron_goi": (5_750_000, 7_150_000),
 }
 
 
 def lookup(inp: EstimateInput):
-    p = PRICES.get((str(inp.work_scope), str(inp.quality_tier)))
+    p = PRICES.get(str(inp.work_scope))
     if p is None:
         return None
-    return make_rate(*p, work_scope=str(inp.work_scope), quality_tier=str(inp.quality_tier))
+    return make_rate(*p, work_scope=str(inp.work_scope))
 
 
 def run(inp: EstimateInput, target: int, rules=None):
@@ -49,7 +46,7 @@ def test_typical_case_has_at_least_two_options_each_computed_by_engine():
     mins = [o.cost_min for o in options if o.code != "combined"]
     assert mins == sorted(mins)
     codes = by_code(options)
-    assert {"reduce_floor", "lower_quality", "change_roof"} <= set(codes)
+    assert {"reduce_floor", "change_roof"} <= set(codes)
 
 
 def test_reduce_floor_recomputes_default_foundation():
@@ -82,13 +79,12 @@ def test_combined_option_when_no_single_option_fits():
     assert "hai phương án trên" not in combo.description
 
 
-def test_quality_tier_names_lowercase_mid_sentence():
-    _, options = run(make_input(), 1_000_000_000)
-    lq = by_code(options)["lower_quality"]
-    assert lq.label_vi == "Hạ mức chất lượng xuống tiết kiệm"
-    assert "Tiết kiệm" not in lq.description and "Trung bình" not in lq.description
-    combo = by_code(options)["combined"]
-    assert "Tiết kiệm" not in combo.label_vi
+def test_no_quality_tier_option_or_wording():
+    """Không còn phân mức chất lượng (không có dữ liệu giá thật theo mức) -> không có phương án hạ mức."""
+    for tier in ("tiet_kiem", "trung_binh", "kha", "cao_cap"):
+        _, options = run(make_input(quality_tier=tier), 1_000_000_000)
+        assert "lower_quality" not in by_code(options)
+        assert not any("mức chất lượng" in (o.label_vi + o.description).lower() for o in options)
 
 
 def test_fits_budget_true_when_target_is_close():
@@ -102,7 +98,7 @@ def test_all_feature_options_present():
                      rooftop_terrace="covered", rooftop_area_m2=50, roof_type="roof_tile_on_concrete")
     current, options = run(inp, 1_000_000_000)
     codes = by_code(options)
-    assert {"reduce_floor", "lower_quality", "remove_basement", "change_roof", "open_rooftop",
+    assert {"reduce_floor", "remove_basement", "change_roof", "open_rooftop",
             "remove_mezzanine", "phase_rough_first"} <= set(codes)
     assert codes["change_roof"].changes == {"roof_type": "roof_tile_on_truss"}
     assert codes["phase_rough_first"].changes == {"work_scope": "xay_tho"}
@@ -111,19 +107,17 @@ def test_all_feature_options_present():
     assert not any(it.group_name == "ham" for it in calculate_estimate(rb, make_rules(), lookup(rb)).items)
 
 
-def test_lower_quality_skipped_when_rate_missing_or_already_cheapest():
-    _, options = run(make_input(quality_tier="tiet_kiem"), 1_000_000_000)
-    assert "lower_quality" not in by_code(options)
-    # Không có đơn giá cho mức thấp hơn -> bỏ phương án (không tự suy ra giá)
-    def no_cheap(inp):
-        return None if str(inp.quality_tier) == "tiet_kiem" else lookup(inp)
+def test_option_skipped_when_rate_missing():
+    """Không có đơn giá cho phương án (vd chia giai đoạn xây thô) -> bỏ phương án, không tự suy ra giá."""
+    def no_rough(inp):
+        return None if str(inp.work_scope) == "xay_tho" else lookup(inp)
 
-    inp = make_input()
+    inp = make_input(work_scope="tron_goi")
     rules = make_rules()
-    current = calculate_estimate(inp, rules, no_cheap(inp), today=TODAY)
-    opts2 = suggest_adjustments(inp, rules, no_cheap, 1_000_000_000, current, today=TODAY)
-    assert "lower_quality" not in by_code(opts2)
-    assert "reduce_floor" in by_code(opts2)
+    current = calculate_estimate(inp, rules, no_rough(inp), today=TODAY)
+    opts = suggest_adjustments(inp, rules, no_rough, 1_000_000_000, current, today=TODAY)
+    assert "phase_rough_first" not in by_code(opts)
+    assert "reduce_floor" in by_code(opts)
 
 
 def test_minimal_house_may_have_no_options():

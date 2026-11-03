@@ -6,6 +6,7 @@ import {
   ESTIMATE_FIXTURE,
   MATCH_FIXTURE,
   PROFILES,
+  estimateFixtureFor,
 } from '../../api/fixtures';
 import type { ComparisonMatrix, EstimateResult } from '../../api/types';
 import { renderWithWidget } from '../../test/utils';
@@ -60,9 +61,9 @@ describe('ComparisonTable', () => {
 describe('EstimateTable', () => {
   it('hiển thị số liệu từ engine và luôn có ghi chú miễn trừ', () => {
     renderWithWidget(<EstimateTable block={{ type: 'estimate_table', data: ESTIMATE_FIXTURE }} />);
-    expect(screen.getByText('2,058–2,352 tỷ')).toBeInTheDocument();
+    expect(screen.getByText('2,058–2,303 tỷ')).toBeInTheDocument();
     expect(screen.getByText('490 m²')).toBeInTheDocument();
-    expect(screen.getByText('4,2–4,8 triệu/m²')).toBeInTheDocument();
+    expect(screen.getByText('4,2–4,7 triệu/m²')).toBeInTheDocument();
     const note = screen.getByRole('note');
     expect(note).toHaveTextContent('Không phải báo giá thi công');
   });
@@ -72,8 +73,23 @@ describe('EstimateTable', () => {
     renderWithWidget(<EstimateTable block={{ type: 'estimate_table', data }} />);
     const note = screen.getByRole('note');
     expect(note).toHaveTextContent('Đây là khái toán sơ bộ dựa trên đơn giá tham chiếu');
-    expect(note).toHaveTextContent('31/10/2026');
+    expect(note).toHaveTextContent('26/08/2026');
     expect(note).toHaveTextContent('Không phải báo giá thi công');
+  });
+
+  it('không hiển thị mức hoàn thiện kể cả khi payload còn trường quality_tier', () => {
+    const data: EstimateResult = { ...ESTIMATE_FIXTURE, input: { ...ESTIMATE_FIXTURE.input, quality_tier: 'trung_binh' } };
+    renderWithWidget(<EstimateTable block={{ type: 'estimate_table', data }} />);
+    const row = screen.getByRole('rowheader', { name: 'Phạm vi' }).closest('tr')!;
+    expect(row).toHaveTextContent(/^Phạm viXây thô$/);
+    expect(screen.queryByText(/mức|trung bình/i)).toBeNull();
+  });
+
+  it('phạm vi Hoàn thiện (chưa có đơn giá trên Dezon) -> chi phí và đơn giá "Chưa có dữ liệu"', () => {
+    renderWithWidget(<EstimateTable block={{ type: 'estimate_table', data: estimateFixtureFor('hoan_thien') }} />);
+    expect(screen.getAllByText('Chưa có dữ liệu')).toHaveLength(2);
+    expect(screen.getByRole('rowheader', { name: 'Phạm vi' }).closest('tr')!).toHaveTextContent('Hoàn thiện');
+    expect(screen.getByRole('note')).toHaveTextContent('Không phải báo giá thi công');
   });
 
   it('không có đơn giá -> chi phí "Chưa có dữ liệu" nhưng vẫn có miễn trừ', () => {
@@ -100,8 +116,8 @@ describe('EstimateTable — nguồn đơn giá', () => {
   it('dòng đơn giá tham chiếu hiển thị nguồn kèm ngày cập nhật dd/mm/yyyy (không chỉ trong tooltip)', () => {
     renderWithWidget(<EstimateTable block={{ type: 'estimate_table', data: ESTIMATE_FIXTURE }} />);
     const row = screen.getByRole('rowheader', { name: 'Đơn giá tham chiếu' }).closest('tr')!;
-    expect(row).toHaveTextContent('4,2–4,8 triệu/m²');
-    expect(row).toHaveTextContent(/Nguồn: .*cập nhật 31\/10\/2026/);
+    expect(row).toHaveTextContent('4,2–4,7 triệu/m²');
+    expect(row).toHaveTextContent(/Nguồn: .*cập nhật 26\/08\/2026/);
   });
 });
 
@@ -113,19 +129,22 @@ describe('ContractorCard', () => {
     expect(link).toHaveAttribute('href', 'https://dezon.vn/nha-thau/kien-phong');
     expect(link).toHaveAttribute('target', '_blank');
     expect(link.getAttribute('rel')).toContain('noopener');
-    expect(screen.getByText('Vì sao em đề xuất')).toBeInTheDocument();
+    expect(screen.getByText('Vì sao đề xuất')).toBeInTheDocument();
+    expect(screen.queryByText(/Vì sao em/)).toBeNull();
     expect(screen.getByText('7 công trình ghi nhận trên Dezon')).toBeInTheDocument();
     expect(screen.getByText('Công trình ghi nhận trên Dezon')).toBeInTheDocument();
-    expect(screen.getByText('Phù hợp')).toBeInTheDocument();
-    expect(screen.getByText('Điểm 76/100')).toBeInTheDocument();
+    // Đầu ra engine: 4,3–4,7 triệu/m² × 490 m² = 2,107–2,303 tỷ, vượt ngân sách 2 tỷ ~5% -> 67 điểm.
+    expect(screen.getByText('Cần đánh giá thêm')).toBeInTheDocument();
+    expect(screen.getByText('Điểm 67/100')).toBeInTheDocument();
     expect(screen.getAllByRole('img').length).toBeGreaterThan(0);
   });
 
-  it('nhà thầu thiếu dữ liệu -> "Chưa có dữ liệu" + điểm cần lưu ý; không có chữ "tốt nhất"', () => {
+  it('nhà thầu thiếu dữ liệu -> "Chưa có dữ liệu", không hiển thị "Điểm cần lưu ý"; không có chữ "tốt nhất"', () => {
     const item = MATCH_FIXTURE.results[1]!;
     const { container } = renderWithWidget(<ContractorCardView item={item} />);
     expect(screen.getAllByText('Chưa có dữ liệu').length).toBeGreaterThanOrEqual(3);
-    expect(screen.getByText('Chưa có thông tin đơn giá — cần đối chiếu')).toBeInTheDocument();
+    expect(screen.queryByText('Điểm cần lưu ý')).toBeNull(); // chủ sản phẩm yêu cầu bỏ phần này
+    expect(screen.queryByText('Chưa có thông tin đơn giá — cần đối chiếu')).toBeNull();
     expect(screen.getByText('Cần đánh giá thêm')).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/tốt nhất/i);
   });
@@ -149,13 +168,14 @@ describe('ContractorList', () => {
 });
 
 describe('ContractorDetail', () => {
-  it('lưới 3 ảnh + ô "+N", danh sách công trình có link dự án, link hồ sơ đầy đủ', () => {
+  it('lưới 3 ảnh + lớp "+N" trên ô cuối, danh sách công trình có link dự án, link hồ sơ đầy đủ', () => {
     const { actions } = renderWithWidget(
       <BlockRenderer block={{ type: 'contractor_detail', data: PROFILES['kien-phong']!, estimate_session_id: 'est-9' }} active />,
     );
-    expect(screen.getByText('+4')).toBeInTheDocument();
+    // 12 ảnh, hiển thị 3 ô; ô thứ 3 mang lớp "+9" (mở lightbox, không còn là link rời trang).
+    expect(screen.getByText('+9').closest('button')).toHaveAccessibleName('Xem ảnh 3/12 — France Indochine 22 Hà Nội');
     const proj = screen.getByRole('link', { name: 'Indochine Villa Quận 7 Sài Gòn ↗' });
-    expect(proj).toHaveAttribute('href', 'https://dezon.vn/du-an/indochine-villa-quan-7');
+    expect(proj).toHaveAttribute('href', 'https://dezon.vn/nha-thau/kien-phong/indochine-villa-quan-7-sai-gon/');
     expect(screen.getAllByText(/Đơn vị thi công: Kiến Phong/)).toHaveLength(3);
     expect(screen.getByRole('link', { name: 'Mở hồ sơ đầy đủ trên Dezon ↗' })).toHaveAttribute('target', '_blank');
     fireEvent.click(screen.getByRole('button', { name: 'Yêu cầu báo giá' }));
@@ -186,29 +206,35 @@ describe('QuickReplies / SummaryConfirm / BudgetOptions / SourceBadges', () => {
 
   it('summary_confirm: 2 nút gửi value mặc định', () => {
     const { actions } = renderWithWidget(
-      <BlockRenderer block={{ type: 'summary_confirm', items: [{ label: 'Loại công trình', value: 'Nhà phố' }], assumptions: ['Mức trung bình'] }} active />,
+      <BlockRenderer block={{ type: 'summary_confirm', items: [{ label: 'Loại công trình', value: 'Nhà phố' }], assumptions: ['Móng tính theo thông lệ: móng băng'] }} active />,
     );
-    expect(screen.getByText('Mức trung bình')).toBeInTheDocument();
+    expect(screen.getByText('Móng tính theo thông lệ: móng băng')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Đúng rồi' }));
     expect(actions.send).toHaveBeenCalledWith('Đúng rồi, tính khái toán giúp tôi');
   });
 
-  it('budget_options: chi phí display, tiết kiệm, nhãn "Vừa ngân sách"', () => {
-    renderWithWidget(<BlockRenderer block={{ type: 'budget_options', data: BUDGET_FIXTURE }} active />);
-    expect(screen.getByText('1,474–1,685 tỷ')).toBeInTheDocument();
+  it('budget_options: chi phí display, tiết kiệm, nhãn "Vừa ngân sách" chỉ khi fits_budget', () => {
+    // Ca mẫu 1,5 tỷ: engine không có phương án nào vừa ngân sách -> không có nhãn.
+    const { unmount } = renderWithWidget(<BlockRenderer block={{ type: 'budget_options', data: BUDGET_FIXTURE }} active />);
+    expect(screen.getByText('1,596–1,786 tỷ')).toBeInTheDocument();
+    expect(screen.queryByText('Vừa ngân sách')).toBeNull();
+    unmount();
+    const fit = { ...BUDGET_FIXTURE, options: BUDGET_FIXTURE.options.map((o, i) => ({ ...o, fits_budget: i === 0 })) };
+    renderWithWidget(<BlockRenderer block={{ type: 'budget_options', data: fit }} active />);
     expect(screen.getAllByText('Vừa ngân sách')).toHaveLength(1);
-    expect(screen.getByText('Tiết kiệm khoảng 584 triệu so với khái toán hiện tại')).toBeInTheDocument();
+    expect(screen.getByText('Tiết kiệm khoảng 378 triệu so với khái toán hiện tại')).toBeInTheDocument();
+    expect(screen.queryByText(/mức tiết kiệm/i)).toBeNull();
   });
 
-  it('source_badges: chip nhãn + tooltip nguồn', () => {
-    renderWithWidget(
+  it('source_badges: không hiển thị dòng "Nguồn:" (chủ sản phẩm yêu cầu bỏ)', () => {
+    const { container } = renderWithWidget(
       <BlockRenderer
         block={{ type: 'source_badges', badges: [{ label: 'Dezon', status: 'on_dezon', source: { label: 'dezon.vn', url: 'https://dezon.vn', updated_at: '2026-10-31' } }] }}
         active
       />,
     );
-    fireEvent.mouseEnter(screen.getByRole('button', { name: /Dezon/ }));
-    expect(screen.getByRole('tooltip')).toHaveTextContent('31/10/2026');
+    expect(container).not.toHaveTextContent('Nguồn:');
+    expect(container.querySelector('.dz-srcbadges')).toBeNull();
   });
 });
 
@@ -233,6 +259,7 @@ describe('QuoteRequestForm', () => {
       expect(actions.submitQuote).toHaveBeenCalledWith({
         contractor_ids: [1],
         estimate_session_id: 'est-1',
+        chat_session_id: null,
         customer_name: 'Nguyễn Văn An',
         customer_phone: '0901234567',
         customer_email: null,
@@ -240,6 +267,23 @@ describe('QuoteRequestForm', () => {
       }),
     );
     expect(await screen.findByText('DZ-TEST-0001')).toBeInTheDocument();
+  });
+});
+
+describe('QuoteRequestForm — phiên chat', () => {
+  it('chưa có khái toán -> vẫn gửi chat_session_id để backend ghi phong cách / mức đầu tư', async () => {
+    const { actions } = renderWithWidget(
+      <BlockRenderer block={{ type: 'quote_request_form', contractors: [{ id: 3, name: 'BIC' }], estimate_session_id: null }} active />,
+      { chatSessionId: 'chat-7' },
+    );
+    fireEvent.change(screen.getByLabelText(/Họ tên/), { target: { value: 'Trần Bình' } });
+    fireEvent.change(screen.getByLabelText(/Số điện thoại/), { target: { value: '0912345678' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu báo giá' }));
+    await waitFor(() =>
+      expect(actions.submitQuote).toHaveBeenCalledWith(
+        expect.objectContaining({ contractor_ids: [3], estimate_session_id: null, chat_session_id: 'chat-7' }),
+      ),
+    );
   });
 });
 

@@ -66,8 +66,10 @@ def format_price_per_m2_range(lo: float | int | Decimal | None, hi: float | int 
     """(4_300_000, 4_700_000) -> '4,3–4,7 triệu/m²'."""
     if lo is None and hi is None:
         return NO_DATA
-    if lo is None or hi is None or float(lo) == float(hi):
-        v = lo if lo is not None else hi
+    if lo is None:  # chỉ có cận trên (cận dưới trên hồ sơ là giá trị mặc định của form)
+        return f"tối đa {vi_number(float(hi) / TRIEU, 2)} triệu/m²"
+    if hi is None or float(lo) == float(hi):
+        v = lo
         return f"{vi_number(float(v) / TRIEU, 2)} triệu/m²"
     return f"{vi_number(float(lo) / TRIEU, 2)}–{vi_number(float(hi) / TRIEU, 2)} triệu/m²"
 

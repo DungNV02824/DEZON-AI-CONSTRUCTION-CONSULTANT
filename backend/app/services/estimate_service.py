@@ -23,6 +23,7 @@ from app.evidence import (
     source_ref_from,
 )
 from app.formatting import format_price_per_m2_range, format_vnd
+from app.ingestion import parse_vi
 from app.schemas.common import BuildingType, QualityTier, WorkScope
 from app.schemas.estimate import (
     BudgetAdjustmentResult,
@@ -32,6 +33,7 @@ from app.schemas.estimate import (
     RuleData,
     RuleSet,
 )
+from app.services.market_rates import is_market_label, is_seed_dev_label, seed_dev_rates_allowed
 
 NATIONWIDE = "*"
 CUSTOMER_BUDGET_LABEL = "Ngân sách do anh/chị cung cấp"
@@ -83,10 +85,15 @@ def _fold(text: str) -> str:
 def normalize_province(name: str | None) -> str:
     """Khóa so khớp tỉnh: không phân biệt hoa thường, dấu, khoảng trắng/dấu chấm thừa, tiền tố
     "TP."/"Thành phố"/"Tỉnh" và bí danh phổ biến ("HCM", "Sài Gòn", "HN").
-    Vd "TP. Hồ Chí Minh", "tp ho chi minh", "HCM" -> "ho chi minh"; "*" giữ nguyên."""
+    Vd "TP. Hồ Chí Minh", "tp ho chi minh", "HCM" -> "ho chi minh"; "*" giữ nguyên.
+
+    Trước hết quy về tên tỉnh chuẩn bằng `parse_vi.normalize_province` — cùng bộ chuẩn hóa đã dùng để gắn tỉnh cho
+    dòng đơn giá tổng hợp (`market_rates`) — nên quận/huyện cũng khớp đúng tỉnh: "Thủ Đức", "Quận 7" ->
+    "ho chi minh"; "Cầu Giấy" -> "ha noi". Không nhận ra tỉnh nào thì so khớp theo chuỗi đã bỏ dấu."""
     s = (name or "").strip()
     if s == NATIONWIDE:
         return NATIONWIDE
+    s = parse_vi.normalize_province(s) or s
     s = re.sub(r"[.,]", " ", _fold(s))
     s = re.sub(r"\s+", " ", s).strip()
     if s in _PROVINCE_ALIASES:
@@ -110,25 +117,38 @@ def _to_rate_data(row: ConstructionRate, is_fallback: bool) -> RateData:
 def select_rate(db: Session, building_type: BuildingType | str, province: str,
                 work_scope: WorkScope | str, quality_tier: QualityTier | str = QualityTier.trung_binh,
                 on_date: date | None = None) -> RateData | None:
-    """Đơn giá còn hiệu lực khớp chính xác; không có -> fallback province='*' (status reference).
+    """Đơn giá còn hiệu lực khớp tỉnh (theo `normalize_province`); không có -> fallback province='*'
+    (status reference).
+
+    Không phân mức chất lượng (không có dữ liệu thật theo mức): luôn dùng dòng 'trung_binh', tham số
+    `quality_tier` chỉ giữ để tương thích chữ ký. Trong cùng tỉnh (và cùng '*'), đơn giá chính thức
+    (vd Dezon nhập qua CSV/admin) được ưu tiên hơn đơn giá tổng hợp từ hồ sơ nhà thầu
+    (`market_rates`); cùng loại thì lấy dòng hiệu lực mới nhất.
 
     Giá trị enum không hợp lệ -> ValueError (kiểm tra trước khi gửi xuống PostgreSQL để không làm
-    hỏng transaction bằng lỗi enum). quality_tier None -> 'trung_binh'."""
+    hỏng transaction bằng lỗi enum)."""
     building_type = BuildingType(building_type)
     work_scope = WorkScope(work_scope)
-    quality_tier = QualityTier(quality_tier or QualityTier.trung_binh)
+    if quality_tier is not None:
+        QualityTier(quality_tier)  # vẫn kiểm tra giá trị hợp lệ
     on_date = on_date or date.today()
     rows = db.scalars(
         select(ConstructionRate).options(selectinload(ConstructionRate.source))
         .where(
             ConstructionRate.building_type == building_type.value,
             ConstructionRate.work_scope == work_scope.value,
-            ConstructionRate.quality_tier == quality_tier.value,
+            ConstructionRate.quality_tier == QualityTier.trung_binh.value,
             ConstructionRate.effective_from <= on_date,
             or_(ConstructionRate.effective_to.is_(None), ConstructionRate.effective_to >= on_date),
         )
         .order_by(ConstructionRate.effective_from.desc(), ConstructionRate.id.desc())
     ).all()
+    # Đơn giá mẫu seed dev (bảng giá tự đặt) không bao giờ hiển thị cho khách, kể cả khi DB cũ còn để hiệu lực;
+    # chỉ test bật ALLOW_SEED_DEV_RATES=1 để dùng làm fixture.
+    if not seed_dev_rates_allowed():
+        rows = [r for r in rows if not is_seed_dev_label(r.source.label if r.source is not None else None)]
+    # sort ổn định: dòng chính thức trước dòng tổng hợp, giữ thứ tự hiệu lực mới nhất trong mỗi nhóm
+    rows = sorted(rows, key=lambda r: is_market_label(r.source.label if r.source is not None else None))
     wanted = normalize_province(province)
     exact = next((r for r in rows if normalize_province(r.province) == wanted), None)
     if exact is not None and exact.province != NATIONWIDE:
@@ -163,13 +183,17 @@ def _lookup_for(db: Session):
 
 # --- Khái toán ----------------------------------------------------------------------------------
 
-def create_estimate(db: Session, inp: EstimateInput, chat_session_id: uuid.UUID | None = None) -> EstimateResult:
-    """Tính khái toán, lưu estimate_sessions + estimate_items, trả kết quả có estimate_session_id."""
+def create_estimate(db: Session, inp: EstimateInput, chat_session_id: uuid.UUID | None = None,
+                    notes: list[str] | None = None) -> EstimateResult:
+    """Tính khái toán, lưu estimate_sessions + estimate_items, trả kết quả có estimate_session_id.
+
+    `notes`: ghi chú thêm vào giả định (vd mức đầu tư khách chọn chưa được tính vào khái toán) — không đổi con số."""
     rules = load_ruleset(db)
     rate = _lookup_for(db)(inp)
     result = calculate_estimate(inp, rules, rate)
     sid = uuid.uuid4()
-    result = result.model_copy(update={"estimate_session_id": sid})
+    extra = [n for n in notes or [] if n and n not in result.assumptions]
+    result = result.model_copy(update={"estimate_session_id": sid, "assumptions": [*result.assumptions, *extra]})
     row = EstimateSession(
         id=sid,
         chat_session_id=chat_session_id,

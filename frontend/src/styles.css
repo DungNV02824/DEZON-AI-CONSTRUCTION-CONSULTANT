@@ -1218,7 +1218,7 @@ thead .dz-sticky {
 
 .dz-ccard__covers--3 {
   grid-template-columns: 2fr 1fr;
-  grid-template-rows: 1fr 1fr;
+  grid-template-rows: 74px 74px;
 }
 
 .dz-ccard__covers--3 > :first-child {
@@ -1236,14 +1236,52 @@ thead .dz-sticky {
   aspect-ratio: 4 / 3;
 }
 
-.dz-ccard__covers--3 > :first-child {
-  max-height: 150px;
+.dz-ccard__covers--3 img,
+.dz-ccard__covers--3 .dz-img-fallback {
+  min-height: 0;
+  max-height: none;
   aspect-ratio: auto;
 }
 
-.dz-ccard__covers--3 > :not(:first-child) {
-  max-height: 74px;
-  aspect-ratio: auto;
+/* Ô ảnh bấm được -> mở lightbox (thẻ nhà thầu, hồ sơ mở rộng). */
+.dz-root .dz-gtile {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--dz-bg-soft);
+  overflow: hidden;
+  cursor: zoom-in;
+}
+
+.dz-root .dz-gtile:focus-visible {
+  outline: 3px solid var(--dz-primary);
+  outline-offset: -3px;
+}
+
+.dz-gtile img {
+  transition: transform 0.25s ease, opacity 0.15s;
+}
+
+.dz-gtile:hover img {
+  transform: scale(1.04);
+}
+
+.dz-gtile__more {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.55);
+  color: #fff;
+  font-size: 20px;
+  font-weight: 700;
+  pointer-events: none;
 }
 
 .dz-img-fallback {
@@ -1478,7 +1516,9 @@ thead .dz-sticky {
 }
 
 .dz-gallery__item img,
-.dz-gallery__item .dz-img-fallback {
+.dz-gallery__item .dz-img-fallback,
+.dz-pgallery .dz-gtile img,
+.dz-pgallery .dz-gtile .dz-img-fallback {
   display: block;
   width: 100%;
   aspect-ratio: 4 / 3;
@@ -1489,15 +1529,247 @@ thead .dz-sticky {
   aspect-ratio: 16 / 9;
 }
 
-.dz-root .dz-gallery__more {
+/* Ảnh từng công trình (hồ sơ mở rộng): dải ô nhỏ. */
+.dz-pgallery {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  max-width: 360px;
+  margin-top: 6px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.dz-pgallery .dz-gtile__more {
+  font-size: 15px;
+}
+
+/* ----------------------------------------------------------- lightbox (xem ảnh toàn màn hình) */
+.dz-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483002;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 56px 72px 20px;
+  background: rgba(255, 255, 255, 0.97);
+  color: var(--dz-text);
+  font-family: var(--dz-font);
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: left;
+  overscroll-behavior: contain;
+  /* Cho phép kéo cả hai chiều khi đã phóng to (pinch-zoom); vuốt chuyển ảnh chỉ chạy ở tỉ lệ 1 (Lightbox.tsx). */
+  touch-action: manipulation;
+  animation: dz-in 0.15s ease-out;
+}
+
+.dz-lightbox,
+.dz-lightbox * {
+  box-sizing: border-box;
+}
+
+.dz-lightbox:focus {
+  outline: none;
+}
+
+.dz-lightbox__bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 56px;
+  padding: 0 64px;
+  pointer-events: none;
+}
+
+.dz-lightbox__counter {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  font-variant-numeric: tabular-nums;
+}
+
+.dz-lightbox button {
+  font: inherit;
+  cursor: pointer;
+}
+
+.dz-lightbox__close,
+.dz-lightbox__nav {
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 50%;
+  background: #fff;
+  color: #111827;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.12);
+  transition: background 0.15s, box-shadow 0.15s;
+  pointer-events: auto;
+}
+
+.dz-lightbox__close:hover,
+.dz-lightbox__nav:hover {
+  background: #f3f4f6;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.18);
+}
+
+.dz-lightbox :focus-visible {
+  outline: 2px solid #111827;
+  outline-offset: 2px;
+}
+
+.dz-lightbox__close {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  width: 40px;
+  height: 40px;
+}
+
+.dz-lightbox__nav {
+  position: absolute;
+  top: 50%;
+  width: 48px;
+  height: 48px;
+  margin-top: -24px;
+}
+
+.dz-lightbox__nav--prev {
+  left: 14px;
+}
+
+.dz-lightbox__nav--next {
+  right: 14px;
+}
+
+.dz-lightbox__figure {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 1200px;
+  max-height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.dz-lightbox__stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 0;
+}
+
+.dz-lightbox__img {
+  display: block;
+  max-width: 100%;
+  /* Chừa chỗ cho thanh đếm/Đóng + chú thích 2 dòng; dvh = vùng nhìn thấy thật trên di động (thanh địa chỉ). */
+  max-height: 85vh;
+  max-height: min(85vh, calc(100vh - 150px));
+  max-height: min(85dvh, calc(100dvh - 150px));
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 4px;
+  user-select: none;
+  -webkit-user-drag: none;
+  animation: dz-in 0.2s ease-out;
+}
+
+.dz-lightbox .dz-img-fallback.dz-lightbox__img {
   display: grid;
   place-items: center;
+  width: min(640px, 100%);
   aspect-ratio: 4 / 3;
-  background: rgba(15, 23, 42, 0.78);
-  color: #fff;
-  font-size: 22px;
-  font-weight: 700;
+  font-size: 14px;
+}
+
+.dz-lightbox__caption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px 4px;
+  max-width: 100%;
+  font-size: 14px;
+  color: #374151;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.dz-lightbox__project {
+  font-weight: 600;
+  color: #111827;
+}
+
+.dz-lightbox .dz-lightbox__ext {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-left: 2px;
+  border-radius: 6px;
+  color: #1d4ed8;
   text-decoration: none;
+}
+
+.dz-lightbox .dz-lightbox__ext:hover {
+  background: #eff6ff;
+}
+
+@media (max-width: 599.98px) {
+  .dz-lightbox {
+    padding: 52px 8px 16px;
+  }
+  .dz-lightbox__nav {
+    width: 36px;
+    height: 36px;
+    margin-top: -18px;
+    background: rgba(255, 255, 255, 0.85);
+  }
+  .dz-lightbox__nav svg {
+    width: 20px;
+    height: 20px;
+  }
+  .dz-lightbox__nav--prev {
+    left: 6px;
+  }
+  .dz-lightbox__nav--next {
+    right: 6px;
+  }
+  .dz-lightbox__close {
+    top: 8px;
+    right: 8px;
+  }
+  .dz-lightbox__caption {
+    font-size: 13px;
+    padding: 0 4px;
+  }
+  .dz-lightbox__img {
+    max-height: calc(100vh - 150px);
+    max-height: calc(100dvh - 150px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dz-lightbox,
+  .dz-lightbox__img {
+    animation: none;
+  }
+  .dz-gtile img {
+    transition: none;
+  }
+  .dz-gtile:hover img {
+    transform: none;
+  }
 }
 
 .dz-detail__desc {
@@ -1597,13 +1869,339 @@ thead .dz-sticky {
   letter-spacing: 0.5px;
 }
 
+/* ----------------------------------------------------------- thẻ câu hỏi từng bước (question_step) */
+.dz-btn--dark,
+.dz-root a.dz-btn--dark {
+  background: #111827;
+  border-color: #111827;
+  color: #fff;
+}
+
+.dz-btn--dark:hover:not(:disabled) {
+  background: #000;
+  border-color: #000;
+  color: #fff;
+}
+
+.dz-btn--lg {
+  min-height: 48px;
+  font-size: 15px;
+}
+
+.dz-qstep {
+  width: 100%;
+  max-width: 520px;
+  background: #fff;
+  border: 1px solid var(--dz-border);
+  border-radius: 14px;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  outline: none;
+}
+
+.dz-qstep:focus-visible {
+  box-shadow: 0 0 0 2px rgba(17, 24, 39, 0.25);
+}
+
+.dz-qstep__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dz-root .dz-qstep__title {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: #111827;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dz-qstep__nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.dz-qstep__arrow {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #374151;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dz-qstep__arrow:hover:not(:disabled) {
+  background: #f3f4f6;
+}
+
+.dz-qstep__arrow:disabled {
+  color: #d1d5db;
+  cursor: default;
+}
+
+.dz-qstep__count {
+  min-width: 34px;
+  text-align: center;
+  color: var(--dz-muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dz-root .dz-qstep__hint {
+  color: #4b5563;
+  font-size: 13px;
+  margin-top: -4px;
+}
+
+.dz-qstep__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dz-qstep__chip {
+  min-height: 34px;
+  padding: 5px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  background: #fff;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dz-qstep__chip:hover:not(:disabled),
+.dz-qstep__chip.is-selected {
+  border-color: #111827;
+  background: #f3f4f6;
+}
+
+.dz-qstep__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dz-qstep__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  color: #111827;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dz-qstep__row:hover:not(:disabled),
+.dz-qstep__row:focus-within {
+  border-color: #9ca3af;
+  background: #f9fafb;
+}
+
+.dz-qstep__row.is-selected {
+  border-color: #111827;
+  background: #f3f4f6;
+  box-shadow: inset 0 0 0 1px #111827;
+}
+
+.dz-qstep__row:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.dz-qstep__row--input {
+  cursor: text;
+}
+
+.dz-qstep__num {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #f3f4f6;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dz-qstep__row.is-selected .dz-qstep__num {
+  background: #111827;
+  color: #fff;
+}
+
+.dz-qstep__label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dz-qstep__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-size: 14px;
+  padding: 2px 0;
+}
+
+.dz-qstep__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dz-qstep__btns {
+  display: inline-flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.dz-qstep__btns .dz-btn {
+  min-width: 76px;
+}
+
+.dz-qstep__skip {
+  padding: 6px 0;
+  border: 0;
+  background: transparent;
+  color: var(--dz-muted);
+  font-size: 13px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.dz-qstep__skip:hover:not(:disabled) {
+  color: #111827;
+}
+
+/* Thẻ câu hỏi đã qua: thu gọn, chỉ đọc. */
+.dz-qstep--done {
+  padding: 8px 12px;
+  box-shadow: none;
+  background: var(--dz-bg-soft);
+}
+
+.dz-qstep--done .dz-qstep__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4b5563;
+}
+
+/* ----------------------------------------------------------- thẻ xác nhận thông tin */
+.dz-sumtable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.dz-sumtable th,
+.dz-sumtable td {
+  padding: 7px 0;
+  border-bottom: 1px dashed var(--dz-border);
+  vertical-align: top;
+  text-align: left;
+}
+
+.dz-sumtable tr:last-child th,
+.dz-sumtable tr:last-child td {
+  border-bottom: 0;
+}
+
+.dz-sumtable th {
+  width: 42%;
+  padding-right: 10px;
+  color: var(--dz-muted);
+  font-weight: 400;
+}
+
+.dz-sumtable td {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.dz-sumtable__edit {
+  width: 1%;
+  padding-left: 8px !important;
+  white-space: nowrap;
+  text-align: right !important;
+}
+
+.dz-sumtable__editbtn {
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dz-sumtable__editbtn:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.dz-sumtable__editbtn:disabled {
+  color: #9ca3af;
+  cursor: default;
+}
+
+.dz-sumcard--v2 {
+  width: 100%;
+  max-width: 620px;
+}
+
+.dz-sumcard__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 /* Đặt cuối file: media query không tăng specificity nên phải đứng sau các rule gốc. */
 @media (max-width: 639.98px) {
   /* Vùng chạm ≥ 44px và chữ ≥ 13px trên điện thoại. */
   .dz-btn,
   .dz-btn--sm,
-  .dz-chip-btn {
+  .dz-chip-btn,
+  .dz-qstep__row {
     min-height: 44px;
+  }
+  .dz-qstep__chip {
+    min-height: 40px;
+  }
+  .dz-qstep__arrow {
+    width: 40px;
+    height: 40px;
+  }
+  .dz-qstep__skip,
+  .dz-sumtable__editbtn {
+    min-height: 40px;
+  }
+  .dz-qstep__input {
+    font-size: 16px; /* tránh iOS tự phóng to khi focus */
   }
   .dz-btn--sm {
     font-size: 14px;
@@ -1661,4 +2259,28 @@ thead .dz-sticky {
   .dz-mock-tag {
     font-size: 12px;
   }
+}
+
+/* Nút "Liên hệ nhân viên" (chỉ giao diện) */
+.dz-contact-notice {
+  flex: 1 0 100%;
+  margin: 2px 0 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #ecfdf3;
+  color: #067647;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Thẻ xác nhận gọn: các mục phụ gom vào "Xem thêm N mục" */
+.dz-sumcard__more {
+  margin: 4px 0 10px;
+}
+.dz-sumcard__more > summary {
+  cursor: pointer;
+  padding: 6px 0;
+  color: #475467;
+  font-size: 13px;
+  font-weight: 600;
 }

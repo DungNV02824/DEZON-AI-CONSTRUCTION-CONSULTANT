@@ -35,12 +35,6 @@ export const WORK_SCOPE_VI: Record<string, string> = {
   tron_goi: 'Trọn gói',
   noi_that: 'Nội thất',
 };
-export const QUALITY_TIER_VI: Record<string, string> = {
-  tiet_kiem: 'Tiết kiệm',
-  trung_binh: 'Trung bình',
-  kha: 'Khá',
-  cao_cap: 'Cao cấp',
-};
 export const PROJECT_ROLE_VI: Record<string, string> = {
   thi_cong: 'Thi công',
   thiet_ke: 'Thiết kế',
@@ -53,3 +47,13 @@ export const FIT_CLASS: Record<string, string> = {
   'Phù hợp': 'ok',
   'Cần đánh giá thêm': 'review',
 };
+
+/** "Đơn giá hoàn thiện cơ bản" trên hồ sơ nhà thầu dezon.vn là đơn giá TRỌN GÓI (thô + hoàn thiện cơ bản). */
+export const FINISH_PRICE_LABEL_VI = 'Đơn giá trọn gói (hoàn thiện cơ bản)';
+
+/** Phạm vi không có đơn giá riêng trên hồ sơ nhà thầu Dezon -> không ước chi phí theo đơn giá nhà thầu. */
+export const SCOPES_WITHOUT_CONTRACTOR_PRICE: ReadonlyArray<string> = ['hoan_thien', 'noi_that'];
+
+/** Miễn trừ khi chưa có đơn giá — trùng nguyên văn bản no-rate của backend explain.build_disclaimer. */
+export const NO_RATE_DISCLAIMER =
+  'Đây là khái toán sơ bộ: Dezon chưa có đủ đơn giá do nhà thầu công bố cho phạm vi này nên em chỉ tính diện tích sàn quy đổi, chưa tính được chi phí. Không phải báo giá thi công. Vui lòng yêu cầu báo giá từ nhà thầu để có con số chính xác.';

@@ -85,6 +85,8 @@ def _field_present(facts: ContractorFacts, fld: str) -> bool:
     v: Any = getattr(facts, fld)
     if fld == "dezon_project_count":
         return v is not None and v > 0
+    if fld in ("rough_price_min", "finish_price_min"):  # có đơn giá = có ít nhất một cận
+        return v is not None or getattr(facts, fld.replace("_min", "_max")) is not None
     if fld == "has_warranty_info":
         return v is True  # False = hồ sơ không có thông tin bảo hành
     if isinstance(v, str):

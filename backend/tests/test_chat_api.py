@@ -152,15 +152,18 @@ def test_create_session_with_and_without_body(api):
     assert body["stage"] == "collect" and "_state" not in body["slots"] and body["slots"]["confirmed"] is False
     msg = body["messages"][0]
     assert set(msg) == {"id", "role", "content", "ui_blocks", "created_at"}
-    assert msg["role"] == "assistant" and msg["ui_blocks"][0]["type"] == "quick_replies"
+    assert msg["role"] == "assistant" and msg["ui_blocks"][0]["type"] == "question_step"
+    card = msg["ui_blocks"][0]
+    assert (card["step"], card["back_value"], card["skippable"]) == (1, None, False)
     assert api.post("/api/chat/sessions", json={"user_id": "khach-1"}).status_code == 200
 
 
 @pytest.mark.db
 def test_get_session_excludes_tool_messages(api):
     sid = api.post("/api/chat/sessions", json={}).json()["session_id"]
-    api.post(f"/api/chat/sessions/{sid}/messages", json={"content": "nhà phố 5x20 Thủ Đức 1 trệt 3 lầu xây thô"})
-    api.post(f"/api/chat/sessions/{sid}/messages", json={"content": "Đúng rồi"})
+    api.post(f"/api/chat/sessions/{sid}/messages", json={"content": "nhà phố 5x20 Thủ Đức 1 trệt 3 lầu xây thô, "
+                                                                   "xây kín đất, không hầm, không lửng, mái bằng"})
+    api.post(f"/api/chat/sessions/{sid}/messages", json={"content": "Đúng rồi, tính khái toán giúp tôi"})
     body = api.get(f"/api/chat/sessions/{sid}").json()
     assert set(body) == {"session_id", "stage", "slots", "missing_required", "messages"}
     assert {m["role"] for m in body["messages"]} == {"user", "assistant"}
@@ -217,7 +220,9 @@ def test_sse_events_order_and_done_payload(api):
     assert "asked" not in done["slots"] and "_state" not in done["slots"]
     assert "asked" not in api.get(f"/api/chat/sessions/{sid}").json()["slots"]
     assert "province" in done["missing_required"]
-    assert events[first_block][1]["block"]["type"] == "quick_replies"
+    card = events[first_block][1]["block"]
+    assert card["type"] == "question_step" and card["question"] == "Khu vực xây dựng?"
+    assert card["back_value"] == "Quay lại câu trước" and card["slots"] == ["province", "district"]
 
 
 @pytest.mark.db

@@ -38,7 +38,7 @@ describe('readConfig — giao diện mở rộng', () => {
 });
 
 describe('App mode="page" (AI for Planning)', () => {
-  it('thanh bên + thẻ câu hỏi dạng lưới; gửi tin -> Recent chats; New chat; mở lại cuộc trò chuyện cũ', async () => {
+  it('thanh bên + thẻ câu hỏi từng bước; gửi tin -> Recent chats; New chat; mở lại cuộc trò chuyện cũ', async () => {
     const client = createMockClient({ delayMs: 0, storage: window.localStorage });
     render(<App client={client} mode="page" loginUrl="https://dezon.vn/dang-nhap/" />);
 
@@ -47,9 +47,9 @@ describe('App mode="page" (AI for Planning)', () => {
     expect(screen.getByRole('link', { name: /Đăng nhập \/ Đăng ký/ }).getAttribute('href')).toBe('https://dezon.vn/dang-nhap/');
     expect(screen.getByText('Chưa có cuộc trò chuyện nào.')).toBeTruthy();
 
-    // Lời chào + lựa chọn nhanh hiển thị thành một thẻ câu hỏi
+    // Lời chào + thẻ câu hỏi từng bước (question_step)
     const card = await waitFor(() => {
-      const c = document.querySelector('.dz-askcard');
+      const c = document.querySelector('.dz-qstep:not(.dz-qstep--done)');
       expect(c).toBeTruthy();
       return c as HTMLElement;
     });
@@ -59,7 +59,7 @@ describe('App mode="page" (AI for Planning)', () => {
     fireEvent.click(within(card).getByRole('button', { name: 'Nhà phố' }));
     const item = await screen.findByRole('button', { name: /Nhà phố/, current: true });
     expect(item.className).toContain('dz-plan__item--active');
-    await waitFor(() => expect(document.querySelector('.dz-askcard')?.textContent).toMatch(/khu vực/));
+    await waitFor(() => expect(document.querySelector('.dz-qstep:not(.dz-qstep--done)')?.textContent).toMatch(/Khu vực xây dựng/));
     const firstSession = window.localStorage.getItem('dezon_ai_mock_session_id');
 
     // Cuộc trò chuyện mới: lịch sử giữ mục cũ (không còn active)
@@ -80,7 +80,7 @@ describe('App mode="page" (AI for Planning)', () => {
     window.confirm = () => true;
     render(<App client={client} mode="page" />);
     const card = await waitFor(() => {
-      const c = document.querySelector('.dz-askcard');
+      const c = document.querySelector('.dz-qstep:not(.dz-qstep--done)');
       expect(c).toBeTruthy();
       return c as HTMLElement;
     });

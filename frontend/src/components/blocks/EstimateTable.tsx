@@ -1,12 +1,14 @@
 import { useId, useState } from 'react';
 import type { EstimateResult, EstimateTableBlock } from '../../api/types';
 import { formatCoefficient, formatDateVi, formatM2, viNumber } from '../../utils/format';
-import { BUILDING_TYPE_VI, QUALITY_TIER_VI, WORK_SCOPE_VI } from '../../utils/labels';
+import { BUILDING_TYPE_VI, NO_RATE_DISCLAIMER, WORK_SCOPE_VI } from '../../utils/labels';
 import { EvidenceCell } from '../common/EvidenceCell';
 import { StatusBadge } from '../common/StatusBadge';
 
 /** Ghi chú miễn trừ mục 6.6 — dùng khi backend không gửi `disclaimer` (không bao giờ để trống). */
 export function fallbackDisclaimer(d: EstimateResult): string {
+  // Không có đơn giá / chi phí: không nói "dựa trên đơn giá tham chiếu" (cùng câu với backend explain.build_disclaimer).
+  if (!d.rate || d.rate.status === 'unavailable' || d.cost_min == null) return NO_RATE_DISCLAIMER;
   const src = d.rate?.source;
   const date = formatDateVi(src?.updated_at);
   const ref = src ? ` (${src.label}${date ? `, cập nhật ${date}` : ''})` : '';
@@ -50,7 +52,6 @@ export function EstimateTable({ block }: { block: EstimateTableBlock }) {
   const detailId = useId();
   const disclaimer = d.disclaimer && d.disclaimer.trim() ? d.disclaimer : fallbackDisclaimer(d);
   const scope = WORK_SCOPE_VI[d.input.work_scope] ?? d.input.work_scope;
-  const tier = d.input.quality_tier ? QUALITY_TIER_VI[d.input.quality_tier] : null;
   const place = [d.input.district, d.input.province].filter(Boolean).join(', ');
 
   return (
@@ -90,10 +91,7 @@ export function EstimateTable({ block }: { block: EstimateTableBlock }) {
           </tr>
           <tr>
             <th scope="row">Phạm vi</th>
-            <td>
-              {scope}
-              {tier ? ` · mức ${tier.toLowerCase()}` : ''}
-            </td>
+            <td>{scope}</td>
           </tr>
           <tr>
             <th scope="row">Đơn giá tham chiếu</th>

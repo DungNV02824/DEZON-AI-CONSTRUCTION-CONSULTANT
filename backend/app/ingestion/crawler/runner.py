@@ -1,6 +1,10 @@
 """Chạy một lượt crawl trang công khai dezon.vn -> upsert vào DB.
 
     python -m app.ingestion.crawler.runner --max-pages 30 [--snapshot app/db/seed_data/dezon_snapshot.json]
+    # snapshot đầy đủ nhà thầu tiềm năng + mọi công trình của họ:
+    python -m app.ingestion.crawler.runner --max-pages 400 --works-per-contractor 50 --list-path /nha-thau/tiem-nang/ --snapshot app/db/seed_data/dezon_snapshot.json
+    # làm sạch lại snapshot theo parser hiện hành, không crawl:
+    python -m app.ingestion.crawler.runner --reclean-snapshot app/db/seed_data/dezon_snapshot.json
 
 Chỉ chạy qua job nền (app.jobs.job_crawl) hoặc CLI của đội vận hành — KHÔNG chạy khi khách hỏi.
 Thứ tự: danh sách nhà thầu -> hồ sơ nhà thầu -> công trình thực tế của nhà thầu -> danh sách & trang dự án.
@@ -180,6 +184,32 @@ def write_snapshot(snapshot: dict[str, Any], path: str | Path) -> None:
     p.write_text(json.dumps(snapshot, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
 
 
+def reclean_snapshot(snapshot: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    """Áp lại bước làm sạch hiện hành lên snapshot đã crawl, KHÔNG crawl lại: đơn giá nhà thầu tính lại từ chuỗi gốc
+    `extra.spec`, tỉnh/quận công trình nhà thầu suy lại từ dòng meta + tên. Giữ nguyên `_source`.
+    Trả danh sách thay đổi `{"contractors": [{slug, before, after}], "projects": [...]}`."""
+    price_fields = [f"{k}_{b}" for k in parsers.PRICE_KEYS for b in ("min", "max")]
+    changes: dict[str, list[dict[str, Any]]] = {"contractors": [], "projects": []}
+    for rec in snapshot.get("contractors") or []:
+        if not (rec.get("extra") or {}).get("spec"):
+            continue
+        before = {f: rec.get(f) for f in price_fields}
+        parsers.apply_spec_prices(rec)
+        after = {f: rec.get(f) for f in price_fields}
+        if before != after:
+            changes["contractors"].append({"slug": rec.get("slug"), "before": before, "after": after})
+    for rec in snapshot.get("projects") or []:
+        if "meta_line" not in (rec.get("extra") or {}):  # trang /du-an/: tỉnh lấy từ bảng thông tin, không suy từ tên
+            continue
+        before = {f: rec.get(f) for f in ("province", "district")}
+        parsers.reapply_work_location(rec)
+        after = {f: rec.get(f) for f in ("province", "district")}
+        if before != after:
+            changes["projects"].append({"slug": rec.get("slug"), "name": rec.get("name"), "before": before,
+                                        "after": after})
+    return changes
+
+
 def main() -> None:  # pragma: no cover — CLI vận hành
     ap = argparse.ArgumentParser(description="Crawl dezon.vn (tôn trọng robots.txt, delay >= 2s)")
     ap.add_argument("--max-pages", type=int, default=30)
@@ -187,14 +217,25 @@ def main() -> None:  # pragma: no cover — CLI vận hành
     ap.add_argument("--works-per-contractor", type=int, default=3)
     ap.add_argument("--no-projects", action="store_true")
     ap.add_argument("--snapshot", default=None)
+    ap.add_argument("--list-path", action="append", default=None,
+                    help="Trang danh sách nhà thầu (lặp được); mặc định /nha-thau/tiem-nang/ và /nha-thau/")
+    ap.add_argument("--reclean-snapshot", default=None, metavar="PATH",
+                    help="Không crawl: áp lại bước làm sạch đơn giá/địa điểm lên snapshot PATH rồi ghi đè file")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO)
+    if args.reclean_snapshot:
+        data = json.loads(Path(args.reclean_snapshot).read_text(encoding="utf-8"))
+        changes = reclean_snapshot(data)
+        write_snapshot(data, args.reclean_snapshot)
+        print(json.dumps(changes, ensure_ascii=False, indent=1, default=str))
+        return
     from app.db.session import SessionLocal
 
     with SessionLocal() as db:
         stats = run_crawl(db, args.max_pages, max_contractors=args.max_contractors,
                           works_per_contractor=args.works_per_contractor,
-                          include_project_pages=not args.no_projects, snapshot_path=args.snapshot)
+                          include_project_pages=not args.no_projects, snapshot_path=args.snapshot,
+                          list_paths=tuple(args.list_path or DEFAULT_LIST_PATHS))
     stats.pop("changed_entities", None)
     print(json.dumps(stats, ensure_ascii=False))
 

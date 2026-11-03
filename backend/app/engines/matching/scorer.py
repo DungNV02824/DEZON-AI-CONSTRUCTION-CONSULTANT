@@ -46,14 +46,16 @@ HIGH_THRESHOLD = 85
 OK_THRESHOLD = 70
 MIN_CANDIDATES = 3
 
-# Phạm vi thi công -> loại đơn giá nhà thầu dùng để ước chi phí.
+# Phạm vi thi công -> loại đơn giá nhà thầu dùng để ước chi phí. Hồ sơ Dezon chỉ có "Đơn giá thi công thô" (rough)
+# và "Đơn giá hoàn thiện cơ bản" (finish) — mục sau là giá TRỌN GÓI (thô + hoàn thiện cơ bản), không phải giá riêng
+# phần hoàn thiện. Hoàn thiện / nội thất: nhà thầu chưa công bố đơn giá riêng -> trung tính (xem docs/DECISIONS.md).
 SCOPE_PRICE_FIELD: dict[str, str | None] = {
     "xay_tho": "rough",
-    "hoan_thien": "finish",
+    "hoan_thien": None,
     "tron_goi": "finish",
-    "noi_that": None,  # đơn giá thô/hoàn thiện trên hồ sơ không áp dụng cho nội thất
+    "noi_that": None,
 }
-PRICE_KIND_VI = {"rough": "xây thô", "finish": "hoàn thiện"}
+PRICE_KIND_VI = {"rough": "xây thô", "finish": "trọn gói (hoàn thiện cơ bản)"}
 
 
 @dataclass
@@ -65,7 +67,9 @@ class ScoredContractor:
     flags: list[str] = field(default_factory=list)
     estimated_cost: tuple[int, int] | None = None  # VND, làm tròn triệu
     price_kind: str | None = None  # rough | finish | None
-    location_kind: str = "none"  # district | province | neighbor | none
+    # Hồ sơ chỉ có cận trên của đơn giá -> estimated_cost là MỨC TỐI ĐA (lo = hi), hiển thị "tối đa …".
+    cost_upper_only: bool = False
+    location_kind: str = "none"  # district | province | project | neighbor | none
     relaxed_location: bool = False
     missing_important: list[str] = field(default_factory=list)
     has_type_capability: bool = False
@@ -81,6 +85,10 @@ class RankingResult:
     total_candidates: int
     relaxed_to_neighbors: bool
     notes: list[str]
+
+
+# Khớp tỉnh chỉ qua công trình (không phải tỉnh trên hồ sơ/khu vực hoạt động) — xem docs/DECISIONS.md.
+PROJECT_ONLY_LOCATION_SCORE = 0.6
 
 
 # --- Tiện ích ----------------------------------------------------------------------------------
@@ -126,11 +134,27 @@ def score_location(facts: ContractorFacts, criteria: MatchCriteria,
                    neighbors: Iterable[str] = ()) -> tuple[float, str, str]:
     p, d = norm_place(criteria.province), norm_place(criteria.district)
     places = _places(facts)
-    if d and any(norm_place(pp) == p and norm_place(dd) == d for pp, dd in places):
+    registered = [c.province for c in facts.capabilities] + [facts.province]
+    registered_prov = any(norm_place(pp) == p for pp in registered if pp)
+
+    def _in_district(items) -> bool:
+        return any(norm_place(x.province) == p and norm_place(x.district) == d for x in items)
+
+    # Khớp quận/huyện chỉ tính 1.0 khi tỉnh đó là khu vực đăng ký (capability tại quận, hoặc dự án tại quận của
+    # nhà thầu đã đăng ký tỉnh). Dự án tại quận của nhà thầu ngoại tỉnh vẫn chỉ là "project" (không vượt sở tại).
+    if d and (_in_district(facts.capabilities) or (registered_prov and _in_district(facts.projects))):
         return 1.0, "district", f"Khớp quận/huyện {criteria.district} ({criteria.province})"
-    if any(norm_place(pp) == p for pp, _ in places):
-        extra = "" if not criteria.district else f"; chưa ghi nhận hoạt động tại {criteria.district}"
+    extra = "" if not criteria.district else f"; chưa ghi nhận hoạt động tại {criteria.district}"
+    if registered_prov:
         return 0.8, "province", f"Khớp tỉnh/thành {criteria.province}{extra}"
+    if any(norm_place(pp) == p for pp, _ in places):
+        # Chỉ có công trình tại tỉnh của khách, hồ sơ đăng ký khu vực khác -> thấp hơn nhà thầu sở tại.
+        if d and _in_district(facts.projects):
+            where, extra = f"{criteria.district} ({criteria.province})", ""
+        else:
+            where = criteria.province
+        return (PROJECT_ONLY_LOCATION_SCORE, "project",
+                f"Có công trình tại {where}, hồ sơ chưa ghi khu vực hoạt động tại {criteria.province}{extra}")
     nb = operates_in_any(facts, neighbors)
     if nb:
         return 0.4, "neighbor", f"Chỉ hoạt động tại tỉnh lân cận ({nb}) của {criteria.province}"
@@ -166,6 +190,18 @@ def contractor_price(facts: ContractorFacts, kind: str | None) -> tuple[float, f
     return float(lo), float(hi)
 
 
+def price_upper_only(facts: ContractorFacts, kind: str | None) -> bool:
+    """Hồ sơ chỉ công bố cận trên (cận dưới mặc định của form đã bị bỏ) -> giá/chi phí là mức tối đa."""
+    if kind not in ("rough", "finish"):
+        return False
+    return getattr(facts, f"{kind}_price_min") is None and getattr(facts, f"{kind}_price_max") is not None
+
+
+def format_cost(cost: tuple[float, float], upper_only: bool = False) -> str:
+    """Chuỗi chi phí ước: khoảng "a–b", hoặc "tối đa b" khi chỉ biết cận trên."""
+    return f"tối đa {format_vnd(cost[1])}" if upper_only else format_vnd_range(*cost)
+
+
 def estimate_cost(facts: ContractorFacts, work_scope: str | None,
                   converted_area_m2: float | None) -> tuple[tuple[int, int] | None, str | None]:
     """Chi phí ước = A_quy_doi × đơn giá nhà thầu (min–max), làm tròn triệu."""
@@ -177,12 +213,17 @@ def estimate_cost(facts: ContractorFacts, work_scope: str | None,
             round_to_million(converted_area_m2 * price[1])), kind
 
 
-def budget_score(cost: tuple[float, float], budget: float) -> tuple[float, str]:
+def budget_score(cost: tuple[float, float], budget: float, upper_only: bool = False) -> tuple[float, str]:
     """Quy tắc 7.3: 1.0 nếu khoảng chi phí giao [0,9B; 1,1B] và có phần ≤ B; vượt thì giảm tuyến tính
-    theo % vượt (tính trên đầu thấp của khoảng), 0 khi vượt > 40%."""
+    theo % vượt (tính trên đầu thấp của khoảng), 0 khi vượt > 40%.
+
+    `upper_only`: chỉ biết mức tối đa (cận dưới chưa rõ). Mức tối đa ≤ B -> xét như thường; mức tối đa > B ->
+    không đủ căn cứ kết luận vượt ngân sách -> trung tính, không gắn cờ vượt ngân sách."""
     lo, hi = cost
     if budget <= 0:
         raise ValueError("Ngân sách phải > 0")
+    if upper_only and hi > budget:
+        return NEUTRAL, ""
     if lo > budget:
         overrun = (lo - budget) / budget
         return max(0.0, 1.0 - overrun / OVERRUN_ZERO_AT), FLAG_OVER_BUDGET
@@ -200,8 +241,8 @@ def score_budget_fit(facts: ContractorFacts, criteria: MatchCriteria, converted_
         return NEUTRAL, "Chưa rõ phạm vi thi công — tính trung tính", flags, est, kind
     if kind is None:
         flags.append(FLAG_SCOPE_NO_PRICE)
-        return (NEUTRAL, f"Đơn giá trên hồ sơ không áp dụng cho phạm vi {WORK_SCOPE_VI[scope].lower()} "
-                "— tính trung tính", flags, est, kind)
+        return (NEUTRAL, f"Nhà thầu chưa công bố đơn giá riêng cho phạm vi {WORK_SCOPE_VI[scope].lower()} "
+                "trên Dezon — tính trung tính", flags, est, kind)
     if contractor_price(facts, kind) is None:
         flags.append(FLAG_VERIFY_PRICE)
         return (NEUTRAL, f"Chưa có đơn giá {PRICE_KIND_VI[kind]} — tính trung tính, {FLAG_VERIFY_PRICE.lower()}",
@@ -210,10 +251,14 @@ def score_budget_fit(facts: ContractorFacts, criteria: MatchCriteria, converted_
         return NEUTRAL, "Anh/chị chưa cung cấp ngân sách — tính trung tính", flags, est, kind
     if est is None:
         return NEUTRAL, "Chưa có diện tích quy đổi từ khái toán — tính trung tính", flags, est, kind
-    score, flag = budget_score(est, float(criteria.budget_vnd))
-    cost_txt = format_vnd_range(*est)
+    upper_only = price_upper_only(facts, kind)
+    score, flag = budget_score(est, float(criteria.budget_vnd), upper_only)
+    cost_txt = format_cost(est, upper_only)
     budget_txt = format_vnd(criteria.budget_vnd)
-    if flag == FLAG_OVER_BUDGET:
+    if upper_only and est[1] > criteria.budget_vnd:
+        note = (f"Chi phí ước {cost_txt}, cao hơn ngân sách {budget_txt}; hồ sơ chỉ công bố mức tối đa "
+                "— tính trung tính, cần đối chiếu báo giá")
+    elif flag == FLAG_OVER_BUDGET:
         flags.append(flag)
         note = f"Chi phí ước {cost_txt} vượt ngân sách {budget_txt}"
     elif flag == FLAG_UNDER_BUDGET:
@@ -297,7 +342,8 @@ def score_contractor(facts: ContractorFacts, criteria: MatchCriteria, weights: M
     missing = missing_important_fields(facts)
     return ScoredContractor(
         facts=facts, score=total, fit_label=fit_label(total, missing), breakdown=breakdown, flags=flags,
-        estimated_cost=est, price_kind=kind, location_kind=loc_kind,
+        estimated_cost=est, price_kind=kind, cost_upper_only=est is not None and price_upper_only(facts, kind),
+        location_kind=loc_kind,
         relaxed_location=loc_kind == "neighbor", missing_important=missing,
         has_type_capability=has_cap, has_type_project=has_proj,
     )

@@ -37,7 +37,8 @@ def _session() -> Iterator[Session]:
 
 
 def _after_sync(db: Session, changed: list[tuple[str, int]] | None) -> dict[str, Any]:
-    """Sau đồng bộ: tính lại profile_completeness (module contractor_service) rồi re-embed."""
+    """Sau đồng bộ: tính lại profile_completeness (module contractor_service), dựng lại đơn giá tổng hợp từ
+    hồ sơ nhà thầu (market_rates) rồi re-embed."""
     from app.rag.embed import reindex_all, reindex_changed
 
     completeness = "skipped"
@@ -54,8 +55,18 @@ def _after_sync(db: Session, changed: list[tuple[str, int]] | None) -> dict[str,
     except Exception as exc:  # noqa: BLE001
         log.exception("Lỗi tính lại profile_completeness: %s", exc)
         completeness = "error"
+    market_rates: dict[str, Any] | str
+    try:
+        from app.services.market_rates import rebuild_market_rates
+
+        with db.begin_nested():  # lỗi dựng đơn giá không được chặn bước re-embed
+            stats = rebuild_market_rates(db)
+        market_rates = {k: stats[k] for k in ("created", "updated", "expired", "skipped_official", "kept_in_use")}
+    except Exception as exc:  # noqa: BLE001
+        log.exception("Lỗi dựng lại đơn giá tổng hợp từ hồ sơ nhà thầu: %s", exc)
+        market_rates = "error"
     chunks = reindex_changed(db, changed) if changed is not None else reindex_all(db)
-    return {"profile_completeness": completeness, "reindexed_chunks": chunks}
+    return {"profile_completeness": completeness, "market_rates": market_rates, "reindexed_chunks": chunks}
 
 
 # ------------------------------------------------------------------ các job

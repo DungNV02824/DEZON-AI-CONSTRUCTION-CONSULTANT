@@ -3,7 +3,9 @@
 Quy tắc (đặc tả 2.10, 11.2):
 - Mỗi trang/bản ghi nguồn -> đúng 1 bản ghi `data_sources` (khóa theo `url`), có `fetched_at`, `raw_hash`,
   `status` mặc định theo `default_status_for(source_type)`.
-- Chỉ cập nhật thực thể khi `raw_hash` đổi (hoặc thực thể chưa tồn tại).
+- Chỉ cập nhật thực thể khi nội dung đổi (hoặc thực thể chưa tồn tại). `data_sources.raw_hash` của trang lưu
+  "<hash trang>:<hash bản ghi đã parse>" (`ingest_page`): trang không đổi nhưng bộ parse/làm sạch đổi (vd làm sạch đơn
+  giá) vẫn ghi lại thực thể; trang không đổi và bản ghi parse không đổi -> bỏ qua.
 - `contractors.field_sources = {field: data_source_id}` cho từng trường được ghi.
 - Ưu tiên nguồn (`SOURCE_PRIORITY`): nguồn ưu tiên thấp hơn KHÔNG ghi đè trường đang có giá trị từ nguồn
   ưu tiên cao hơn; chỉ được điền trường đang trống.
@@ -12,6 +14,8 @@ Quy tắc (đặc tả 2.10, 11.2):
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
@@ -87,6 +91,11 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
+def aware(dt: datetime) -> datetime:
+    """datetime không có múi giờ -> coi là UTC (để so sánh được)."""
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
+
+
 def priority_of(source_type: str | SourceType | None) -> int:
     """Số nhỏ = ưu tiên cao. Không rõ nguồn -> thấp nhất."""
     if source_type is None:
@@ -146,22 +155,44 @@ def _source_priority_by_id(db: Session, source_id: int | None) -> int:
 
 
 # ------------------------------------------------------------------ data_sources
+HASH_SEP = ":"
+
+
+def records_hash(records: list[dict[str, Any]]) -> str:
+    """Hash của các bản ghi đã parse (JSON sắp xếp khóa) — đổi khi bộ parse/làm sạch cho kết quả khác."""
+    data = json.dumps(records, sort_keys=True, ensure_ascii=False, default=str)
+    return hashlib.sha256(data.encode("utf-8")).hexdigest()
+
+
+def find_data_source(db: Session, *, url: str | None, label: str, source_type: str | SourceType) -> DataSource | None:
+    if url:
+        return db.scalar(select(DataSource).where(DataSource.url == url))
+    return db.scalar(select(DataSource).where(DataSource.label == label, DataSource.url.is_(None),
+                                              DataSource.source_type == SourceType(source_type).value))
+
+
+def reset_verification(ds: DataSource, approved: bool | None = None) -> None:
+    """Nội dung nguồn đã đổi -> trạng thái về mặc định theo loại nguồn, bỏ xác minh cũ."""
+    ds.status = default_status_for(ds.source_type, approved).value
+    ds.verified_by = None
+    ds.verified_at = None
+
+
 def upsert_data_source(db: Session, *, url: str | None, label: str, source_type: str | SourceType,
                        raw_hash: str | None, source_updated_at: datetime | None = None,
                        fetched_at: datetime | None = None, approved: bool | None = None,
+                       keep_verification: bool = False,
                        ) -> tuple[DataSource, Literal["created", "changed", "unchanged"]]:
     """Tạo/cập nhật bản ghi nguồn theo `url` (hoặc theo `label` khi không có url).
 
-    - hash không đổi: chỉ cập nhật `fetched_at` (thời điểm kiểm tra lại gần nhất), trả "unchanged".
+    - hash không đổi: chỉ cập nhật `fetched_at` (thời điểm kiểm tra lại gần nhất, không lùi về trước), trả
+      "unchanged".
     - hash đổi: cập nhật hash, nhãn, ngày nguồn; trạng thái về mặc định theo `source_type`
-      (nội dung đã thay đổi nên xác minh cũ không còn áp dụng), trả "changed".
+      (nội dung đã thay đổi nên xác minh cũ không còn áp dụng), trả "changed". `keep_verification=True`: giữ trạng
+      thái (người gọi tự quyết định sau khi biết dữ liệu có thật sự đổi — xem `ingest_page`).
     """
     st = SourceType(source_type)
-    if url:
-        ds = db.scalar(select(DataSource).where(DataSource.url == url))
-    else:
-        ds = db.scalar(select(DataSource).where(DataSource.label == label, DataSource.url.is_(None),
-                                                DataSource.source_type == st.value))
+    ds = find_data_source(db, url=url, label=label, source_type=st)
     fetched_at = fetched_at or _now()
     if ds is None:
         ds = DataSource(url=url, label=label, source_type=st.value,
@@ -173,7 +204,8 @@ def upsert_data_source(db: Session, *, url: str | None, label: str, source_type:
         return ds, "created"
     _ds_cache(db)[ds.id] = ds
     if raw_hash is not None and ds.raw_hash == raw_hash:
-        ds.fetched_at = fetched_at
+        if ds.fetched_at is None or aware(fetched_at) > aware(ds.fetched_at):
+            ds.fetched_at = fetched_at
         return ds, "unchanged"
     # Một URL chỉ có 1 bản ghi nguồn: chỉ nâng loại nguồn lên mức ưu tiên cao hơn, không hạ.
     if priority_of(st) <= priority_of(ds.source_type):
@@ -183,9 +215,8 @@ def upsert_data_source(db: Session, *, url: str | None, label: str, source_type:
     ds.fetched_at = fetched_at
     if source_updated_at is not None:
         ds.source_updated_at = source_updated_at
-    ds.status = default_status_for(ds.source_type, approved).value
-    ds.verified_by = None
-    ds.verified_at = None
+    if not keep_verification:
+        reset_verification(ds, approved)
     db.flush()
     return ds, "changed"
 
@@ -437,15 +468,23 @@ def ingest_page(db: Session, records: list[dict[str, Any]], *, url: str | None, 
                 primary: bool = True, create_missing_contractors: bool = False) -> list[UpsertOutcome]:
     """Ghi các bản ghi lấy từ cùng một trang/nguồn.
 
-    `raw_hash` trùng lần trước -> mọi bản ghi đã tồn tại được đánh dấu "unchanged" mà không ghi DB.
+    Khóa so sánh = `raw_hash` (hash trang) + hash các bản ghi đã parse. Trùng lần trước -> mọi bản ghi đã tồn tại
+    được đánh dấu "unchanged" mà không ghi DB. Trang không đổi nhưng bản ghi parse khác (bộ parse/làm sạch mới, hoặc
+    khóa cũ chỉ có hash trang) -> vẫn ghi lại; xác minh của nguồn chỉ bị bỏ khi thực thể thật sự đổi.
     """
     if not records:
         return []
     label = label or default_label(records[0], url)
     if source_updated_at is None:
         source_updated_at = records[0].get("source_updated_at")
-    ds, state = upsert_data_source(db, url=url, label=label, source_type=source_type, raw_hash=raw_hash,
-                                   source_updated_at=source_updated_at, fetched_at=fetched_at)
+    content_key = f"{raw_hash}{HASH_SEP}{records_hash(records)}" if raw_hash is not None else None
+    prev = find_data_source(db, url=url, label=label, source_type=source_type)
+    prev_key = prev.raw_hash if prev is not None else None
+    reparsed = (content_key is not None and prev_key is not None and prev_key != content_key
+                and prev_key.split(HASH_SEP, 1)[0] == raw_hash)
+    ds, state = upsert_data_source(db, url=url, label=label, source_type=source_type, raw_hash=content_key,
+                                   source_updated_at=source_updated_at, fetched_at=fetched_at,
+                                   keep_verification=reparsed)
     outcomes: list[UpsertOutcome] = []
     for rec in records:
         kind = rec.get("kind", "contractor")
@@ -469,4 +508,7 @@ def ingest_page(db: Session, records: list[dict[str, Any]], *, url: str | None, 
             out = UpsertOutcome(action="skipped", entity_type=kind, source_id=ds.id, slug=rec.get("slug"),
                                 detail=f"{exc.__class__.__name__}: {exc}")
         outcomes.append(out)
+    if reparsed and any(o.action in ("created", "updated") for o in outcomes):
+        reset_verification(ds)  # dữ liệu hiển thị đổi (dù trang không đổi) -> xác minh cũ không còn áp dụng
+        db.flush()
     return outcomes

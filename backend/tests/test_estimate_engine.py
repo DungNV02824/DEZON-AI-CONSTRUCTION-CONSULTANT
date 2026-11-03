@@ -96,17 +96,17 @@ def test_defaults_four_floors_use_pile_and_concrete_roof_and_are_recorded():
     assert res.input.roof_area_m2 == 100
     joined = "\n".join(res.assumptions)
     assert "Diện tích xây dựng mỗi tầng = diện tích đất 100 m² (anh/chị chưa cung cấp)" in res.assumptions
-    assert "Móng: móng cọc (mặc định cho nhà ≥ 4 tầng nổi" in joined
-    assert "Mái: mái bê tông cốt thép (mặc định, anh/chị chưa chọn loại mái)" in res.assumptions
-    assert "Mức chất lượng: Trung bình (mặc định, anh/chị chưa chọn)" in res.assumptions
-    assert "Không có tầng hầm (anh/chị chưa đề cập)" in res.assumptions
+    assert "Móng tính theo thông lệ: móng cọc cho nhà ≥ 4 tầng nổi" in joined
+    assert "Mái: mái bê tông cốt thép (anh/chị chưa có thông tin loại mái, em tạm tính)" in res.assumptions
+    assert not any("Mức chất lượng" in a for a in res.assumptions)  # không còn phân mức chất lượng
+    assert "Không có tầng hầm (anh/chị chưa có thông tin, em tạm tính không có hầm)" in res.assumptions
 
 
 def test_default_strip_foundation_for_three_floors():
     res = calc(floors=3)
     assert res.input.foundation_type == "foundation_strip"
     assert res.converted_area_m2 == 400  # 50 + 3×100 + 50
-    assert any("móng băng (mặc định cho nhà ≤ 3 tầng nổi" in a for a in res.assumptions)
+    assert any("móng băng cho nhà ≤ 3 tầng nổi" in a for a in res.assumptions)
 
 
 def test_foundation_single_explicit_no_default_assumption():
@@ -215,16 +215,23 @@ def test_no_rate_gives_unavailable_cost():
     assert res.rate.display == NO_DATA and res.rate.status == "unavailable"
     assert res.converted_area_m2 == 490
     assert any("chưa thể khái toán chi phí" in w for w in res.warnings)
-    assert "(Chưa có dữ liệu)" in res.disclaimer
+    # Không có đơn giá -> ghi chú không được nói "dựa trên đơn giá tham chiếu"
+    assert res.disclaimer == (
+        "Đây là khái toán sơ bộ: Dezon chưa có đủ đơn giá do nhà thầu công bố cho phạm vi này nên em chỉ tính diện "
+        "tích sàn quy đổi, chưa tính được chi phí. Không phải báo giá thi công. "
+        "Vui lòng yêu cầu báo giá từ nhà thầu để có con số chính xác.")
+    assert "đơn giá tham chiếu" not in res.disclaimer
     assert res.rate_id is None
 
 
 def test_fallback_rate_is_reference_with_assumption():
-    rate = make_rate(is_fallback=True, status=VerificationStatus.verified)
+    rate = make_rate(is_fallback=True, status=VerificationStatus.verified,
+                     label="Tổng hợp đơn giá xây thô do 5 nhà thầu nhà phố trên toàn quốc công bố trên Dezon")
     res = calc(make_input(province="Cần Thơ"), rules=make_rules(approved=True), rate=rate)
     assert res.rate.status == "reference"
     assert res.cost.status == "reference"
-    assert "Dùng đơn giá mặc định toàn quốc do chưa có đơn giá riêng cho Cần Thơ" in res.assumptions
+    assert ("Dùng đơn giá mặc định toàn quốc (tổng hợp đơn giá do các nhà thầu trên Dezon công bố) vì chưa đủ "
+            "dữ liệu đơn giá nhà thầu tại Cần Thơ (cần ít nhất 3 hồ sơ nhà thầu có công bố giá)") in res.assumptions
 
 
 def test_unapproved_rules_make_reference_and_warn():
@@ -284,7 +291,7 @@ def test_apartment_no_foundation_roof_basement():
     assert "Không tính tầng hầm vì nằm ngoài phạm vi khái toán này" in res.assumptions
     assert not any("Mức chất lượng" in a for a in res.assumptions)
     assert any("ban quản lý tòa nhà" in e for e in res.exclusions)
-    assert any("Mức chất lượng vật tư" in d for d in res.cost_drivers)
+    assert not any("Mức chất lượng" in d for d in res.cost_drivers)
     assert any("thang máy" in d for d in res.cost_drivers)
     big = calc(make_input(building_type="can_ho", floors=5, work_scope="hoan_thien"))
     assert any("căn duplex" in w for w in big.warnings)
@@ -317,9 +324,9 @@ def test_exclusions_by_scope(scope, expected):
     assert pile_excl == (scope != "hoan_thien")
 
 
-def test_quality_high_finishing_driver():
+def test_quality_tier_ignored_in_drivers():
     res = calc(work_scope="tron_goi", quality_tier="cao_cap", rate=make_rate(work_scope="tron_goi"))
-    assert any("Mức chất lượng vật tư hoàn thiện cao" in d for d in res.cost_drivers)
+    assert not any("Mức chất lượng" in d for d in res.cost_drivers)
     assert any("Hẻm nhỏ" in d for d in res.cost_drivers)
     assert any("Đất yếu" in d for d in res.cost_drivers)
 
@@ -334,8 +341,6 @@ def test_rules_helpers():
     assert R.weakest_status() == "unavailable"
     assert R.weakest_status("verified", "on_dezon", "reference") == "reference"
     assert R.basement_rule_for_depth(None) == R.DEFAULT_BASEMENT_RULE
-    assert R.lower_quality("trung_binh") == "tiet_kiem"
-    assert R.lower_quality("tiet_kiem") is None
     assert R.default_foundation(3) == "foundation_strip"
     assert R.default_foundation(4) == "foundation_pile"
 
@@ -364,8 +369,8 @@ def test_finishing_scope_drivers_do_not_mention_rough_work():
 
 def test_blank_province_label_in_fallback_and_no_rate():
     res = calc(make_input(province="  "), rate=make_rate(is_fallback=True))
-    assert ("Dùng đơn giá mặc định toàn quốc do chưa có đơn giá riêng cho khu vực của anh/chị"
-            in res.assumptions)
+    assert any(a.startswith("Dùng đơn giá mặc định toàn quốc") and "tại khu vực của anh/chị" in a
+               for a in res.assumptions)
     none = calc(make_input(province=""), rate=None)
     assert any("tại khu vực của anh/chị" in w for w in none.warnings)
 
@@ -374,10 +379,14 @@ def test_rate_not_matching_input_warns_and_is_reference():
     res = calc(make_input(work_scope="tron_goi", quality_tier="kha"),
                rules=make_rules(approved=True), rate=make_rate(status=VerificationStatus.verified))
     warn = next(w for w in res.warnings if "không khớp thông tin công trình" in w)
-    assert "phạm vi Xây thô" in warn and "mức Trung bình" in warn
+    assert "phạm vi Xây thô" in warn and "mức" not in warn
     assert res.rate.status == "reference" and res.cost.status == "reference"
     ok = calc(rules=make_rules(approved=True), rate=make_rate(status=VerificationStatus.verified))
     assert not any("không khớp" in w for w in ok.warnings)
+    # Mức chất lượng không còn được so khớp (đơn giá không phân mức)
+    tier = calc(make_input(quality_tier="cao_cap"), rules=make_rules(approved=True),
+                rate=make_rate(status=VerificationStatus.verified))
+    assert not any("không khớp" in w for w in tier.warnings)
     assert ok.cost.status == "verified"
 
 
@@ -392,3 +401,23 @@ def test_finishing_scope_does_not_add_foundation_area():
     assert any("không tính diện tích móng" in a for a in fin.assumptions)
     assert any("Phần xây thô" in e for e in fin.exclusions)
     assert fin.converted_area_m2 < rough.converted_area_m2
+
+
+@pytest.mark.parametrize("scope", ["hoan_thien", "noi_that"])
+def test_scope_without_declared_prices_explains_and_suggests_other_scopes(scope):
+    res = calc(make_input(work_scope=scope), rate=None)
+    assert res.cost.display == NO_DATA and res.cost_min is None
+    warn = next(w for w in res.warnings if "chưa công bố đơn giá" in w)
+    assert "Dezon" in warn and "Xây thô hoặc Trọn gói" in warn and "mức" not in warn
+    rough = calc(make_input(work_scope="xay_tho"), rate=None)
+    assert not any("chưa công bố đơn giá" in w for w in rough.warnings)
+    assert not any("mức " in w for w in rough.warnings)
+
+
+def test_answered_no_basement_no_mezzanine_is_not_listed_as_assumption():
+    """Khách đã trả lời "không hầm, không lửng" -> không ghi là "chưa có thông tin"; chưa trả lời -> ghi rõ."""
+    answered = calc(basement=False, has_mezzanine=False)
+    assert not any("tầng hầm" in a.lower() or "tầng lửng" in a.lower() for a in answered.assumptions)
+    unknown = calc()
+    assert "Không có tầng lửng (anh/chị chưa có thông tin, em tạm tính không có lửng)" in unknown.assumptions
+    assert answered.converted_area_m2 == unknown.converted_area_m2

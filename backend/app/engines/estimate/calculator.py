@@ -14,17 +14,12 @@ from typing import Any
 
 from app.evidence import EvidenceValue, VerificationStatus, make_evidence
 from app.formatting import format_m2, format_price_per_m2_range, format_vnd_range, round_to_million
-from app.schemas.common import (
-    BUILDING_TYPE_VI,
-    QUALITY_TIER_VI,
-    WORK_SCOPE_VI,
-    BuildingType,
-    WorkScope,
-)
+from app.schemas.common import BUILDING_TYPE_VI, WORK_SCOPE_VI, BuildingType, WorkScope
 from app.schemas.estimate import EstimateInput, EstimateItem, EstimateResult, RateData, RuleSet
 
 from . import explain
 from . import rules as R
+from .market import MIN_CONTRACTORS_FOR_RATE, is_market_label
 
 RULES_NOT_APPROVED_WARNING = "Hệ số khái toán chưa được Dezon phê duyệt chính thức"
 _TWO = Decimal("0.01")
@@ -77,9 +72,28 @@ def _rate_mismatch(inp: EstimateInput, rate: RateData) -> list[str]:
         out.append(f"loại công trình {BUILDING_TYPE_VI.get(rate.building_type, rate.building_type)}")
     if str(rate.work_scope) != str(inp.work_scope):
         out.append(f"phạm vi {WORK_SCOPE_VI.get(rate.work_scope, rate.work_scope)}")
-    if str(rate.quality_tier) != str(inp.quality_tier):
-        out.append(f"mức {QUALITY_TIER_VI.get(rate.quality_tier, rate.quality_tier)}")
     return out
+
+
+# Phạm vi chưa có đơn giá nào do nhà thầu công bố trên Dezon (hồ sơ chỉ có xây thô và hoàn thiện cơ bản = trọn gói).
+NO_DECLARED_PRICE_SCOPES = {WorkScope.hoan_thien, WorkScope.noi_that}
+
+
+NATIONAL_RATE_PREFIX = "Dùng đơn giá mặc định toàn quốc"
+
+
+def _national_fallback_assumption(rate: RateData, province: str | None) -> str:
+    """Câu giả định khi dùng dòng toàn quốc ('*'), nêu đúng nguồn của dòng đó.
+
+    Giữ tiền tố `NATIONAL_RATE_PREFIX` (lớp AI nhận diện câu này để nói rõ với khách)."""
+    where = _province_label(province)
+    label = rate.source.label if rate.source is not None else None
+    if is_market_label(label):
+        return (f"{NATIONAL_RATE_PREFIX} (tổng hợp đơn giá do các nhà thầu trên Dezon công bố) vì chưa đủ "
+                f"dữ liệu đơn giá nhà thầu tại {where} "
+                f"(cần ít nhất {MIN_CONTRACTORS_FOR_RATE} hồ sơ nhà thầu có công bố giá)")
+    source = f"nguồn: {label}" if label else "đơn giá tham chiếu toàn quốc"
+    return f"{NATIONAL_RATE_PREFIX} ({source}) vì chưa có đơn giá riêng tại {where}"
 
 
 def _floor_label(i: int, floors: int, apartment: bool) -> str:
@@ -101,9 +115,6 @@ def calculate_estimate(inp: EstimateInput, rules: RuleSet, rate: RateData | None
     land = float(inp.land_area_m2)  # validator đảm bảo có giá trị
 
     assumptions.append(explain.SCOPE_INCLUDES_VI[scope])
-    if "quality_tier" not in inp.model_fields_set:
-        assumptions.append(
-            f"Mức chất lượng: {QUALITY_TIER_VI[inp.quality_tier]} (mặc định, anh/chị chưa chọn)")
 
     # --- Diện tích xây dựng mỗi tầng ---------------------------------------------------------
     if inp.building_area_m2 is None:
@@ -149,8 +160,8 @@ def calculate_estimate(inp: EstimateInput, rules: RuleSet, rate: RateData | None
             cond = (f"≤ {R.STRIP_FOUNDATION_MAX_FLOORS}" if foundation == R.FOUNDATION_STRIP
                     else f"≥ {R.STRIP_FOUNDATION_MAX_FLOORS + 1}")
             assumptions.append(
-                f"Móng: {R.FOUNDATION_LABEL_VI[foundation]} (mặc định cho nhà {cond} tầng nổi, "
-                "anh/chị chưa cung cấp loại móng)")
+                f"Móng tính theo thông lệ: {R.FOUNDATION_LABEL_VI[foundation]} cho nhà {cond} tầng nổi "
+                "(anh/chị chưa cung cấp loại móng)")
         b.add(foundation, ground)
 
     # --- Các tầng nổi --------------------------------------------------------------------------
@@ -171,6 +182,8 @@ def calculate_estimate(inp: EstimateInput, rules: RuleSet, rate: RateData | None
             assumptions.append(
                 f"Diện tích tầng lửng = diện tích xây dựng {format_m2(ground)} (anh/chị chưa cung cấp)")
         b.add(R.MEZZANINE, float(mezz))
+    elif not interior_only and "has_mezzanine" not in inp.model_fields_set:
+        assumptions.append("Không có tầng lửng (anh/chị chưa có thông tin, em tạm tính không có lửng)")
 
     # --- Tầng hầm -----------------------------------------------------------------------------
     wants_basement = inp.basement or inp.basement_depth_m is not None or inp.basement_area_m2 is not None
@@ -192,8 +205,8 @@ def calculate_estimate(inp: EstimateInput, rules: RuleSet, rate: RateData | None
         b.add(code, float(area))
     elif wants_basement:
         assumptions.append("Không tính tầng hầm vì nằm ngoài phạm vi khái toán này")
-    elif not interior_only:
-        assumptions.append("Không có tầng hầm (anh/chị chưa đề cập)")
+    elif not interior_only and "basement" not in inp.model_fields_set:
+        assumptions.append("Không có tầng hầm (anh/chị chưa có thông tin, em tạm tính không có hầm)")
 
     # --- Sân thượng & mái ----------------------------------------------------------------------
     if not interior_only:
@@ -235,7 +248,7 @@ def calculate_estimate(inp: EstimateInput, rules: RuleSet, rate: RateData | None
                     roof_type = R.ROOF_CONCRETE
                     applied["roof_type"] = roof_type
                     assumptions.append(
-                        f"Mái: {R.ROOF_LABEL_VI[roof_type]} (mặc định, anh/chị chưa chọn loại mái)")
+                        f"Mái: {R.ROOF_LABEL_VI[roof_type]} (anh/chị chưa có thông tin loại mái, em tạm tính)")
                 b.add(roof_type, float(roof_area))
 
         # --- Sân ---------------------------------------------------------------------------
@@ -262,17 +275,22 @@ def calculate_estimate(inp: EstimateInput, rules: RuleSet, rate: RateData | None
     if rate is None:
         rate_ev = EvidenceValue.unavailable()
         cost_ev = EvidenceValue.unavailable()
-        warnings.append(
-            f"Chưa có đơn giá tham chiếu cho {BUILDING_TYPE_VI.get(inp.building_type, inp.building_type)} "
-            f"tại {_province_label(inp.province)} (phạm vi {WORK_SCOPE_VI[scope]}, "
-            f"mức {QUALITY_TIER_VI[inp.quality_tier]}) nên em chưa thể khái toán chi phí")
+        if scope in NO_DECLARED_PRICE_SCOPES:
+            warnings.append(
+                f"Các nhà thầu trên Dezon chưa công bố đơn giá riêng cho phạm vi {WORK_SCOPE_VI[scope]} nên em "
+                "chưa thể khái toán chi phí phần này. Anh/chị có thể chọn phạm vi Xây thô hoặc Trọn gói "
+                "(có đơn giá do nhà thầu công bố trên Dezon), hoặc yêu cầu báo giá trực tiếp từ nhà thầu")
+        else:
+            warnings.append(
+                f"Chưa có đơn giá tham chiếu cho {BUILDING_TYPE_VI.get(inp.building_type, inp.building_type)} "
+                f"tại {_province_label(inp.province)} (phạm vi {WORK_SCOPE_VI[scope]}) "
+                "nên em chưa thể khái toán chi phí")
     else:
         mismatch = _rate_mismatch(inp, rate)
         rate_status = (VerificationStatus.reference if rate.is_fallback or mismatch
                        else VerificationStatus(rate.status))
         if rate.is_fallback:
-            assumptions.append(
-                f"Dùng đơn giá mặc định toàn quốc do chưa có đơn giá riêng cho {_province_label(inp.province)}")
+            assumptions.append(_national_fallback_assumption(rate, inp.province))
         if mismatch:
             warnings.append(
                 "Đơn giá tham chiếu đang dùng là của " + ", ".join(mismatch)
@@ -308,6 +326,6 @@ def calculate_estimate(inp: EstimateInput, rules: RuleSet, rate: RateData | None
         assumptions=assumptions,
         exclusions=explain.build_exclusions(effective),
         cost_drivers=explain.build_cost_drivers(effective, has_basement, has_mezzanine),
-        disclaimer=explain.build_disclaimer(rate.source if rate else None),
+        disclaimer=explain.build_disclaimer(rate.source if rate else None, has_rate=rate is not None),
         warnings=warnings,
     )

@@ -163,3 +163,29 @@ def test_money_not_joined_without_range_connector():
 def test_zero_money_is_unavailable():
     assert parse_money_range("0 đ") is None
     assert parse_money("0 triệu/m²") is None
+
+
+@pytest.mark.parametrize("rng,ok", [
+    ([4_200_000, 4_800_000], True),
+    ([7_500_000, 9_000_000], True),
+    ([2_000_000, 80_000_000], False),  # vượt trần và lệch > 10 lần
+    ([100_000, 300_000], False),  # quá thấp cho đơn giá/m²
+    (None, False),
+])
+def test_plausible_price_per_m2_range(rng, ok):
+    from app.ingestion.parse_vi import plausible_price_per_m2_range
+
+    assert plausible_price_per_m2_range(rng) is ok
+
+
+@pytest.mark.parametrize("text,expected,reason", [
+    ("Từ 4,3 đến 4,7 tr/m²", [4_300_000, 4_700_000], None),
+    ("Từ 2 đến 4,3 tr/m²", [None, 4_300_000], "default_min"),  # cận dưới mặc định của form
+    ("Từ 2 đến 80 tr/m²", None, "implausible"),
+    ("Từ 2 tr/m²", [2_000_000, 2_000_000], None),  # nhà thầu khai đúng 2 tr -> giữ
+    ("Từ 4,3 tr/m²", [4_300_000, 4_300_000], None),
+])
+def test_clean_price_per_m2_range(text, expected, reason):
+    from app.ingestion.parse_vi import clean_price_per_m2_range
+
+    assert clean_price_per_m2_range(parse_money_range(text)) == (expected, reason)

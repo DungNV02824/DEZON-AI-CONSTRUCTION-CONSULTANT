@@ -4,9 +4,9 @@ import { ComparisonTable } from './ComparisonTable';
 import { ContractorDetail } from './ContractorDetail';
 import { ContractorList } from './ContractorList';
 import { EstimateTable } from './EstimateTable';
+import { QuestionStep } from './QuestionStep';
 import { QuickReplies } from './QuickReplies';
 import { QuoteRequestForm } from './QuoteRequestForm';
-import { SourceBadges } from './SourceBadges';
 import { SummaryConfirm } from './SummaryConfirm';
 
 /**
@@ -18,6 +18,8 @@ export function BlockRenderer({ block, active }: { block: UIBlock; active: boole
   switch (block.type) {
     case 'quick_replies':
       return <QuickReplies block={block} active={active} />;
+    case 'question_step':
+      return <QuestionStep block={block} active={active} />;
     case 'summary_confirm':
       return <SummaryConfirm block={block} active={active} />;
     case 'estimate_table':
@@ -31,7 +33,7 @@ export function BlockRenderer({ block, active }: { block: UIBlock; active: boole
     case 'contractor_detail':
       return <ContractorDetail block={block} />;
     case 'source_badges':
-      return <SourceBadges block={block} />;
+      return null; // chủ sản phẩm yêu cầu bỏ dòng "Nguồn:"
     case 'quote_request_form':
       return <QuoteRequestForm block={block} />;
     default:

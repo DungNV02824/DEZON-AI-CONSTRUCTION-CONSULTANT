@@ -47,6 +47,8 @@ class ImageRef(BaseModel):
     url: str
     caption: str | None = None
     project_slug: str | None = None
+    project_name: str | None = None  # tên công trình chứa ảnh (chú thích slideshow)
+    project_url: str | None = None  # trang công trình trên dezon.vn
 
 
 class ContractorCard(BaseModel):
@@ -57,7 +59,9 @@ class ContractorCard(BaseModel):
     avatar_url: str | None = None
     profile_url: str  # link hồ sơ gốc trên dezon.vn
     profile_source: SourceRef | None = None
-    cover_images: list[ImageRef] = []  # tối đa 3 ảnh dự án
+    # Tối đa 12 ảnh dự án, xoay vòng giữa các dự án (ảnh 1 của mỗi dự án, rồi ảnh 2, ...); frontend
+    # hiển thị vài ô đầu, bấm vào mở slideshow toàn bộ.
+    cover_images: list[ImageRef] = []
     # Mọi trường số liệu là EvidenceValue. Khóa chuẩn:
     # province, building_types, years_experience, founded_year, staff, rough_price, finish_price,
     # typical_project_value, dezon_project_count, warranty, profile_completeness
@@ -111,8 +115,8 @@ class ContractorProfile(BaseModel):
     # typical_project_value, dezon_project_count, warranty
     info: dict[str, EvidenceValue]
     projects: list[ProjectSummary]
-    images: list[ImageRef]  # toàn bộ ảnh dự án (frontend hiển thị 3 + "+N")
-    total_images: int
+    images: list[ImageRef]  # ảnh các dự án (mỗi dự án tối đa 20; frontend hiển thị 3 + "+N")
+    total_images: int  # tổng số ảnh dự án thực có (không bị cắt)
     chips: list[str] = ["Hồ sơ nhà thầu", "Dự án thực tế", "Đơn giá tham khảo"]
 
 

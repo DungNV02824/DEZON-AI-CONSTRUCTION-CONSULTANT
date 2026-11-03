@@ -40,7 +40,7 @@ def test_build_contractor_card_evidence(db):
     assert ev["rough_price"].status == "on_dezon"
     assert ev["rough_price"].source.url == kp.profile_url
     assert str(ev["rough_price"].source.updated_at) == "2026-10-31"
-    assert 1 <= len(card.cover_images) <= 3
+    assert 1 <= len(card.cover_images) <= svc.MAX_COVER_IMAGES
 
 
 def test_match_nha_pho_hcm_returns_three_and_logs(db):
@@ -102,7 +102,7 @@ def test_compare_no_empty_cells(db):
     m = svc.compare_contractors(db, ids)
     assert [c.id for c in m.contractors] == ids
     assert [r.label_vi for r in m.rows] == ["Khu vực", "Công trình trên Dezon", "Kinh nghiệm", "Đơn giá thô",
-                                           "Đơn giá hoàn thiện", "Hồ sơ dự án", "Bảo hành", "Mức phù hợp"]
+                                           "Đơn giá trọn gói (hoàn thiện cơ bản)", "Hồ sơ dự án", "Bảo hành", "Mức phù hợp"]
     for row in m.rows:
         assert len(row.cells) == 3
         for cell in row.cells:

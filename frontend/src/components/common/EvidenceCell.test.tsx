@@ -15,6 +15,12 @@ const PRICE: EvidenceValue = {
 };
 
 describe('EvidenceCell', () => {
+  it('mặc định không hiển thị nhãn trạng thái ("Có dữ liệu trên Dezon")', () => {
+    const { container } = renderWithWidget(<EvidenceCell ev={PRICE} />);
+    expect(container.querySelector('.dz-badge')).toBeNull();
+    expect(container).not.toHaveTextContent('Có dữ liệu trên Dezon');
+  });
+
   it('unavailable -> chữ xám đúng "Chưa có dữ liệu", không có badge', () => {
     const { container } = renderWithWidget(<EvidenceCell ev={UNAVAILABLE} />);
     const text = screen.getByText('Chưa có dữ liệu');
@@ -32,14 +38,14 @@ describe('EvidenceCell', () => {
   });
 
   it('hiển thị nguyên văn display (không định dạng lại value) kèm badge trạng thái', () => {
-    renderWithWidget(<EvidenceCell ev={PRICE} />);
+    renderWithWidget(<EvidenceCell ev={PRICE} badge="full" />);
     expect(screen.getByText('4,3–4,7 triệu/m²')).toBeInTheDocument();
     expect(screen.queryByText(/4300000/)).toBeNull();
     expect(screen.getByText('Có dữ liệu trên Dezon')).toBeInTheDocument();
   });
 
   it('bấm badge -> tooltip nguồn với nhãn, link, ngày dd/mm/yyyy', () => {
-    renderWithWidget(<EvidenceCell ev={PRICE} />);
+    renderWithWidget(<EvidenceCell ev={PRICE} badge="full" />);
     fireEvent.click(screen.getByRole('button', { name: /Có dữ liệu trên Dezon/ }));
     const tip = screen.getByRole('tooltip');
     expect(tip).toHaveTextContent('Hồ sơ nhà thầu Kiến Phong');

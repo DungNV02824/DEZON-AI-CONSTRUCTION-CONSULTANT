@@ -119,6 +119,11 @@ def test_location_scores():
     assert _c(score_contractor(kp, crit(district="Quận 7"), WEIGHTS), "location").score == 1.0
     assert _c(score_contractor(kp, crit(), WEIGHTS), "location").score == 0.8
     assert _c(score_contractor(kp, crit(district="Quận 1"), WEIGHTS), "location").score == 0.8
+    # Kiến Phong (hồ sơ TP HCM) chỉ có 1 công trình ở Hà Nội -> thấp hơn nhà thầu sở tại Hà Nội
+    s_hn = score_contractor(kp, crit(province=HN), WEIGHTS)
+    assert (_c(s_hn, "location").score, s_hn.location_kind) == (0.6, "project")
+    hn_local = huy_hoang(province=HN, capabilities=[CapabilityFact("nha_pho", None, HN)])
+    assert _c(score_contractor(hn_local, crit(province=HN), WEIGHTS), "location").score == 0.8
     bd = huy_hoang(province="Bình Dương", capabilities=[CapabilityFact("nha_pho", None, "Bình Dương")])
     s = score_contractor(bd, crit(), WEIGHTS, NEIGHBORS_HCM)
     assert _c(s, "location").score == 0.4 and s.relaxed_location
@@ -140,7 +145,7 @@ def test_estimate_cost_uses_scope_price():
     kp = kien_phong()
     assert estimate_cost(kp, "xay_tho", 490) == ((2_107_000_000, 2_303_000_000), "rough")
     assert estimate_cost(kp, "tron_goi", 490) == ((3_577_000_000, 4_655_000_000), "finish")
-    assert estimate_cost(kp, "hoan_thien", 490)[1] == "finish"
+    assert estimate_cost(kp, "hoan_thien", 490) == (None, None)  # trọn gói ≠ giá riêng phần hoàn thiện
     assert estimate_cost(kp, "noi_that", 490) == (None, None)
     assert estimate_cost(kp, "xay_tho", None) == (None, "rough")
     assert estimate_cost(smartcons(), "xay_tho", 490) == (None, "rough")
@@ -455,3 +460,18 @@ def test_zero_years_experience_is_not_a_reason():
     s = score_contractor(hh, crit(), WEIGHTS)
     reasons = _check_reasons(s, build_evidence(hh, today=TODAY), crit())
     assert all(r.evidence != "years_experience" for r in reasons)
+
+
+def test_upper_bound_only_price_is_costed_at_upper_bound_and_counts_as_price():
+    """Cận dưới mặc định "2 tr" của form bị bỏ (crawler) -> chỉ còn cận trên: chi phí ước tính theo cận trên,
+    không được lợi thế "vừa ngân sách" so với nhà thầu khai khoảng cụ thể; hồ sơ vẫn tính là có đơn giá thô."""
+    precise = kien_phong()
+    upper_only = kien_phong(id=9, slug="x", name="X", rough_price_min=None, rough_price_max=4_300_000)
+    crit = MatchCriteria(province=HCM, building_type="nha_pho", work_scope="xay_tho", budget_vnd=1_200_000_000,
+                         converted_area_m2=300)
+    assert estimate_cost(upper_only, "xay_tho", 300) == ((1_290_000_000, 1_290_000_000), "rough")
+    s_precise = score_contractor(precise, crit, WEIGHTS).criterion("budget_fit").score
+    s_upper = score_contractor(upper_only, crit, WEIGHTS).criterion("budget_fit").score
+    assert s_upper <= s_precise < 1.0
+    assert profile_completeness(upper_only) == profile_completeness(precise)
+    assert build_evidence(upper_only, TODAY)["rough_price"].display == "tối đa 4,3 triệu/m²"

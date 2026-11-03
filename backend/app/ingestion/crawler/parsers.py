@@ -24,6 +24,7 @@ from urllib.parse import urljoin, urlsplit
 from bs4 import BeautifulSoup, Tag
 
 from app.ingestion.parse_vi import (
+    clean_price_per_m2_range,
     clean_text,
     fold_vi,
     infer_building_type_from_name,
@@ -240,6 +241,50 @@ def _spec_rows(soup: BeautifulSoup) -> dict[str, str]:
     return rows
 
 
+PRICE_KEYS = ("rough_price", "finish_price")
+_PRICE_BUCKETS = {"implausible": "implausible_prices", "implausible_min": "implausible_min_prices",
+                  "default_min": "default_min_prices"}
+
+
+def apply_price(rec: dict[str, Any], key: str, value: str) -> None:
+    """Ghi `<key>_min/_max` từ chuỗi đơn giá trên hồ sơ (xem docs/DECISIONS.md): cận dưới mặc định của form hoặc
+    thấp hơn sàn theo loại bị bỏ, khoảng vô lý không dùng; chuỗi gốc lưu ở `extra.<bucket>` để đối chiếu."""
+    rec[f"{key}_min"] = rec[f"{key}_max"] = None
+    rng, reason = clean_price_per_m2_range(parse_money_range(value), kind=key)
+    if rng:
+        rec[f"{key}_min"], rec[f"{key}_max"] = rng
+    if reason:
+        rec["extra"].setdefault(_PRICE_BUCKETS[reason], {})[key] = value
+
+
+def apply_spec_prices(rec: dict[str, Any]) -> dict[str, Any]:
+    """Tính lại đơn giá xây thô / "hoàn thiện cơ bản" (= trọn gói) từ chuỗi gốc `extra.spec` của hồ sơ.
+
+    Dùng cho cả parse hồ sơ lẫn làm sạch lại snapshot (không cần crawl lại). Quy tắc chéo: đơn giá trọn gói bao gồm
+    phần thô nên cận trên trọn gói thấp hơn cận dưới xây thô -> trọn gói vô lý, không dùng."""
+    extra = rec.setdefault("extra", {})
+    for bucket in _PRICE_BUCKETS.values():
+        extra.pop(bucket, None)
+    for key in PRICE_KEYS:
+        rec[f"{key}_min"] = rec[f"{key}_max"] = None
+    raw: dict[str, str] = {}
+    for label, value in (extra.get("spec") or {}).items():
+        key = SPEC_LABELS.get(label)
+        if key in PRICE_KEYS and not is_placeholder(value):
+            raw[key] = value
+            apply_price(rec, key, value)
+    rough_min, finish_max = rec.get("rough_price_min"), rec.get("finish_price_max")
+    if rough_min is not None and finish_max is not None and finish_max < rough_min:
+        rec["finish_price_min"] = rec["finish_price_max"] = None
+        for bucket in ("implausible_min_prices", "default_min_prices"):
+            extra.get(bucket, {}).pop("finish_price", None)
+        extra.setdefault("implausible_prices", {})["finish_price"] = raw["finish_price"]
+    for bucket in _PRICE_BUCKETS.values():
+        if bucket in extra and not extra[bucket]:
+            del extra[bucket]
+    return rec
+
+
 def parse_contractor_profile(html: str, url: str) -> dict[str, Any]:
     """Hồ sơ nhà thầu -> dict đầy đủ các trường của `contractors` (thiếu = None) + capabilities + works."""
     soup = _soup(html)
@@ -289,10 +334,8 @@ def parse_contractor_profile(html: str, url: str) -> dict[str, Any]:
             continue
         if key == "founded_year":
             rec["founded_year"] = parse_year(value)
-        elif key in ("rough_price", "finish_price"):
-            rng = parse_money_range(value)
-            if rng:
-                rec[f"{key}_min"], rec[f"{key}_max"] = rng
+        elif key in PRICE_KEYS:
+            continue  # apply_spec_prices sau vòng lặp (cần cả hai loại cho quy tắc chéo)
         elif key == "staff":
             rec["staff_workers"], rec["staff_office"] = parse_staff(value)
         elif key == "building_types":
@@ -313,6 +356,7 @@ def parse_contractor_profile(html: str, url: str) -> dict[str, Any]:
             rec["warranty_text"] = value
         else:
             rec["extra"][key] = value
+    apply_spec_prices(rec)
     rec["building_types"] = parse_building_types(header_types)
     if rec["province"] is None and rec["service_provinces"]:
         rec["province"] = rec["service_provinces"][0]
@@ -341,18 +385,96 @@ def work_project_slug(contractor_slug: str, work_slug: str) -> str:
     return f"{contractor_slug}--{work_slug}"
 
 
+# Từ đứng ngay trước địa danh cho biết đó là tên đường/phường/xã/ấp…, không phải tỉnh ("ấp Khánh Hòa", "đường Hà Nội").
+_SUB_PROVINCE_MARKERS = {"duong", "d", "xa", "x", "ap", "thon", "phuong", "p", "hem", "ngo", "ngach", "kiet", "kp",
+                         "khom", "xom", "bon", "buon"}
+_NAME_SEGMENT_RE = re.compile(r"[,;|·]|\s[-–]\s")
+
+
+def _bare_word(word: str) -> str:
+    return fold_vi(word).strip(".:()")
+
+
+def _last_province_mention(words: list[str]) -> str | None:
+    """Tỉnh được nhắc CUỐI CÙNG trong dãy từ, bỏ qua tên đường/phường/xã trùng tên tỉnh
+    ("Điện Biên Phủ", "ấp Khánh Hòa")."""
+    from app.ai.normalize import parse_location
+
+    end = len(words)
+    while end > 0:
+        start = next((i for i in range(end - 1, -1, -1) if parse_location(" ".join(words[i:end])).get("province")),
+                     None)
+        if start is None:
+            return None
+        prov = parse_location(" ".join(words[start:end]))["province"]
+        length = next((k for k in range(1, end - start + 1)
+                       if parse_location(" ".join(words[start:start + k])).get("province")), end - start)
+        after = _bare_word(words[start + length]) if start + length < len(words) else ""
+        before = _bare_word(words[start - 1]) if start > 0 else ""
+        if after == "phu" or before in _SUB_PROVINCE_MARKERS:  # "Điện Biên Phủ", "xã Khánh Hòa"
+            end = start
+            continue
+        return prov
+    return None
+
+
+def province_from_name(name: str | None) -> tuple[str | None, str | None]:
+    """(tỉnh, quận/huyện) nhắc trong tên công trình; không có -> (None, None).
+
+    Địa chỉ tiếng Việt ghi tỉnh ở CUỐI: xét các đoạn (tách theo dấu phẩy…) từ cuối lên, trong mỗi đoạn lấy lần nhắc
+    tỉnh cuối cùng. 'Nhà phố số 30, Điện Biên Phủ, Ninh Hòa, Ninh Thạnh, Tây Ninh' -> Tây Ninh (không phải Điện Biên);
+    'Biệt thự ấp Lập Khánh, Khánh Hòa, Tây Ninh' -> Tây Ninh. Quận/huyện chỉ nhận khi thuộc đúng tỉnh đó."""
+    from app.ai.normalize import parse_location, province_of_district
+
+    segments = [seg.split() for seg in _NAME_SEGMENT_RE.split(clean_text(name or ""))]
+    segments = [seg for seg in segments if seg]
+    for idx in range(len(segments) - 1, -1, -1):
+        prov = _last_province_mention(segments[idx])
+        if not prov:
+            continue
+        district = None
+        for seg in segments[:idx + 1]:
+            text = re.sub(r"(?i)\bđiện\s+biên\s+phủ\b", " ", " ".join(seg))
+            d = parse_location(text).get("district")
+            if d and province_of_district(d) == prov:
+                district = d
+        return prov, district
+    return None, None
+
+
 def apply_location_from_name(rec: dict[str, Any]) -> dict[str, Any]:
     """Ghi đè tỉnh/quận của công trình bằng địa danh trong tên (nếu tên có), ghi lại nguồn suy luận."""
-    from app.ai.normalize import parse_location  # hàm thuần, dùng chung bảng bí danh tỉnh/quận
-
-    loc = parse_location(rec.get("name") or "")
-    if loc.get("province"):
-        rec["province"] = loc["province"]
-        rec["district"] = loc.get("district") or rec.get("district")
+    prov, district = province_from_name(rec.get("name"))
+    if prov:
+        if prov != rec.get("province"):
+            rec["district"] = None
+        rec["province"] = prov
+        rec["district"] = district or rec.get("district")
         rec.setdefault("extra", {})["location_source"] = "project_name"
     elif rec.get("province"):
         rec.setdefault("extra", {})["location_source"] = "page_meta"
     return rec
+
+
+def meta_line_province(line: str | None) -> str | None:
+    """Tỉnh trên dòng meta trang công trình ('Công trình thực tế do X thi công · TP. HCM · 8 ảnh … · Đăng ngày …')
+    — đây là khu vực của NHÀ THẦU, chỉ dùng khi tên công trình không nhắc tỉnh."""
+    for seg in [s.strip() for s in (line or "").split("·")]:
+        if seg.startswith("Đăng ngày") or "ảnh" in seg or "thi công" in seg:
+            continue
+        prov = normalize_province(seg)
+        if prov:
+            return prov
+    return None
+
+
+def reapply_work_location(rec: dict[str, Any]) -> dict[str, Any]:
+    """Suy lại tỉnh/quận của công trình nhà thầu từ dữ liệu đã lưu (dòng meta + tên) — làm sạch snapshot không cần
+    crawl lại."""
+    rec.setdefault("extra", {}).pop("location_source", None)
+    rec["province"] = meta_line_province(rec["extra"].get("meta_line"))
+    rec["district"] = None
+    return apply_location_from_name(rec)
 
 
 def parse_contractor_work(html: str, url: str) -> dict[str, Any]:
@@ -378,10 +500,7 @@ def parse_contractor_work(html: str, url: str) -> dict[str, Any]:
         for seg in [s.strip() for s in line.split("·")]:
             if seg.startswith("Đăng ngày"):
                 rec["extra"]["posted_at"] = parse_date_vi(seg)
-            elif "ảnh" in seg or "thi công" in seg:
-                continue
-            elif rec["province"] is None:
-                rec["province"] = normalize_province(seg)
+        rec["province"] = meta_line_province(line)
         a = meta_p.select_one("a[href*='/nha-thau/']")
         role = "thi_cong" if "thi công" in line else ("thiet_ke" if "thiết kế" in line else "thi_cong")
         if a is not None:

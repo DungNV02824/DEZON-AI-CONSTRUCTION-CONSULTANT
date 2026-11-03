@@ -89,6 +89,10 @@ def test_parse_contractor_profile_range_values_are_not_collapsed():
     assert rec["extra"]["typical_project_value_range"] == [7_000_000_000, 15_000_000_000]
     assert rec["staff_workers"] is None and rec["staff_office"] == 5
     assert rec["founded_year"] == 2004
+    # "Từ 2 đến 80 tr/m²" là khoảng vô lý -> không dùng cho khái toán/matching, giữ chuỗi gốc để đối chiếu
+    assert rec["finish_price_min"] is None and rec["finish_price_max"] is None
+    assert rec["extra"]["implausible_prices"] == {"finish_price": "Từ 2 đến 80 tr/m²"}
+    assert (rec["rough_price_min"], rec["rough_price_max"]) == (4_200_000, 4_800_000)
 
 
 def test_parse_contractor_work_page():
@@ -194,7 +198,9 @@ def test_upsert_profile_created_unchanged_updated(db):
     assert out.action == "updated"  # Kiến Phong đã có từ seed -> cập nhật theo trang thật
     kp = db.scalar(select(Contractor).where(Contractor.slug == "kien-phong"))
     ds = db.scalar(select(DataSource).where(DataSource.url == KP_URL))
-    assert ds.source_type == "crawl_public" and ds.status == "on_dezon" and ds.raw_hash == content_hash(html)
+    assert ds.source_type == "crawl_public" and ds.status == "on_dezon"
+    # raw_hash lưu "<hash trang>:<hash bản ghi đã parse>" (bộ parse đổi -> vẫn ghi lại dù trang không đổi)
+    assert ds.raw_hash.split(":")[0] == content_hash(html)
     assert kp.profile_url == KP_URL and kp.source_id == ds.id
     assert kp.field_sources["rough_price_min"] == ds.id
     assert kp.rough_price_min == Decimal(4_300_000)
@@ -214,7 +220,7 @@ def test_upsert_profile_created_unchanged_updated(db):
     assert out3.action == "updated" and "rough_price_min" in out3.changed_fields
     db.refresh(kp)
     assert (kp.rough_price_min, kp.rough_price_max) == (Decimal(4_400_000), Decimal(4_900_000))
-    assert db.get(DataSource, ds.id).raw_hash == content_hash(html2)
+    assert db.get(DataSource, ds.id).raw_hash.split(":")[0] == content_hash(html2)
 
 
 def test_upsert_respects_source_priority(db):

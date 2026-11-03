@@ -118,11 +118,16 @@ describe('W-F11 — nhãn phù hợp có màu riêng, chấm nguồn có chú gi
     expect(fit).not.toMatch(/#c2410c|#ffedd5|#15803d|#1d4ed8/i);
   });
 
-  it('danh sách nhà thầu có chú giải 4 trạng thái hiển thị sẵn (không cần hover)', () => {
+  it('danh sách nhà thầu và bảng so sánh không hiển thị chú thích trạng thái (chủ sản phẩm yêu cầu bỏ)', () => {
     renderWithWidget(<ContractorList block={{ type: 'contractor_list', data: MATCH_FIXTURE }} />);
-    const legend = screen.getByRole('list', { name: 'Chú thích trạng thái dữ liệu' });
-    expect(legend).toHaveTextContent('Đã xác minh');
-    expect(legend).toHaveTextContent('Dữ liệu tham khảo');
+    expect(screen.queryByRole('list', { name: 'Chú thích trạng thái dữ liệu' })).toBeNull();
+    expect(screen.queryByText(/Chấm màu cạnh mỗi lý do/)).toBeNull();
+  });
+
+  it('không còn chấm màu cạnh lý do đề xuất và trong nhãn nguồn', () => {
+    const { container } = renderWithWidget(<ContractorList block={{ type: 'contractor_list', data: MATCH_FIXTURE }} />);
+    expect(container.querySelectorAll('.dz-reasons .dz-badge')).toHaveLength(0);
+    expect(container.querySelectorAll('.dz-dot')).toHaveLength(0);
   });
 });
 
@@ -197,9 +202,10 @@ describe('W-F8 — giữ hồ sơ/so sánh/mã báo giá sau khi tải lại tra
     const { unmount } = render(<App client={client} initiallyOpen />);
     await screen.findByText(/Xin chào anh\/chị/);
     const input = screen.getByLabelText('Nội dung tin nhắn');
-    fireEvent.change(input, { target: { value: 'nhà phố 5x20 Thủ Đức 1 trệt 3 lầu xây thô ngân sách 2 tỷ' } });
+    fireEvent.change(input, { target: { value: 'nhà phố 5x20 Thủ Đức 1 trệt 3 lầu xây kín đất, không hầm không lửng, mái bằng bê tông, xây thô ngân sách 2 tỷ' } });
     fireEvent.click(screen.getByRole('button', { name: 'Gửi tin nhắn' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Đúng rồi' }));
+    // Đủ 5 thông tin -> thẻ xác nhận ngay (không hỏi phong cách / mức đầu tư / ngân sách).
+    fireEvent.click(await screen.findByRole('button', { name: 'Tính ngay → xem bảng khái toán' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Tìm nhà thầu phù hợp' }));
     await screen.findByText('3 nhà thầu phù hợp nhất với tiêu chí của anh/chị');
     fireEvent.click(screen.getAllByRole('button', { name: 'Xem chi tiết' })[0]!);

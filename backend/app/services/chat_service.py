@@ -78,9 +78,10 @@ def get_session(db: Session, session_id: uuid.UUID | str) -> ChatSession | None:
 
 
 def create_session(db: Session, user_id: str | None = None) -> SessionCreatedOut:
-    """Tạo phiên + tin chào (dialog.greeting) kèm quick replies; ghi analytics "session_started"."""
+    """Tạo phiên + tin chào (dialog.greeting) kèm thẻ câu hỏi loại công trình; ghi analytics "session_started"."""
     sid = uuid.uuid4()
-    slots, state = Slots(), SessionState(expected_slots=list(GREETING_EXPECTED_SLOTS))
+    slots = Slots()
+    state = SessionState(expected_slots=list(GREETING_EXPECTED_SLOTS), current_question="building_type")
     sess = ChatSession(id=sid, user_id=user_id, slots=to_raw(slots, state), stage="collect")
     db.add(sess)
     db.flush()

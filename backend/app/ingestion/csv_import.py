@@ -4,6 +4,12 @@
 - Mỗi lần nhập = 1 bản ghi `data_sources` (source_type `csv_import` -> trạng thái `reference`), raw_hash = sha256 file.
 - Dòng lỗi bị bỏ qua và liệt kê trong báo cáo; dòng hợp lệ vẫn được nhập.
 - Không ghi đè bản ghi cùng khóa đang lấy từ nguồn ưu tiên cao hơn (2.10) trừ khi `force=True`.
+- Ngoại lệ: dòng đơn giá TỔNG HỢP từ hồ sơ nhà thầu (`app.services.market_rates`, nhãn "Tổng hợp đơn giá ...") cùng
+  khóa không chặn: đơn giá chính thức trong file luôn thay thế nó — dòng tổng hợp nhường khóa
+  (`displace_market_rate`: xóa nếu chưa có khái toán dùng, nếu đã dùng thì giữ nguyên giá/nguồn/ngày) rồi dòng trong
+  file được THÊM MỚI. Không bao giờ ghi giá chính thức đè lên dòng tổng hợp (kể cả `force=True`).
+- Dòng đơn giá đã được khái toán đã lưu tham chiếu (`estimate_sessions.rate_id`) không bị đổi giá (kể cả
+  `force=True`); chỉ được đặt ngày hết hiệu lực.
 - Hệ số nhập vào luôn `approved=false`: chỉ admin duyệt mới bật (mục 11.2 bước 4).
 
 Cột đơn giá: building_type, province, work_scope, quality_tier, price_min, price_max, effective_from, effective_to
@@ -37,6 +43,7 @@ from app.ingestion.parse_vi import (
 )
 from app.ingestion.upsert import priority_of, upsert_data_source
 from app.schemas.common import BUILDING_TYPE_VI, QUALITY_TIER_VI, WORK_SCOPE_VI
+from app.services.market_rates import displace_market_rate, is_market_label, rate_usage
 
 Kind = Literal["rates", "rules"]
 
@@ -82,6 +89,7 @@ class ImportReport:
     updated: int = 0
     unchanged: int = 0
     skipped: int = 0
+    replaced_market: int = 0  # số dòng tổng hợp từ hồ sơ nhà thầu bị đơn giá chính thức trong file thay thế
     errors: list[RowError] = field(default_factory=list)
     source_id: int | None = None
     status: str = "ok"  # ok | partial | failed | unchanged
@@ -90,7 +98,7 @@ class ImportReport:
     def as_dict(self) -> dict[str, Any]:
         return {"kind": self.kind, "filename": self.filename, "total_rows": self.total_rows,
                 "inserted": self.inserted, "updated": self.updated, "unchanged": self.unchanged,
-                "skipped": self.skipped, "error_count": len(self.errors),
+                "skipped": self.skipped, "replaced_market": self.replaced_market, "error_count": len(self.errors),
                 "errors": [e.as_dict() for e in self.errors], "source_id": self.source_id,
                 "status": self.status, "dry_run": self.dry_run}
 
@@ -337,11 +345,25 @@ def validate_rule_row(rec: dict[str, Any]) -> tuple[dict[str, Any] | None, list[
 
 # ------------------------------------------------------------------ nhập
 def _protected(db: Session, existing_source_id: int | None) -> bool:
-    """Bản ghi hiện có đến từ nguồn ưu tiên cao hơn csv_import?"""
+    """Bản ghi hiện có đến từ nguồn ưu tiên cao hơn csv_import? Đơn giá tổng hợp từ hồ sơ nhà thầu (lưu với
+    source_type crawl_public) KHÔNG được bảo vệ: đơn giá chính thức luôn đứng trước nó."""
     from app.ingestion.upsert import get_source
 
     ds = get_source(db, existing_source_id)
-    return ds is not None and priority_of(ds.source_type) < priority_of(SourceType.csv_import)
+    if ds is None or is_market_label(ds.label):
+        return False
+    return priority_of(ds.source_type) < priority_of(SourceType.csv_import)
+
+
+def _is_market_rate(db: Session, row: ConstructionRate) -> bool:
+    from app.ingestion.upsert import get_source
+
+    ds = get_source(db, row.source_id)
+    return ds is not None and is_market_label(ds.label)
+
+
+def _price_changes(existing: ConstructionRate, data: dict[str, Any]) -> bool:
+    return _differs(existing.price_min, data["price_min"]) or _differs(existing.price_max, data["price_max"])
 
 
 def import_table(db: Session, content: bytes, filename: str, kind: Kind, *, label: str | None = None,
@@ -419,11 +441,28 @@ def import_table(db: Session, content: bytes, filename: str, kind: Kind, *, labe
         else:
             existing = db.scalar(select(EstimateRule).where(EstimateRule.code == data["code"],
                                                             EstimateRule.version == data["version"]))
+        if kind == "rates" and existing is not None and _is_market_rate(db, existing):
+            # Đơn giá chính thức thay thế dòng tổng hợp cùng khóa: nhường khóa rồi THÊM dòng mới — không ghi đè giá
+            # lên dòng tổng hợp (khái toán đã lưu có thể đang tham chiếu nó), kể cả khi force=True.
+            if not dry_run:
+                try:
+                    displace_market_rate(db, existing)
+                except ValueError as exc:
+                    report.skipped += 1
+                    report.errors.append(RowError(row_no, f"Không thay được đơn giá tổng hợp cùng khóa: {exc}"))
+                    continue
+            report.replaced_market += 1
+            existing = None
         if existing is None:
             if not dry_run:
                 model = ConstructionRate if kind == "rates" else EstimateRule
                 db.add(model(**data, source_id=ds_id))
             report.inserted += 1
+            continue
+        if kind == "rates" and _price_changes(existing, data) and (used := rate_usage(db, existing.id)):
+            report.skipped += 1
+            report.errors.append(RowError(row_no, f"Đơn giá cùng khóa đã được dùng trong {used} khái toán — không "
+                                                  "đổi giá; hãy nhập đơn giá mới với ngày hiệu lực khác"))
             continue
         if not force and _protected(db, existing.source_id):
             report.skipped += 1

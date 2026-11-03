@@ -39,7 +39,7 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
         className="dz-composer__input"
         rows={1}
         value={text}
-        placeholder={busy ? 'Em đang trả lời…' : variant === 'page' ? 'Hỏi bất kỳ điều gì' : 'Nhập câu hỏi hoặc mô tả công trình…'}
+        placeholder={busy ? 'Đang trả lời…' : variant === 'page' ? 'Hỏi bất kỳ điều gì' : 'Nhập câu hỏi hoặc mô tả công trình…'}
         aria-label="Nội dung tin nhắn"
         disabled={disabled}
         maxLength={2000}

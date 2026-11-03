@@ -17,6 +17,8 @@ export interface WidgetActions {
   quoteSubmitted(block: import('../api/types').QuoteRequestFormBlock, code: string): void;
   /** estimate_session_id gần nhất trong hội thoại (để đính kèm báo giá/so sánh). */
   estimateSessionId: string | null;
+  /** Mã phiên chat hiện tại — gửi kèm yêu cầu báo giá để backend ghi phong cách / mức đầu tư khách đã chọn. */
+  chatSessionId: string | null;
 }
 
 const noop = () => undefined;
@@ -33,6 +35,7 @@ export const defaultActions: WidgetActions = {
   submitQuote: () => Promise.reject(new Error('Chưa cấu hình client')),
   quoteSubmitted: noop,
   estimateSessionId: null,
+  chatSessionId: null,
 };
 
 export const WidgetContext = createContext<WidgetActions>(defaultActions);

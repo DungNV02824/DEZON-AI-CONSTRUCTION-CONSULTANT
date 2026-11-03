@@ -30,14 +30,13 @@ from app.db.models import AnalyticsEvent
 from app.schemas.estimate import EstimateInput
 from app.schemas.knowledge import USAGE_NOTE_VI
 from app.schemas.matching import MatchCriteria
-from app.schemas.slots import Slots, missing_required, to_estimate_input
+from app.schemas.slots import Slots, investment_note, missing_core, to_estimate_input
 from app.services import contractor_service, estimate_service, knowledge_service, quote_service
 
 log = logging.getLogger(__name__)
 
 BuildingTypeLit = Literal["nha_pho", "biet_thu", "can_ho", "van_phong", "khach_san", "khac"]
 WorkScopeLit = Literal["xay_tho", "hoan_thien", "tron_goi", "noi_that"]
-QualityTierLit = Literal["tiet_kiem", "trung_binh", "kha", "cao_cap"]
 
 
 class ToolError(Exception):
@@ -61,14 +60,19 @@ class UpdateProjectRequirementsIn(_In):
     building_area_m2: float | None = Field(default=None, description="Diện tích xây dựng mỗi tầng (m²)")
     floors: int | None = Field(default=None, description="Số tầng nổi tính cả trệt")
     has_mezzanine: bool | None = None
+    mezzanine_area_m2: float | None = Field(default=None, description="Diện tích tầng lửng (m²) khách nói")
     basement: bool | None = None
+    basement_depth_m: float | None = Field(default=None, description="Độ sâu tầng hầm (m)")
     roof_type: Literal["roof_metal", "roof_concrete", "roof_tile_on_truss", "roof_tile_on_concrete"] | None = None
     rooftop_terrace: Literal["none", "covered", "open"] | None = None
     foundation_type: Literal["foundation_single", "foundation_strip", "foundation_pile"] | None = None
     work_scope: WorkScopeLit | None = None
-    quality_tier: QualityTierLit | None = None
     budget_vnd: int | None = Field(default=None, description="Ngân sách khách nói (VND)")
     start_time: str | None = Field(default=None, description="Thời gian dự kiến khởi công, nguyên văn")
+    design_style: str | None = Field(default=None, description="Phong cách thiết kế khách muốn: hien_dai, toi_gian, "
+                                     "tan_co_dien, indochine hoặc nguyên văn lời khách. Chỉ ghi nhận, không vào khái toán")
+    investment_level: Literal["tiet_kiem", "pho_thong", "trung_cap", "sieu_cao_cap"] | None = Field(
+        default=None, description="Mức đầu tư khách nói rõ. Chỉ ghi nhận, KHÔNG làm thay đổi khái toán")
 
 
 class CalculateEstimateIn(_In):
@@ -83,13 +87,13 @@ class CalculateEstimateIn(_In):
     building_area_m2: float | None = None
     floors: int | None = Field(default=None, ge=1, le=50)
     has_mezzanine: bool | None = None
+    mezzanine_area_m2: float | None = Field(default=None, gt=0)
     basement: bool | None = None
     basement_depth_m: float | None = None
     roof_type: Literal["roof_metal", "roof_concrete", "roof_tile_on_truss", "roof_tile_on_concrete", "none"] | None = None
     rooftop_terrace: Literal["none", "covered", "open"] | None = None
     foundation_type: Literal["foundation_single", "foundation_strip", "foundation_pile"] | None = None
     work_scope: WorkScopeLit | None = None
-    quality_tier: QualityTierLit | None = None
 
 
 class SuggestBudgetAdjustmentsIn(_In):
@@ -127,7 +131,6 @@ class GetReferenceRatesIn(_In):
     building_type: BuildingTypeLit | None = None
     province: str | None = None
     work_scope: WorkScopeLit | None = None
-    quality_tier: QualityTierLit | None = None
 
 
 class SearchKnowledgeIn(_In):
@@ -307,10 +310,13 @@ def _calculate_estimate(ctx: ToolContext, inp: CalculateEstimateIn) -> Any:
         raise ToolError("Khách chưa xác nhận bản tóm tắt thông tin. Hãy tóm tắt và chờ khách xác nhận "
                         "trước khi tính khái toán.")
     overrides = inp.model_dump(exclude_none=True)
-    missing = missing_required(ctx.slots)
+    # Slot chi tiết (diện tích xây dựng, hầm, mái...) chưa hỏi không chặn tính thử: engine dùng mặc định có nêu rõ.
+    missing = missing_core(ctx.slots)
     if missing and not overrides:
         raise ToolError(f"Chưa đủ thông tin bắt buộc để khái toán: {', '.join(missing)}")
     base = to_estimate_input(ctx.slots).model_dump(exclude_unset=True) if not missing else {}
+    if overrides.get("has_mezzanine") is False:  # "nếu bỏ lửng": diện tích lửng của slot không còn áp dụng
+        base.pop("mezzanine_area_m2", None)
     if "land_area_m2" in overrides and not ({"land_width_m", "land_length_m"} & set(overrides)):
         base.pop("land_width_m", None)
         base.pop("land_length_m", None)
@@ -323,7 +329,10 @@ def _calculate_estimate(ctx: ToolContext, inp: CalculateEstimateIn) -> Any:
     key = _cache_key("calculate_estimate", est_in)
     if key in ctx.cache:
         return ctx.cache[key]
-    result = estimate_service.create_estimate(ctx.db, est_in, chat_session_id=ctx.chat_session_id)
+    # Mức đầu tư chỉ ghi nhận: khái toán nêu rõ chưa tính theo mức đầu tư (chưa có đơn giá thật theo mức).
+    note = investment_note(ctx.slots.investment_level)
+    result = estimate_service.create_estimate(ctx.db, est_in, chat_session_id=ctx.chat_session_id,
+                                              notes=[note] if note else None)
     ctx.cache[key] = result
     if from_slots:
         ctx.state.estimate = EstimateRef(id=str(result.estimate_session_id), cost_min=result.cost_min,
@@ -432,8 +441,8 @@ def _reference_rates(ctx: ToolContext, inp: GetReferenceRatesIn) -> dict[str, An
     ws = inp.work_scope or (str(s.work_scope) if s.work_scope else None)
     if not (bt and province and ws):
         raise ToolError("Cần loại công trình, khu vực và phạm vi thi công để tra đơn giá tham chiếu")
-    qt = inp.quality_tier or (str(s.quality_tier) if s.quality_tier else "trung_binh")
-    ev, rate = estimate_service.get_reference_rates(ctx.db, bt, province, ws, qt)
+    # Không phân mức hoàn thiện (chưa có dữ liệu thật theo mức): luôn tra đơn giá mặc định (trung bình) của service.
+    ev, rate = estimate_service.get_reference_rates(ctx.db, bt, province, ws)
     return {"rate": ev, "rate_data": rate}
 
 
@@ -488,7 +497,8 @@ def _create_quote(ctx: ToolContext, inp: CreateQuoteRequestIn) -> Any:
         raise ToolError("Thông tin yêu cầu báo giá chưa hợp lệ: "
                         + "; ".join(str(e.get("msg")) for e in exc.errors()[:3])) from exc
     try:
-        result = quote_service.create_quote_requests(ctx.db, data, chat_session_id=ctx.chat_session_id)
+        result = quote_service.create_quote_requests(ctx.db, data, chat_session_id=ctx.chat_session_id,
+                                                     slots=ctx.slots)
     except quote_service.QuoteRequestError as exc:
         raise ToolError("Không tạo được yêu cầu báo giá: nhà thầu hoặc phiên khái toán không tồn tại") from exc
     ctx.state.presented = True
@@ -510,8 +520,9 @@ def _overview(ctx: ToolContext, inp: GetContractorOverviewIn) -> Any:
 TOOLS: dict[str, ToolDef] = {t.name: t for t in [
     ToolDef("update_project_requirements",
             "Ghi nhận/cập nhật thông tin công trình khách vừa cung cấp (loại công trình, khu vực, diện tích, số tầng, "
-            "phạm vi, mức hoàn thiện, ngân sách...). Chỉ truyền trường khách NÓI RÕ. Trả về slots hiện tại và các "
-            "thông tin bắt buộc còn thiếu (missing_required).",
+            "phạm vi, diện tích xây dựng, hầm, lửng, mái, ngân sách, phong cách thiết kế, mức đầu tư...). Chỉ truyền "
+            "trường khách NÓI RÕ. Phong cách và mức đầu tư chỉ ghi nhận, không làm thay đổi khái toán. Trả về slots "
+            "hiện tại và các thông tin bắt buộc còn thiếu (missing_required).",
             UpdateProjectRequirementsIn, _update_requirements),
     ToolDef("calculate_estimate",
             "Tính khái toán chi phí xây dựng bằng công thức của Dezon (diện tích quy đổi × đơn giá tham chiếu). "
@@ -520,7 +531,7 @@ TOOLS: dict[str, ToolDef] = {t.name: t for t in [
             "(rate.display, nguồn), giả định, phần chưa bao gồm, yếu tố tăng chi phí, miễn trừ.",
             CalculateEstimateIn, _calculate_estimate),
     ToolDef("suggest_budget_adjustments",
-            "Khi ngân sách của khách thấp hơn khái toán: engine thử các phương án (giảm tầng, đổi mức hoàn thiện, "
+            "Khi ngân sách của khách thấp hơn khái toán: engine thử các phương án (giảm tầng, "
             "bỏ hầm, đổi mái, xây thô trước...) và trả chi phí mới của từng phương án.",
             SuggestBudgetAdjustmentsIn, _suggest_budget),
     ToolDef("search_contractors",
@@ -540,7 +551,7 @@ TOOLS: dict[str, ToolDef] = {t.name: t for t in [
             "hành, mức phù hợp). Ô thiếu dữ liệu là 'Chưa có dữ liệu'. Bỏ trống = so sánh các nhà thầu vừa đề xuất.",
             CompareContractorsIn, _compare),
     ToolDef("get_reference_rates",
-            "Tra đơn giá tham chiếu (VND/m²) theo loại công trình, khu vực, phạm vi, mức hoàn thiện, kèm nguồn và "
+            "Tra đơn giá tham chiếu (VND/m²) theo loại công trình, khu vực, phạm vi, kèm nguồn và "
             "ngày cập nhật.",
             GetReferenceRatesIn, _reference_rates),
     ToolDef("search_knowledge",

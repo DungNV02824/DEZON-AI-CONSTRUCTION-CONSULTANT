@@ -5,7 +5,7 @@ import { BlockBoundary } from './common/BlockBoundary';
 
 function TypingDots() {
   return (
-    <span className="dz-typing" role="status" aria-label="Em đang trả lời">
+    <span className="dz-typing" role="status" aria-label="Đang trả lời">
       <span />
       <span />
       <span />

@@ -10,7 +10,9 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import AnalyticsEvent, Contractor, EstimateSession, QuoteRequest
+from app.ai.state import split_raw
+from app.db.models import AnalyticsEvent, ChatSession, Contractor, EstimateSession, QuoteRequest
+from app.schemas.slots import Slots, project_preferences
 
 _PHONE_RE = re.compile(r"^0\d{9,10}$")
 
@@ -34,6 +36,9 @@ class QuoteRequestIn(BaseModel):
     customer_phone: str
     customer_email: str | None = Field(default=None, max_length=200)
     note: str | None = Field(default=None, max_length=2000)
+    # Phiên chat của khách (tùy chọn): mong muốn đã ghi nhận (phong cách, mức đầu tư) được gửi kèm ghi chú. Bỏ trống ->
+    # lấy theo phiên chat của estimate_session_id (nếu có).
+    chat_session_id: UUID | None = None
 
     @field_validator("customer_phone")
     @classmethod
@@ -67,11 +72,31 @@ class QuoteRequestError(ValueError):
     pass
 
 
-def create_quote_requests(db: Session, data: QuoteRequestIn, chat_session_id: UUID | None = None
-                          ) -> QuoteRequestResult:
+def _session_slots(db: Session, data: QuoteRequestIn, chat_session_id: UUID | None) -> Slots | None:
+    sid = data.chat_session_id or chat_session_id
+    if sid is None and data.estimate_session_id is not None:
+        est = db.get(EstimateSession, data.estimate_session_id)
+        sid = est.chat_session_id if est is not None else None
+    sess = db.get(ChatSession, sid) if sid is not None else None
+    return split_raw(sess.slots)[0] if sess is not None else None
+
+
+def note_with_preferences(note: str | None, prefs: list[str]) -> str | None:
+    """Ghi chú gửi nhà thầu = ghi chú của khách + mong muốn đã ghi nhận (phong cách, mức đầu tư — chỉ để tham khảo,
+    không thuộc khái toán)."""
+    extra = [p for p in prefs if p not in (note or "")]
+    if not extra:
+        return note
+    return "\n".join([*([note.strip()] if note and note.strip() else []), *extra])
+
+
+def create_quote_requests(db: Session, data: QuoteRequestIn, chat_session_id: UUID | None = None,
+                          slots: Slots | None = None) -> QuoteRequestResult:
     """Tạo 1 quote_requests cho mỗi nhà thầu, cùng estimate_session_id. Commit.
 
-    Ném QuoteRequestError nếu nhà thầu không tồn tại/không hoạt động hoặc estimate_session_id không tồn tại.
+    Ghi chú gửi nhà thầu kèm phong cách thiết kế / mức đầu tư khách đã chọn trong hội thoại (`slots`, hoặc đọc từ phiên
+    chat của yêu cầu). Ném QuoteRequestError nếu nhà thầu không tồn tại/không hoạt động hoặc estimate_session_id không
+    tồn tại.
     """
     contractors = db.scalars(select(Contractor).where(Contractor.id.in_(data.contractor_ids),
                                                       Contractor.is_active.is_(True))).all()
@@ -82,11 +107,14 @@ def create_quote_requests(db: Session, data: QuoteRequestIn, chat_session_id: UU
     if data.estimate_session_id and not db.get(EstimateSession, data.estimate_session_id):
         raise QuoteRequestError("Không tìm thấy phiên khái toán")
 
+    if slots is None:
+        slots = _session_slots(db, data, chat_session_id)
+    note = note_with_preferences(data.note, project_preferences(slots) if slots is not None else [])
     ids: list[UUID] = []
     for cid in data.contractor_ids:
         qr = QuoteRequest(id=uuid.uuid4(), estimate_session_id=data.estimate_session_id, contractor_id=cid,
                           customer_name=data.customer_name.strip(), customer_phone=data.customer_phone,
-                          customer_email=data.customer_email, note=data.note, status="new")
+                          customer_email=data.customer_email, note=note, status="new")
         db.add(qr)
         ids.append(qr.id)
     code = "DZ-" + ids[0].hex[:6].upper()

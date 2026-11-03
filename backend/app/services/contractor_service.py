@@ -46,12 +46,13 @@ from app.engines.matching.reasons import (
 from app.engines.matching.scorer import (
     PRICE_KIND_VI,
     ScoredContractor,
+    format_cost,
     operates_in,
     rank_contractors,
     score_contractor,
 )
 from app.evidence import EvidenceValue, SourceRef, VerificationStatus, make_evidence, source_ref_from
-from app.formatting import format_m2, format_price_per_m2_range, format_vnd_range, vi_number
+from app.formatting import format_m2, format_price_per_m2_range, vi_number
 from app.schemas.common import BUILDING_TYPE_VI, BuildingType
 from app.schemas.matching import (
     ComparedContractor,
@@ -68,7 +69,8 @@ from app.schemas.matching import (
     ProjectSummary,
 )
 
-MAX_COVER_IMAGES = 3
+MAX_COVER_IMAGES = 80  # ảnh trên thẻ nhà thầu (slideshow): đủ toàn bộ ảnh thật (nhiều nhất hiện 63/nhà thầu)
+MAX_PROJECT_IMAGES = 20  # ảnh mỗi dự án trong hồ sơ nhà thầu
 STATUS_RANK = {VerificationStatus.unavailable.value: 0, VerificationStatus.reference.value: 1,
                VerificationStatus.on_dezon.value: 2, VerificationStatus.verified.value: 3}
 
@@ -207,21 +209,29 @@ def load_active_weights(db: Session) -> MatchingWeights:
 # ================================================================================================
 # Thẻ nhà thầu / dự án
 # ================================================================================================
-def _image_refs(projects: Iterable[Project]) -> list[ImageRef]:
-    return [ImageRef(url=img.url, caption=img.caption, project_slug=p.slug)
-            for p in projects for img in sorted(p.images, key=lambda i: (i.sort_order or 0, i.id))]
+def _sorted_images(p: Project):
+    return sorted(p.images, key=lambda i: (i.sort_order or 0, i.id))
+
+
+def _image_ref(p: Project, img) -> ImageRef:
+    return ImageRef(url=img.url, caption=img.caption or p.name, project_slug=p.slug,
+                    project_name=p.name, project_url=p.project_url)
+
+
+def _image_refs(p: Project, limit: int = MAX_PROJECT_IMAGES) -> list[ImageRef]:
+    return [_image_ref(p, img) for img in _sorted_images(p)[:limit]]
 
 
 def _cover_images(c: Contractor) -> list[ImageRef]:
-    """Tối đa 3 ảnh: ưu tiên ảnh đầu của mỗi dự án, sau đó bổ sung ảnh còn lại."""
-    projects = sorted(_unique_projects(c), key=lambda p: p.id)
-    firsts, rest = [], []
-    for p in projects:
-        imgs = [ImageRef(url=i.url, caption=i.caption, project_slug=p.slug)
-                for i in sorted(p.images, key=lambda i: (i.sort_order or 0, i.id))]
-        firsts += imgs[:1]
-        rest += imgs[1:]
-    return (firsts + rest)[:MAX_COVER_IMAGES]
+    """Tối đa MAX_COVER_IMAGES ảnh, xoay vòng giữa các dự án: ảnh 1 của mỗi dự án, rồi ảnh 2, ...
+    (dự án theo id, ảnh theo sort_order, id — thứ tự cố định)."""
+    per_project = [_image_refs(p, MAX_COVER_IMAGES) for p in sorted(_unique_projects(c), key=lambda p: p.id)]
+    out: list[ImageRef] = []
+    depth = 0
+    while len(out) < MAX_COVER_IMAGES and any(len(imgs) > depth for imgs in per_project):
+        out += [imgs[depth] for imgs in per_project if len(imgs) > depth]
+        depth += 1
+    return out[:MAX_COVER_IMAGES]
 
 
 def _card(c: Contractor, facts: ContractorFacts) -> ContractorCard:
@@ -257,7 +267,7 @@ def _project_summaries(c: Contractor, building_type: str | None = None) -> list[
             id=p.id, slug=p.slug, name=p.name, building_type=p.building_type, province=p.province,
             district=p.district, floors=p.floors, status=p.status, start_date=p.start_date, end_date=p.end_date,
             project_url=p.project_url, role=", ".join(sorted(roles.get(p.id, set()))) or None,
-            contractor_names=names, images=_image_refs([p]), source=source_ref_from(p.source),
+            contractor_names=names, images=_image_refs(p), source=source_ref_from(p.source),
         ))
     return out
 
@@ -302,8 +312,9 @@ def get_contractor_profile(db: Session, id_or_slug: int | str) -> ContractorProf
     desc = (c.description or "").strip() or None
     projects = _project_summaries(c)
     images = [img for p in projects for img in p.images]
+    total_images = sum(len(p.images) for p in _unique_projects(c))  # số ảnh thực có, kể cả phần bị cắt
     return ContractorProfile(card=card, description=single(desc, desc or "", "description"), info=info,
-                             projects=projects, images=images, total_images=len(images))
+                             projects=projects, images=images, total_images=total_images)
 
 
 def get_contractor_projects(db: Session, contractor_id: int, building_type: str | None = None,
@@ -344,12 +355,12 @@ def _estimated_cost_evidence(s: ScoredContractor, area: float | None) -> Evidenc
     f = s.facts
     src = f.source_for(f"{s.price_kind}_price_min", f"{s.price_kind}_price_max")
     ref = SourceRef(
-        label=(f"Ước tính = diện tích quy đổi {format_m2(area)} × đơn giá {PRICE_KIND_VI[s.price_kind]} "
-               f"trên hồ sơ {f.name}"),
+        label=(f"Ước tính = diện tích quy đổi {format_m2(area)} × đơn giá {PRICE_KIND_VI[s.price_kind]}"
+               f"{' tối đa' if s.cost_upper_only else ''} trên hồ sơ {f.name}"),
         url=(src.ref.url if src and src.ref else None) or f.profile_url or None,
         updated_at=src.ref.updated_at if src and src.ref else None,
     )
-    return make_evidence(list(s.estimated_cost), format_vnd_range(*s.estimated_cost), source=ref,
+    return make_evidence(list(s.estimated_cost), format_cost(s.estimated_cost, s.cost_upper_only), source=ref,
                          status=src.status if src else VerificationStatus.reference)
 
 
@@ -562,7 +573,7 @@ COMPARISON_ROWS: tuple[tuple[str, str], ...] = (
     ("dezon_project_count", "Công trình trên Dezon"),
     ("experience", "Kinh nghiệm"),
     ("rough_price", "Đơn giá thô"),
-    ("finish_price", "Đơn giá hoàn thiện"),
+    ("finish_price", "Đơn giá trọn gói (hoàn thiện cơ bản)"),
     ("projects", "Hồ sơ dự án"),
     ("warranty", "Bảo hành"),
     ("fit", "Mức phù hợp"),

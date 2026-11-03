@@ -1,9 +1,10 @@
-import type { ContractorDetailBlock, ContractorInfoKey, ProjectSummary } from '../../api/types';
+import type { ContractorDetailBlock, ContractorInfoKey, ImageRef, ProjectSummary } from '../../api/types';
 import { useWidget } from '../../state/context';
 import { formatDateVi, NO_DATA } from '../../utils/format';
-import { BUILDING_TYPE_VI, PROJECT_ROLE_VI } from '../../utils/labels';
+import { BUILDING_TYPE_VI, FINISH_PRICE_LABEL_VI, PROJECT_ROLE_VI } from '../../utils/labels';
 import { EvidenceCell } from '../common/EvidenceCell';
 import { ExternalLink } from '../common/ExternalLink';
+import { GalleryTiles } from '../common/Lightbox';
 import { SafeImage } from '../common/SafeImage';
 
 const INFO_LABELS: Record<ContractorInfoKey, string> = {
@@ -12,7 +13,7 @@ const INFO_LABELS: Record<ContractorInfoKey, string> = {
   staff_workers: 'Nhân sự thợ',
   staff_office: 'Nhân sự văn phòng',
   rough_price: 'Đơn giá xây thô',
-  finish_price: 'Đơn giá hoàn thiện cơ bản',
+  finish_price: FINISH_PRICE_LABEL_VI,
   typical_project_value: 'Quy mô dự án',
   dezon_project_count: 'Công trình ghi nhận trên Dezon',
   warranty: 'Bảo hành',
@@ -40,14 +41,31 @@ function projectMeta(p: ProjectSummary): string[] {
   return parts;
 }
 
+/** Bổ sung tên/link công trình cho ảnh khi payload cũ (lịch sử, localStorage) chưa gửi kèm từng ảnh. */
+function withProject(img: ImageRef, p: ProjectSummary | undefined): ImageRef {
+  if (!p) return img;
+  return { ...img, project_name: img.project_name || p.name, project_url: img.project_url || p.project_url };
+}
+
+/** Ảnh của một công trình. */
+function projectImages(p: ProjectSummary): ImageRef[] {
+  return (p.images ?? []).map((img) => withProject(img, p));
+}
+
+/** Lưới ảnh chính của hồ sơ: tra công trình theo project_slug để ảnh nào cũng có tên/link công trình. */
+function profileImages(images: ImageRef[], projects: ProjectSummary[]): ImageRef[] {
+  const bySlug = new Map(projects.map((pr) => [pr.slug, pr]));
+  return images.map((img) => withProject(img, img.project_slug ? bySlug.get(img.project_slug) : undefined));
+}
+
 /** Hồ sơ mở rộng (mục 8.3). */
 export function ContractorDetail({ block }: { block: ContractorDetailBlock }) {
   const { openQuoteForm, estimateSessionId } = useWidget();
   const p = block.data;
   const c = p.card;
-  const images = p.images.slice(0, 3);
-  const total = Math.max(p.total_images ?? 0, p.images.length);
-  const more = total - images.length;
+  const images = profileImages(p.images ?? [], p.projects ?? []);
+  // Ảnh trên Dezon nhiều hơn số ảnh backend gửi -> thêm link xem toàn bộ trên hồ sơ gốc.
+  const total = Math.max(p.total_images ?? 0, images.length);
   const infoKeys = [...INFO_ORDER, ...Object.keys(p.info).filter((k) => !(INFO_ORDER as string[]).includes(k))];
   const chips = p.chips && p.chips.length ? p.chips : DEFAULT_CHIPS;
   const estimateId = block.estimate_session_id ?? estimateSessionId;
@@ -71,18 +89,22 @@ export function ContractorDetail({ block }: { block: ContractorDetailBlock }) {
       </ul>
 
       {images.length > 0 ? (
-        <div className={`dz-gallery dz-gallery--${images.length + (more > 0 ? 1 : 0)}`}>
-          {images.map((img, i) => (
-            <figure key={`${img.url}-${i}`} className="dz-gallery__item">
-              <SafeImage src={img.url} alt={img.caption ?? `Ảnh dự án ${i + 1} của ${c.name}`} />
-            </figure>
-          ))}
-          {more > 0 && (
-            <ExternalLink href={c.profile_url} className="dz-gallery__more" ariaLabel={`Xem thêm ${more} ảnh trên Dezon`}>
-              +{more}
+        <>
+          <GalleryTiles
+            images={images}
+            max={3}
+            contractorName={c.name}
+            fallbackUrl={c.profile_url}
+            className="dz-gallery"
+            tileClassName="dz-gallery__item"
+            fallbackAlt={(i) => `Ảnh dự án ${i + 1} của ${c.name}`}
+          />
+          {total > images.length && (
+            <ExternalLink href={c.profile_url} className="dz-extlink dz-small">
+              Xem toàn bộ {total} ảnh trên Dezon ↗
             </ExternalLink>
           )}
-        </div>
+        </>
       ) : (
         <p className="dz-muted">Ảnh dự án: {NO_DATA}</p>
       )}
@@ -117,6 +139,14 @@ export function ContractorDetail({ block }: { block: ContractorDetailBlock }) {
                 {pr.name} ↗
               </ExternalLink>
               <div className="dz-muted dz-small">{projectMeta(pr).join(' · ')}</div>
+              <GalleryTiles
+                images={projectImages(pr)}
+                max={4}
+                contractorName={c.name}
+                fallbackUrl={c.profile_url}
+                className="dz-pgallery"
+                fallbackAlt={(i) => `Ảnh ${i + 1} công trình ${pr.name}`}
+              />
             </li>
           ))}
         </ul>

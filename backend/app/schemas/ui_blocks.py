@@ -24,9 +24,30 @@ class QuickRepliesBlock(BaseModel):
     allow_free_text: bool = True  # hiển thị lựa chọn "Nhập thông tin khác"
 
 
+class QuestionStepBlock(BaseModel):
+    """Thẻ câu hỏi từng bước khi thu thập thông tin (thay quick_replies cho câu hỏi slot).
+
+    Chọn một dòng `options` / một `chips` -> gửi `value` như tin nhắn của khách; ô nhập tự do gửi chữ khách gõ.
+    "Bỏ qua" gửi `skip_value` (chỉ khi `skippable`), "Trước"/‹ gửi `back_value` (None = bước đầu, nút bị tắt).
+    """
+    type: Literal["question_step"] = "question_step"
+    question: str  # tiêu đề câu hỏi in đậm, vd "Diện tích công trình (m²)?"
+    hint: str | None = None  # dòng gợi ý (frontend thêm biểu tượng 💡 phía trước)
+    options: list[QuickReply] = []  # các dòng đánh số 1..n
+    chips: list[QuickReply] = []  # lựa chọn nhanh dạng chip nhỏ (vd kích thước đất), có thể rỗng
+    input_placeholder: str | None = None  # None = không có dòng nhập tự do
+    step: int = 1  # vị trí câu hỏi hiện tại (bắt đầu từ 1)
+    total: int = 1  # tổng số câu hỏi dự kiến cho thông tin hiện tại
+    skippable: bool = False
+    skip_value: str | None = None
+    back_value: str | None = None
+    slots: list[str] = []  # slot đang hỏi (thông tin tham khảo)
+
+
 class SummaryItem(BaseModel):
     label: str
     value: str
+    edit_value: str | None = None  # tin nhắn gửi khi khách bấm "Sửa" ở dòng này (None = không sửa riêng được)
 
 
 class SummaryConfirmBlock(BaseModel):
@@ -35,6 +56,11 @@ class SummaryConfirmBlock(BaseModel):
     assumptions: list[str] = []
     confirm: QuickReply = QuickReply(label="Đúng rồi", value="Đúng rồi, tính khái toán giúp tôi")
     edit: QuickReply = QuickReply(label="Sửa lại", value="Tôi muốn sửa lại thông tin")
+    title: str | None = None  # vd "Xác nhận thông tin — Nhà phố"
+    confirm_label: str | None = None  # nút chính, vd "Tính ngay → xem bảng khái toán"
+    confirm_value: str | None = None  # tin nhắn gửi khi bấm nút chính (được hiểu là xác nhận)
+    more_label: str | None = None  # nút phụ "Cung cấp thêm thông tin..."; None = ẩn (không còn câu nào để hỏi thêm)
+    more_value: str | None = None
 
 
 class EstimateTableBlock(BaseModel):
@@ -86,7 +112,7 @@ class QuoteRequestFormBlock(BaseModel):
 
 
 UIBlock = Annotated[
-    QuickRepliesBlock | SummaryConfirmBlock | EstimateTableBlock | BudgetOptionsBlock | ContractorListBlock
-    | ComparisonTableBlock | ContractorDetailBlock | SourceBadgesBlock | QuoteRequestFormBlock,
+    QuickRepliesBlock | QuestionStepBlock | SummaryConfirmBlock | EstimateTableBlock | BudgetOptionsBlock
+    | ContractorListBlock | ComparisonTableBlock | ContractorDetailBlock | SourceBadgesBlock | QuoteRequestFormBlock,
     Field(discriminator="type"),
 ]

@@ -10,7 +10,6 @@ from app.ai.normalize import (
     parse_floors,
     parse_location,
     parse_message,
-    parse_quality_tier,
     parse_start_time,
     parse_structure,
     parse_vn_number,
@@ -232,19 +231,13 @@ def test_parse_work_scope(text, value):
 
 def test_quality_phrase_is_not_scope():
     assert parse_work_scope("mức hoàn thiện khá") is None
-    assert parse_quality_tier("mức hoàn thiện khá") == "kha"
 
 
-@pytest.mark.parametrize("text,value", [
-    ("tiết kiệm", "tiet_kiem"), ("trung bình", "trung_binh"), ("mức khá", "kha"), ("Khá", "kha"),
-    ("cao cấp", "cao_cap"), ("vật tư khá", "kha"),
-])
-def test_parse_quality_tier(text, value):
-    assert parse_quality_tier(text) == value
-
-
-def test_kha_as_adverb_is_not_quality():
-    assert parse_quality_tier("đất khá rộng") is None
+@pytest.mark.parametrize("text", ["tiết kiệm", "trung bình", "mức khá", "Khá", "cao cấp", "vật tư khá",
+                                  "mức hoàn thiện khá", "nhà phố 5x20 xây thô cao cấp"])
+def test_quality_tier_never_parsed(text):
+    """Không phân mức hoàn thiện (chưa có dữ liệu thật theo mức) -> parse_message không đặt quality_tier."""
+    assert "quality_tier" not in parse_message(text)
 
 
 @pytest.mark.parametrize("text,value", [

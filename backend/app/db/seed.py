@@ -3,9 +3,12 @@
     python -m app.db.seed
 
 - Hệ số khái toán mục 6.2: approved=false, nguồn dezon_editorial (chờ Dezon duyệt).
-- Đơn giá mẫu: trạng thái `reference` — KHÔNG phải bảng giá chính thức của Dezon.
-- Fixture nhà thầu: Kiến Phong (dữ liệu quan sát 31/10/2026) + 2 hồ sơ thiếu dữ liệu.
+- Fixture (`seed_fixtures`: nhà thầu/công trình mẫu `CONTRACTORS` + bảng giá TỰ ĐẶT `seed_rates`) chỉ dành cho
+  test/dev: `run()` mặc định KHÔNG nạp (dữ liệu hiển thị cho khách phải từ dezon.vn). Bật bằng
+  `run(db, fixtures=True)` (tests/conftest.py) hoặc `SEED_FIXTURES=1` (máy dev không nạp snapshot).
+  Đơn giá thật được tổng hợp từ đơn giá nhà thầu công bố trên Dezon (`app.services.market_rates`).
 """
+import os
 from datetime import UTC, date, datetime
 
 from sqlalchemy import select
@@ -50,7 +53,7 @@ RULES: list[tuple[str, str, str, float, str]] = [
 ]
 DEFAULT_RULE_CODES = {"floor_standard", "foundation_strip", "foundation_pile", "roof_concrete"}
 
-# --- Đơn giá mẫu (VND/m², mức trung bình) — dữ liệu tham khảo cho dev ---------------------------
+# --- Đơn giá mẫu (VND/m², mức trung bình) — CHỈ cho fixture test (tests/conftest.py), không phải giá thật ----
 BASE_RATES: dict[tuple[str, str], tuple[int, int]] = {
     # (building_type, work_scope): (min, max) toàn quốc
     ("nha_pho", "xay_tho"): (3_400_000, 4_000_000),
@@ -214,12 +217,26 @@ def seed_contractors(db: Session, site: str = "https://dezon.vn") -> None:
                                 url=f"https://placehold.co/800x600?text=Project+{i + 1}"))
 
 
-def run(db: Session) -> None:
-    seed_rules(db)
+def seed_fixtures(db: Session) -> None:
+    """Dữ liệu mẫu cho test/dev (KHÔNG phải dữ liệu thật để hiển thị cho khách)."""
+    seed_contractors(db)
     seed_rates(db)
+
+
+def fixtures_enabled() -> bool:
+    return os.environ.get("SEED_FIXTURES") == "1"
+
+
+def run(db: Session, *, fixtures: bool | None = None) -> None:
+    """Seed cơ bản (hệ số, trọng số, tỉnh lân cận) rồi các hook bổ sung (snapshot, điểm hồ sơ, RAG).
+
+    `fixtures=None` -> theo biến môi trường `SEED_FIXTURES=1`. Môi trường thật không nạp fixture: nhà thầu/công trình
+    lấy từ snapshot/crawl dezon.vn, đơn giá tổng hợp từ đơn giá nhà thầu công bố (market_rates, hook snapshot)."""
+    seed_rules(db)
     seed_weights(db)
     seed_neighbors(db)
-    seed_contractors(db)
+    if fixtures if fixtures is not None else fixtures_enabled():
+        seed_fixtures(db)
     db.flush()
     # Mở rộng: các module khác đăng ký hook seed bổ sung ở đây (profile_completeness, RAG, snapshot).
     for hook in EXTRA_SEED_HOOKS:

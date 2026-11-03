@@ -6,6 +6,7 @@ import { useChat } from '../state/useChat';
 import { Composer } from './Composer';
 import { MessageList } from './MessageList';
 import { PlanningLayout } from './PlanningLayout';
+import { LightboxProvider } from './common/Lightbox';
 import { SourcePopoverProvider } from './common/SourcePopover';
 
 const OPEN_KEY = 'dezon_ai_open';
@@ -71,7 +72,7 @@ export function App({ client, initiallyOpen = false, registerControls, mode = 'w
     setTimeout(() => launcherRef.current?.focus(), 0);
   }, []);
 
-  const { runLocal, markQuoteSubmitted, latestMatch, estimateSessionId, send, busy } = chat;
+  const { runLocal, markQuoteSubmitted, latestMatch, estimateSessionId, send, busy, sessionId } = chat;
 
   const actions = useMemo<WidgetActions>(
     () => ({
@@ -112,8 +113,9 @@ export function App({ client, initiallyOpen = false, registerControls, mode = 'w
       submitQuote: (body) => client.createQuoteRequest(body),
       quoteSubmitted: markQuoteSubmitted,
       estimateSessionId,
+      chatSessionId: sessionId,
     }),
-    [client, busy, send, runLocal, markQuoteSubmitted, latestMatch, estimateSessionId],
+    [client, busy, send, runLocal, markQuoteSubmitted, latestMatch, estimateSessionId, sessionId],
   );
 
   const onPanelKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -132,7 +134,9 @@ export function App({ client, initiallyOpen = false, registerControls, mode = 'w
       <WidgetContext.Provider value={actions}>
         <SourcePopoverProvider>
           <div className="dz-root dz-root--page">
-            <PlanningLayout chat={chat} isMock={client.isMock} loginUrl={loginUrl} inputRef={inputRef} />
+            <LightboxProvider>
+              <PlanningLayout chat={chat} isMock={client.isMock} loginUrl={loginUrl} inputRef={inputRef} />
+            </LightboxProvider>
           </div>
         </SourcePopoverProvider>
       </WidgetContext.Provider>
@@ -143,6 +147,7 @@ export function App({ client, initiallyOpen = false, registerControls, mode = 'w
     <WidgetContext.Provider value={actions}>
       <SourcePopoverProvider>
         <div className="dz-root">
+          <LightboxProvider>
           {open && expanded && (
             <div
               className="dz-root--page dz-overlay"
@@ -265,6 +270,7 @@ export function App({ client, initiallyOpen = false, registerControls, mode = 'w
             {!open && <span className="dz-launcher__label">Tư vấn AI</span>}
           </button>
           )}
+          </LightboxProvider>
         </div>
       </SourcePopoverProvider>
     </WidgetContext.Provider>

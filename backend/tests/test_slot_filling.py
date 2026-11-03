@@ -17,6 +17,7 @@ def test_acceptance_full_sentence_no_missing():
     assert s.floors == 4
     assert s.work_scope == "xay_tho"
     assert s.budget_vnd == 2_000_000_000
+    # Đủ 5 slot cốt lõi -> không còn thiếu (chi tiết dùng mặc định, nêu rõ trên bản xác nhận).
     assert u.missing_required == []
     assert u.intent == "provide_info"
     assert set(u.changed) >= {"building_type", "province", "district", "land_area_m2", "floors", "work_scope",
@@ -97,7 +98,7 @@ def test_expected_slots_recorded_in_asked():
 # --- Xác nhận / sửa ------------------------------------------------------------
 
 FULL = dict(building_type="nha_pho", province=HCM, land_width_m=5, land_length_m=20, land_area_m2=100, floors=4,
-            work_scope="xay_tho")
+            work_scope="xay_tho", building_area_m2=100, basement=False, has_mezzanine=False, roof_type="roof_concrete")
 
 
 def test_confirm_when_complete_sets_confirmed():
@@ -264,6 +265,25 @@ def test_update_slots_normalizes_partial():
     assert u.slots.province == HCM and u.slots.district == "TP. Thủ Đức"
     assert u.slots.land_area_m2 == 100
     assert u.missing_required == []
+    u = update_slots(u.slots, {"building_area_m2": 80, "basement": True, "basement_depth_m": 1.5,
+                               "has_mezzanine": False, "roof_type": "roof_metal"})
+    assert (u.slots.building_area_m2, u.slots.basement, u.slots.basement_depth_m) == (80, True, 1.5)
+    assert u.missing_required == []
+
+
+def test_extraction_schema_has_no_quality_tier_and_drops_it():
+    assert "quality_tier" not in EXTRACTION_JSON_SCHEMA["properties"]
+    assert "basement_depth_m" in EXTRACTION_JSON_SCHEMA["properties"]
+    assert normalize_raw_slots({"quality_tier": "cao_cap", "work_scope": "tron_goi"}) == {"work_scope": "tron_goi"}
+    assert update_slots(Slots(), {"quality_tier": "kha"}).slots.quality_tier is None
+
+
+def test_llm_basement_depth_checked_against_message():
+    assert normalize_raw_slots({"basement": True, "basement_depth_m": 1.5}, message="có hầm sâu 1,5 m") == {
+        "basement": True, "basement_depth_m": 1.5}
+    # Số không có trong tin nhắn / tin nhắn không nói về hầm -> bỏ.
+    assert "basement_depth_m" not in normalize_raw_slots({"basement_depth_m": 2.5}, message="có hầm sâu 1,5 m")
+    assert "basement_depth_m" not in normalize_raw_slots({"basement_depth_m": 2}, message="nhà 2 tầng")
 
 
 def test_normalize_raw_slots_drops_invalid():

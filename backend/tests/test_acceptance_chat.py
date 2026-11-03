@@ -15,10 +15,13 @@ from app.db.models import ChatSession, EstimateSession, GuardrailViolation, Quot
 from app.formatting import NO_DATA, format_vnd_range
 from app.schemas.slots import Slots
 from app.services import chat_service
+from tests.wizard import question, step
 
 pytestmark = pytest.mark.db
 
-FULL = "nhà phố 5x20 Thủ Đức 1 trệt 3 lầu xây thô ngân sách 2 tỷ"
+# Câu đầy đủ kèm chi tiết (diện tích xây dựng, hầm/lửng, mái) -> đi thẳng tới tóm tắt.
+DETAILS = ", xây kín đất, không hầm, không lửng, mái bằng"
+FULL = "nhà phố 5x20 Thủ Đức 1 trệt 3 lầu xây thô ngân sách 2 tỷ" + DETAILS
 CONFIRM = "Đúng rồi, tính khái toán giúp tôi"
 
 
@@ -55,8 +58,9 @@ def test_1_full_sentence_goes_straight_to_summary(db):
     sid = _new(db)
     r = _say(db, sid, FULL)
     assert r.missing_required == []
+    # Không hỏi lại thông tin đã nói, không hỏi câu tùy chọn -> bản xác nhận ngay.
     assert r.stage == "estimate"
-    assert _types(r) == ["summary_confirm"]  # không có quick_replies hỏi slot
+    assert _types(r) == ["summary_confirm"]  # không có câu hỏi slot
     assert "Em tóm tắt lại" in r.text and "xác nhận" in r.text
     for q in ("loại công trình nào", "khu vực nào", "diện tích đất", "mấy tầng", "phạm vi nào"):
         assert q not in r.text
@@ -65,6 +69,50 @@ def test_1_full_sentence_goes_straight_to_summary(db):
     assert values["Loại công trình"] == "Nhà phố" and "TP. Thủ Đức" in values["Khu vực"]
     assert values["Ngân sách"] == "2 tỷ" and values["Phạm vi"] == "Xây thô"
     assert r.slots["budget_vnd"] == 2_000_000_000 and "_state" not in r.slots
+    assert values["Diện tích xây dựng mỗi tầng"] == "100 m²" and values["Mái"] == "Mái bê tông cốt thép"
+    assert values["Tầng hầm"] == "Không" and values["Tầng lửng"] == "Không"
+    assert "Mức hoàn thiện" not in values and "mức hoàn thiện" not in r.text.lower()
+
+
+def test_1b_core_sentence_goes_to_summary_with_disclosed_defaults(db):
+    """Đủ 5 thông tin cốt lõi nhưng chưa nói chi tiết -> bản xác nhận ngay, mặc định nêu rõ ở "Giả định"; "Cung cấp
+    thêm thông tin" -> hỏi diện tích xây dựng, hầm/lửng, mái, độ sâu hầm; khách "chưa biết" -> dùng mặc định."""
+    sid = _new(db)
+    r = _say(db, sid, "nhà phố 5x20 Thủ Đức 1 trệt 3 lầu trọn gói")
+    assert r.stage == "estimate" and _types(r) == ["summary_confirm"] and r.missing_required == []
+    summary = _block(r, "summary_confirm")
+    assert summary.assumptions[0] == ("Tạm tính: xây kín đất (100 m²/tầng), không hầm, không lửng, mái bê tông cốt "
+                                      "thép — anh/chị bấm Sửa hoặc Cung cấp thêm thông tin để thay đổi.")
+
+    r = _say(db, sid, summary.more_value)
+    assert question(r) == "Diện tích xây dựng mỗi tầng (m²)?" and "?" not in r.text
+    assert [o.label for o in step(r).options] == ["Xây kín đất (100 m²)", "Chưa biết"]
+
+    r = _say(db, sid, "80 m2")
+    assert r.slots["building_area_m2"] == 80 and r.slots["land_area_m2"] == 100
+    assert question(r) == "Nhà có tầng hầm hoặc tầng lửng không?"
+
+    r = _say(db, sid, "Có tầng hầm, không lửng")
+    assert r.slots["basement"] is True and r.slots["has_mezzanine"] is False
+    assert question(r) == "Loại mái dự kiến?"
+
+    r = _say(db, sid, "Chưa biết")
+    assert r.slots["roof_type"] is None and question(r) == "Độ sâu tầng hầm?"
+    assert [o.label for o in step(r).options] == ["Dưới 1,3 m", "1,3–1,7 m", "1,7–2 m", "Trên 2 m", "Chưa biết"]
+
+    r = _say(db, sid, "Chưa biết")
+    assert r.missing_required == [] and r.stage == "estimate" and _types(r) == ["summary_confirm"]
+    summary = _block(r, "summary_confirm")
+    values = {i.label: i.value for i in summary.items}
+    assert values["Diện tích xây dựng mỗi tầng"] == "80 m²" and values["Tầng hầm"] == "Có"
+    assert values["Mái"] == "Mái bê tông cốt thép (tạm tính)" and "Mức hoàn thiện" not in values
+    assert summary.assumptions == [
+        "Tạm tính: hầm sâu 1,7–2 m, mái bê tông cốt thép — anh/chị bấm Sửa hoặc Cung cấp thêm thông tin để thay đổi.",
+        "Móng tính theo thông lệ: móng cọc (nhà từ 4 tầng nổi trở lên), chưa gồm chi phí ép cọc.",
+    ]
+    r = _say(db, sid, CONFIRM)
+    table = _block(r, "estimate_table").data
+    assert table.input.building_area_m2 == 80 and table.input.basement is True
 
 
 # ---------------------------------------------------------------------------------------------
@@ -73,27 +121,33 @@ def test_1_full_sentence_goes_straight_to_summary(db):
 def test_2_step_by_step_asks_only_missing_slot(db):
     sid = _new(db)
     steps = [
-        ("Nhà phố", ["province", "district"], "TP. Hồ Chí Minh"),
-        ("TP. Hồ Chí Minh", ["land_area_m2", "floors"], "5 × 20 m"),
-        ("Đất 5×20 m, 1 trệt 3 lầu", ["work_scope"], "Xây thô"),
+        ("Nhà phố", ["province", "district"], "TP. Hồ Chí Minh", 2),
+        ("TP. Hồ Chí Minh", ["land_area_m2"], "5 × 10", 3),
+        ("Đất 5×20 m", ["floors"], "1 trệt 3 lầu", 4),
+        ("1 trệt 3 lầu", ["work_scope"], "Xây thô", 5),
     ]
     asked_before: list[str] = []
-    for msg, expected_slots, reply_label in steps:
+    for msg, expected_slots, reply_label, step_no in steps:
         r = _say(db, sid, msg)
         assert r.stage == "collect"
         q = next_question(Slots.model_validate(r.slots))
         assert q is not None and q.slots == expected_slots
-        assert q.text in r.text
+        assert question(r) == q.title and q.text not in r.text  # câu hỏi nằm trên thẻ, không lặp trong văn bản
         for prev in asked_before:
             assert prev not in r.text  # không hỏi lại slot đã có
-        qr = _block(r, "quick_replies")
-        assert reply_label in [o.label for o in qr.options]
+        card = step(r)
+        assert reply_label in [o.label for o in [*card.chips, *card.options]]
+        assert card.slots == expected_slots and (card.step, card.total) == (step_no, 5) and card.back_value
         assert "summary_confirm" not in _types(r)
         _, state = split_raw(db.get(ChatSession, sid).slots)
         assert state.expected_slots == expected_slots
         asked_before.append(q.text)
     r = _say(db, sid, "Xây thô")
     assert _types(r) == ["summary_confirm"] and r.missing_required == []
+    assert _block(r, "summary_confirm").assumptions == [
+        "Tạm tính: xây kín đất (100 m²/tầng), không hầm, không lửng, mái bê tông cốt thép — anh/chị bấm Sửa hoặc "
+        "Cung cấp thêm thông tin để thay đổi.",
+        "Móng tính theo thông lệ: móng cọc (nhà từ 4 tầng nổi trở lên), chưa gồm chi phí ép cọc."]
 
 
 # ---------------------------------------------------------------------------------------------
@@ -124,7 +178,7 @@ def test_3_confirm_produces_estimate_matching_engine(db):
 # 4. Ngân sách thấp hơn khái toán -> ≥ 2 phương án, chi phí do engine tính
 # ---------------------------------------------------------------------------------------------
 def test_4_low_budget_gives_budget_options(db):
-    sid, r = _confirmed_session(db, "nhà phố 5x20 Thủ Đức 1 trệt 3 lầu xây thô")
+    sid, r = _confirmed_session(db, "nhà phố 5x20 Thủ Đức 1 trệt 3 lầu xây thô" + DETAILS)
     assert "budget_options" not in _types(r)
     est = _block(r, "estimate_table").data
     r2 = _say(db, sid, "Ngân sách 1,2 tỷ")
@@ -146,7 +200,7 @@ def test_4_low_budget_gives_budget_options(db):
 
 def test_4b_budget_in_first_message_below_cost(db):
     sid = _new(db)
-    _say(db, sid, "nhà phố 5x20 Thủ Đức 1 trệt 3 lầu xây thô ngân sách 1,2 tỷ")
+    _say(db, sid, "nhà phố 5x20 Thủ Đức 1 trệt 3 lầu xây thô ngân sách 1,2 tỷ" + DETAILS)
     r = _say(db, sid, CONFIRM)
     assert {"estimate_table", "budget_options", "contractor_list"} <= set(_types(r))
     # Đã có ngân sách -> không hỏi lại ngân sách, gợi ý bước tiếp theo.
@@ -217,7 +271,7 @@ def test_7a_price_question_in_fresh_session(db):
     r = _say(db, sid, "đơn giá của Huy Hoàng là bao nhiêu?")
     assert NO_DATA in r.text
     assert not [c for c in validator.extract_claims(r.text) if c.kind == validator.UNIT_PRICE]
-    assert "quick_replies" in _types(r)  # vẫn tiếp tục hỏi slot còn thiếu
+    assert "question_step" in _types(r)  # vẫn tiếp tục hỏi slot còn thiếu
 
 
 def test_7b_best_contractor_question(db):
@@ -352,7 +406,7 @@ _LIMITER = chat_service.MemoryRateLimiter(20)
 def test_10_sse_full_flow_over_http(api):
     created = api.post("/api/chat/sessions", json={}).json()
     sid = created["session_id"]
-    assert created["messages"][0]["ui_blocks"][0]["type"] == "quick_replies"
+    assert created["messages"][0]["ui_blocks"][0]["type"] == "question_step"
 
     resp = api.post(f"/api/chat/sessions/{sid}/messages", json={"content": FULL})
     assert resp.status_code == 200 and resp.headers["content-type"].startswith("text/event-stream")
@@ -376,7 +430,7 @@ def test_10_sse_full_flow_over_http(api):
 
     hist = api.get(f"/api/chat/sessions/{sid}").json()
     assert hist["session_id"] == sid and hist["stage"] == "match"
-    assert [m["role"] for m in hist["messages"]] == ["assistant", "user", "assistant", "user", "assistant"]
+    assert [m["role"] for m in hist["messages"]] == ["assistant", *(["user", "assistant"] * 2)]
     assert hist["messages"][-1]["content"] == text
     assert [b["type"] for b in hist["messages"][-1]["ui_blocks"]] == [b["type"] for b in blocks]
     assert events[-1][1]["message_id"] == hist["messages"][-1]["id"]

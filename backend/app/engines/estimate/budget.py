@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
-from app.schemas.common import QUALITY_TIER_VI, WorkScope
+from app.schemas.common import WorkScope
 from app.schemas.estimate import BudgetOption, EstimateInput, EstimateResult, RateData, RuleSet
 
 from . import rules as R
@@ -53,15 +53,6 @@ def _candidates(inp: EstimateInput, rules: RuleSet, current: EstimateResult) -> 
         n = inp.floors - 1
         out.append(_Candidate("reduce_floor", f"Giảm 1 tầng (còn {n} tầng)",
                               "Bớt một tầng, giữ nguyên các thông số khác.", {"floors": n}))
-
-    lower = R.lower_quality(inp.quality_tier)
-    if lower is not None:
-        # Tên mức chất lượng viết thường giữa câu (thống nhất "mức tiết kiệm", không "mức Tiết kiệm").
-        lo_vi, cur_vi = QUALITY_TIER_VI[lower].lower(), QUALITY_TIER_VI[inp.quality_tier].lower()
-        out.append(_Candidate(
-            "lower_quality", f"Hạ mức chất lượng xuống {lo_vi}",
-            f"Dùng vật tư mức {lo_vi} thay cho mức {cur_vi}.",
-            {"quality_tier": lower.value}))
 
     if eff.basement and "ham" in groups:
         out.append(_Candidate("remove_basement", "Bỏ tầng hầm",

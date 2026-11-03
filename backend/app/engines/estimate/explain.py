@@ -5,7 +5,7 @@ và nhãn nguồn lấy từ đơn giá).
 """
 from app.evidence import SourceRef
 from app.formatting import NO_DATA
-from app.schemas.common import QualityTier, WorkScope
+from app.schemas.common import WorkScope
 from app.schemas.estimate import EstimateInput
 
 from . import rules as R
@@ -20,7 +20,7 @@ SCOPE_INCLUDES_VI: dict[WorkScope, str] = {
         "điện nước, thiết bị vệ sinh) trên phần thô đã có."
     ),
     WorkScope.tron_goi: (
-        "Phạm vi Trọn gói: gồm phần thô và phần hoàn thiện theo mức chất lượng đã chọn."
+        "Phạm vi Trọn gói: gồm phần thô và phần hoàn thiện cơ bản."
     ),
     WorkScope.noi_that: (
         "Phạm vi Nội thất: gồm đồ nội thất và lắp đặt bên trong theo diện tích sàn sử dụng."
@@ -111,8 +111,6 @@ def build_cost_drivers(inp: EstimateInput, has_basement: bool, has_mezzanine: bo
             out.append("Sân thượng có mái che được tính hệ số cao hơn sân thượng để trống")
         if has_mezzanine:
             out.append("Tầng lửng được tính như một sàn đầy đủ")
-    if inp.quality_tier in (QualityTier.kha, QualityTier.cao_cap) and scope != WorkScope.xay_tho:
-        out.append("Mức chất lượng vật tư hoàn thiện cao làm đơn giá tăng")
     if structural:
         out.extend(d for d in _GENERAL_DRIVERS if rough or "móng" not in d)
     else:
@@ -128,8 +126,20 @@ DISCLAIMER_TEMPLATE = (
 )
 
 
-def build_disclaimer(source: SourceRef | None) -> str:
-    """Ghi chú miễn trừ bắt buộc (mục 6.6), điền {nguồn, ngày cập nhật dd/mm/yyyy}."""
+# Không có đơn giá -> không có chi phí: ghi chú không được nói "dựa trên đơn giá tham chiếu".
+NO_RATE_DISCLAIMER = (
+    "Đây là khái toán sơ bộ: Dezon chưa có đủ đơn giá do nhà thầu công bố cho phạm vi này nên em chỉ tính diện "
+    "tích sàn quy đổi, chưa tính được chi phí. Không phải báo giá thi công. "
+    "Vui lòng yêu cầu báo giá từ nhà thầu để có con số chính xác."
+)
+
+
+def build_disclaimer(source: SourceRef | None, *, has_rate: bool = True) -> str:
+    """Ghi chú miễn trừ bắt buộc (mục 6.6), điền {nguồn, ngày cập nhật dd/mm/yyyy}.
+
+    `has_rate=False` (không có đơn giá, không tính được chi phí) -> `NO_RATE_DISCLAIMER`."""
+    if not has_rate:
+        return NO_RATE_DISCLAIMER
     if source is None:
         src = f"({NO_DATA})"
     else:

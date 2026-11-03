@@ -212,6 +212,61 @@ def parse_price_per_m2_range(s: str | None) -> list[int] | None:
     return parse_money_range(s)
 
 
+# Đơn giá/m² ngoài khoảng này gần như chắc là gõ nhầm trên hồ sơ (vd "2.000.000 – 80.000.000").
+PRICE_PER_M2_MIN = 500_000
+PRICE_PER_M2_MAX = 40_000_000
+PRICE_RANGE_MAX_RATIO = 10
+
+
+def plausible_price_per_m2_range(rng: list[int] | tuple[int, int] | None) -> bool:
+    """Khoảng đơn giá/m² có hợp lý để dùng cho khái toán & matching không (xem docs/DECISIONS.md)."""
+    if not rng:
+        return False
+    lo, hi = min(rng), max(rng)
+    return PRICE_PER_M2_MIN <= lo and hi <= PRICE_PER_M2_MAX and hi <= lo * PRICE_RANGE_MAX_RATIO
+
+
+# Form hồ sơ nhà thầu trên dezon.vn để sẵn cận dưới 2 tr/m²: ~1/2 hồ sơ ghi "Từ 2 đến X tr/m²" (kể cả xây thô).
+FORM_DEFAULT_MIN_PRICE = 2_000_000
+
+
+# Sàn hợp lý theo loại đơn giá trên hồ sơ (thận trọng, dưới mức thấp nhất thực tế trên dezon.vn 02/11/2026:
+# xây thô 3,8 tr/m², "hoàn thiện cơ bản" = trọn gói 6 tr/m²). Thấp hơn sàn -> gần như chắc là gõ nhầm/đơn giá nhân
+# công ("Từ 0,5 đến 4,2 tr/m²" xây thô; "Từ 0,7 đến 2 tr/m²" hoàn thiện cơ bản). Xem docs/DECISIONS.md.
+PRICE_KIND_ROUGH = "rough_price"
+PRICE_KIND_FINISH = "finish_price"
+PRICE_PER_M2_FLOOR_BY_KIND = {
+    PRICE_KIND_ROUGH: 2_500_000,
+    PRICE_KIND_FINISH: 4_000_000,
+}
+
+
+def clean_price_per_m2_range(rng: list[int] | None, kind: str | None = None
+                             ) -> tuple[list[int | None] | None, str | None]:
+    """Khoảng đơn giá/m² trên hồ sơ -> ([min, max] dùng được, lý do loại/sửa).
+
+    `kind` = "rough_price" (xây thô) | "finish_price" ("hoàn thiện cơ bản" = trọn gói) | None (chỉ kiểm tra chung).
+    - cận dưới = mặc định của form (2 tr) và cận trên lớn hơn -> bỏ cận dưới: `[None, max]`, lý do "default_min";
+    - cận dưới thấp hơn sàn của `kind` và cận trên đạt sàn -> bỏ cận dưới: `[None, max]`, lý do "implausible_min";
+    - khoảng (sau các bước trên) vô lý, hoặc cận trên dưới sàn -> `None`, lý do "implausible"."""
+    if not rng:
+        return None, None
+    lo: int | None = min(rng)
+    hi = max(rng)
+    reason = None
+    if lo == FORM_DEFAULT_MIN_PRICE and hi > lo:
+        lo, reason = None, "default_min"
+    floor = PRICE_PER_M2_FLOOR_BY_KIND.get(kind or "")
+    if floor is not None:
+        if hi < floor:
+            return None, "implausible"
+        if lo is not None and lo < floor:
+            lo, reason = None, "implausible_min"
+    if not plausible_price_per_m2_range([v for v in (lo, hi) if v is not None]):
+        return None, "implausible"
+    return [lo, hi], reason
+
+
 def parse_int(s: str | None) -> int | None:
     """Số nguyên đầu tiên: '8 năm' -> 8; '7 công trình' -> 7; '1.200 m²' -> 1200."""
     if s is None or is_placeholder(s):
