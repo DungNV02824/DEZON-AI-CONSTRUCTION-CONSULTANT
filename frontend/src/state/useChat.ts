@@ -31,6 +31,8 @@ export const MOCK_SESSION_KEY = 'dezon_ai_mock_session_id';
 
 /** Khóa localStorage lưu các tin nhắn cục bộ (hồ sơ, so sánh, form/mã báo giá) của một phiên. */
 export const localMessagesKey = (sessionKey: string, sessionId: string) => `${sessionKey}:local:${sessionId}`;
+/** Khóa localStorage lưu mã báo giá gửi từ form mở ngay dưới thẻ nhà thầu (state/quoteCodes.ts). */
+export const quoteCodesKey = (sessionKey: string, sessionId: string) => `${sessionKey}:quotes:${sessionId}`;
 /** Giữ tối đa N tin nhắn cục bộ gần nhất để không vượt hạn mức localStorage. */
 const MAX_LOCAL_SAVED = 20;
 
@@ -158,6 +160,7 @@ export function useChat(client: ApiClient, storage: Storage | null = defaultStor
         return next;
       });
       storageSet(storage, localMessagesKey(storageKey, id), null);
+      storageSet(storage, quoteCodesKey(storageKey, id), null);
     },
     [storage, storageKey],
   );
@@ -201,6 +204,7 @@ export function useChat(client: ApiClient, storage: Storage | null = defaultStor
           if (status >= 400 && status < 500) {
             storageSet(storage, storageKey, null);
             storageSet(storage, localMessagesKey(storageKey, saved), null);
+            storageSet(storage, quoteCodesKey(storageKey, saved), null);
           } else {
             setStatus('error');
             initRef.current = null;
@@ -374,8 +378,14 @@ export function useChat(client: ApiClient, storage: Storage | null = defaultStor
 
   /** "Xóa tất cả": xóa lịch sử trên thiết bị này rồi mở cuộc trò chuyện mới. */
   const clearHistory = useCallback(async () => {
-    for (const h of history) storageSet(storage, localMessagesKey(storageKey, h.id), null);
-    if (sessionId) storageSet(storage, localMessagesKey(storageKey, sessionId), null);
+    for (const h of history) {
+      storageSet(storage, localMessagesKey(storageKey, h.id), null);
+      storageSet(storage, quoteCodesKey(storageKey, h.id), null);
+    }
+    if (sessionId) {
+      storageSet(storage, localMessagesKey(storageKey, sessionId), null);
+      storageSet(storage, quoteCodesKey(storageKey, sessionId), null);
+    }
     saveHistory(storage, storageKey, []);
     setHistory([]);
     await newConversation();

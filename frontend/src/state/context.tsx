@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import type { QuoteFormContractor } from '../api/types';
+import type { ComparisonMatrix, ContractorProfile, QuoteFormContractor } from '../api/types';
 
 /** Các thao tác mà UI block có thể gọi. Mặc định là no-op để block render được độc lập (test, storybook). */
 export interface WidgetActions {
@@ -9,7 +9,11 @@ export interface WidgetActions {
   send(text: string): void;
   focusInput(): void;
   openContractor(slug: string, contractorId?: number): void;
+  /** Tải hồ sơ nhà thầu để mở chi tiết ngay dưới thẻ (không thêm tin nhắn mới). */
+  loadContractor(slug: string): Promise<ContractorProfile>;
   compare(contractorIds: number[], estimateSessionId?: string | null): void;
+  /** Tải bảng so sánh để mở ngay dưới nút bấm trong danh sách nhà thầu (không thêm tin nhắn mới). */
+  loadComparison(contractorIds: number[], estimateSessionId?: string | null): Promise<ComparisonMatrix>;
   openQuoteForm(contractors: QuoteFormContractor[], estimateSessionId?: string | null): void;
   recordClick(contractorId: number, logId?: number | null): void;
   submitQuote: import('../api/client').ApiClient['createQuoteRequest'];
@@ -29,7 +33,9 @@ export const defaultActions: WidgetActions = {
   send: noop,
   focusInput: noop,
   openContractor: noop,
+  loadContractor: () => Promise.reject(new Error('Chưa cấu hình client')),
   compare: noop,
+  loadComparison: () => Promise.reject(new Error('Chưa cấu hình client')),
   openQuoteForm: noop,
   recordClick: noop,
   submitQuote: () => Promise.reject(new Error('Chưa cấu hình client')),

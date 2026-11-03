@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from app.formatting import NO_DATA
 from app.schemas.common import BUILDING_TYPE_VI, WORK_SCOPE_VI
+from app.schemas.matching import FIT_REVIEW
 
 log = logging.getLogger(__name__)
 
@@ -178,7 +179,9 @@ def _match(r: dict) -> str:
         reasons = [str(x.get("text", "")) for x in (m.get("reasons") or []) if x.get("text")]
         cautions = [str(x.get("text", "")) for x in (m.get("cautions") or []) if x.get("text")]
         mentions_projects = mentions_projects or any("công trình" in t or "dự án" in t for t in reasons + cautions)
-        line = f"- {c.get('name', '')} ({m.get('fit_label', '')})"
+        fit = m.get("fit_label") or ""
+        # Không nêu nhãn "Cần đánh giá thêm" với khách (yêu cầu chủ sản phẩm).
+        line = f"- {c.get('name', '')}" + (f" ({fit})" if fit and fit != FIT_REVIEW else "")
         if reasons:
             line += f": {'; '.join(reasons)}"
         if cautions:

@@ -1027,3 +1027,33 @@ Test hồi quy chính: `tests/test_chat_fixes.py` (luồng thật qua orchestrat
   schema cho phiên cũ nhưng không còn dùng.
 - Phiên cũ đã xác nhận khi chưa có chi tiết: giữ xác nhận (chi tiết không còn bắt buộc); khái toán tính lại nếu hash
   slot khác.
+
+## Hồ sơ và form báo giá mở ngay dưới thẻ nhà thầu
+
+- Theo yêu cầu chủ sản phẩm: trong `contractor_list`, nút "Xem chi tiết" (và tên nhà thầu) mở hồ sơ ngay dưới thẻ;
+  nút "Yêu cầu báo giá" (trên thẻ, trong hồ sơ, trên thanh "Đã chọn") mở form ngay dưới thẻ / dưới thanh chọn. Bấm lại
+  ("Thu gọn chi tiết" / "Thu gọn báo giá") để đóng. Không còn thêm tin nhắn ở cuối hội thoại. Hồ sơ mở từ chỗ khác (bảng
+  so sánh, block `contractor_detail` backend gửi) vẫn là tin nhắn, nhưng nút "Yêu cầu báo giá" trong hồ sơ đó cũng mở
+  form ngay dưới hồ sơ.
+- Đây là trạng thái giao diện, không phải tin nhắn cục bộ: tải lại trang thì hồ sơ đóng lại (thay phần "hồ sơ" của
+  W-F8). Mã DZ-… của các form này lưu riêng ở localStorage, khóa `<khóa phiên>:quotes:<session_id>`, dạng
+  `{listKey: {khóa form: mã}}` (`state/quoteCodes.ts`; listKey = `recommendation_log_id`, hồ sơ = `detail-<id>`).
+  Khóa form = id nhà thầu sắp xếp tăng dần; form gửi nhiều nhà thầu có tiền tố `b:`. Sau khi tải lại vẫn thấy thẻ
+  "Đã gửi yêu cầu báo giá" ngay dưới thẻ nhà thầu / dưới danh sách; mở lại form đã gửi chỉ hiện thẻ thành công (không
+  gửi trùng). Khóa bị xóa cùng `:local:` khi xóa lịch sử, xóa một cuộc trò chuyện hoặc phiên hết hạn (4xx).
+- Thanh "Đã chọn": chọn 1 nhà thầu thì "Yêu cầu báo giá" mở form dưới thẻ của nhà thầu đó; chọn ≥ 2 thì mở form chung
+  dưới danh sách. Đổi lựa chọn (tích/bỏ tích trên thẻ, "Bỏ chọn") thì form chung đóng, tránh gửi nhầm nhà thầu.
+- Đổi phiên (New chat, Recent chats) thì danh sách tin nhắn mount lại (`key = session_id`), nên trạng thái mở/đóng và mã
+  báo giá của phiên trước không mang sang phiên sau.
+- `dezon-widget.js` (tên file cố định) chuyển từ `max-age=300` sang `no-cache` (trình duyệt hỏi lại bằng ETag): bản build
+  mới tới khách ngay, không còn tình trạng 5 phút đầu vẫn chạy bản cũ.
+- Bảng so sánh cũng mở tại chỗ: nút "So sánh N nhà thầu trong bảng" mở bảng ngay dưới nút (trên thẻ đầu tiên), nút
+  "So sánh" của thanh "Đã chọn" mở bảng ngay dưới thanh; bấm lại ("Thu gọn bảng so sánh" / "Thu gọn so sánh") để đóng.
+  Đổi lựa chọn thì bảng của thanh "Đã chọn" đóng. Bấm tên nhà thầu trong bảng này mở hồ sơ dưới thẻ của nhà thầu đó và
+  cuộn tới thẻ. Bảng là trạng thái giao diện (tải lại trang thì đóng). Khách gõ "so sánh ..." trong chat thì vẫn trả
+  bảng thành tin nhắn như cũ.
+- Thứ tự hiển thị trong một tin nhắn trợ lý (`utils/messageLayout.ts`, chỉ frontend, áp dụng cả tin cũ): mỗi đoạn chữ
+  đứng ngay trên block nó nói tới. Đoạn giới thiệu nhà thầu (có "nhà thầu" + "đề xuất"/"giới thiệu", không phải đoạn
+  đầu) -> ngay trên `contractor_list`; đoạn cuối là câu hỏi (kết thúc "?" hoặc có "cho em biết", vd `BUDGET_TAIL`) ->
+  ngay trên `quick_replies` cuối tin. Không tách được thì giữ thứ tự cũ (chữ trước, block sau). Tin đang stream vẫn
+  chữ trước block sau; block key theo chỉ số gốc nên đổi thứ tự khi nhận xong không mount lại block.

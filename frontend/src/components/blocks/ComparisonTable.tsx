@@ -6,8 +6,17 @@ import { ExternalLink } from '../common/ExternalLink';
 
 const UNAVAILABLE: EvidenceValue = { value: null, display: NO_DATA, status: 'unavailable', source: null, is_stale: false };
 
-/** Bảng so sánh ngang (mục 8.2): cột đầu cố định, cuộn ngang trên mobile, mọi ô có nội dung. */
-export function ComparisonTable({ block }: { block: ComparisonTableBlock }) {
+/**
+ * Bảng so sánh ngang (mục 8.2): cột đầu cố định, cuộn ngang trên mobile, mọi ô có nội dung.
+ * `onOpenContractor`: bảng mở ngay trong danh sách nhà thầu -> bấm tên mở hồ sơ dưới thẻ của nhà thầu đó.
+ */
+export function ComparisonTable({
+  block,
+  onOpenContractor,
+}: {
+  block: ComparisonTableBlock;
+  onOpenContractor?: (id: number, slug: string) => void;
+}) {
   const { openContractor, recordClick } = useWidget();
   const { contractors, rows } = block.data;
   // Bảng tổng quan (câu hỏi chung, C-F4) dùng lại block này với hàng đầu "projects_of_type".
@@ -30,7 +39,8 @@ export function ComparisonTable({ block }: { block: ComparisonTableBlock }) {
                     className="dz-namebtn"
                     onClick={() => {
                       recordClick(c.id);
-                      openContractor(c.slug, c.id);
+                      if (onOpenContractor) onOpenContractor(c.id, c.slug);
+                      else openContractor(c.slug, c.id);
                     }}
                     aria-label={`Xem chi tiết ${c.name}`}
                   >

@@ -947,7 +947,9 @@ export function buildComparison(ids: number[], results: MatchedContractor[] = MA
     {
       key: 'fit',
       label_vi: 'Mức phù hợp',
-      cells: col((m) => ev(m.score, `${m.fit_label} (${m.score}/100)`, MATCHING_SOURCE, 'reference')),
+      cells: col((m) =>
+        ev(m.score, m.fit_label === 'Cần đánh giá thêm' ? `${m.score}/100` : `${m.fit_label} · ${m.score}/100`, MATCHING_SOURCE, 'reference'),
+      ),
     },
   ];
   return {

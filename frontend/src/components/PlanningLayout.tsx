@@ -183,7 +183,7 @@ export function PlanningLayout({ chat, isMock, loginUrl, inputRef, onMinimize }:
               <p>Đang kết nối…</p>
             </div>
           ) : (
-            <MessageList messages={chat.messages} busy={chat.busy} onRetry={chat.retry} variant="page" />
+            <MessageList key={chat.sessionId ?? ''} messages={chat.messages} busy={chat.busy} onRetry={chat.retry} variant="page" />
           )}
           <div className="dz-plan__composer">
             <Composer

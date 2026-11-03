@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   BUDGET_FIXTURE,
   COMPARISON_FIXTURE,
@@ -134,7 +134,8 @@ describe('ContractorCard', () => {
     expect(screen.getByText('7 công trình ghi nhận trên Dezon')).toBeInTheDocument();
     expect(screen.getByText('Công trình ghi nhận trên Dezon')).toBeInTheDocument();
     // Đầu ra engine: 4,3–4,7 triệu/m² × 490 m² = 2,107–2,303 tỷ, vượt ngân sách 2 tỷ ~5% -> 67 điểm.
-    expect(screen.getByText('Cần đánh giá thêm')).toBeInTheDocument();
+    // Chủ sản phẩm yêu cầu bỏ nhãn "Cần đánh giá thêm": chỉ còn điểm.
+    expect(screen.queryByText('Cần đánh giá thêm')).toBeNull();
     expect(screen.getByText('Điểm 67/100')).toBeInTheDocument();
     expect(screen.getAllByRole('img').length).toBeGreaterThan(0);
   });
@@ -145,25 +146,193 @@ describe('ContractorCard', () => {
     expect(screen.getAllByText('Chưa có dữ liệu').length).toBeGreaterThanOrEqual(3);
     expect(screen.queryByText('Điểm cần lưu ý')).toBeNull(); // chủ sản phẩm yêu cầu bỏ phần này
     expect(screen.queryByText('Chưa có thông tin đơn giá — cần đối chiếu')).toBeNull();
-    expect(screen.getByText('Cần đánh giá thêm')).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/Cần đánh giá thêm/);
     expect(container.textContent).not.toMatch(/tốt nhất/i);
   });
 });
 
 describe('ContractorList', () => {
-  it('Xem chi tiết ghi nhận click + mở hồ sơ; chọn 2 nhà thầu rồi So sánh', () => {
-    const { actions } = renderWithWidget(<BlockRenderer block={{ type: 'contractor_list', data: MATCH_FIXTURE }} active />);
+  it('Xem chi tiết ghi nhận click + mở hồ sơ NGAY DƯỚI thẻ (không thêm tin nhắn); bấm lại để thu gọn', async () => {
+    const { actions } = renderWithWidget(<BlockRenderer block={{ type: 'contractor_list', data: MATCH_FIXTURE }} active />, {
+      loadContractor: vi.fn(async (slug: string) => PROFILES[slug]!),
+    });
     expect(screen.getByText('3 nhà thầu phù hợp nhất với tiêu chí của anh/chị')).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole('button', { name: 'Xem chi tiết' })[0]!);
     expect(actions.recordClick).toHaveBeenCalledWith(1, 101);
-    expect(actions.openContractor).toHaveBeenCalledWith('kien-phong', 1);
+    expect(actions.loadContractor).toHaveBeenCalledWith('kien-phong');
+    expect(actions.openContractor).not.toHaveBeenCalled();
+    const detail = await screen.findByText('Công trình thực tế trên Dezon');
+    // Chi tiết nằm ngay sau thẻ thứ nhất, trước thẻ thứ hai.
+    const cards = document.querySelectorAll('.dz-ccard');
+    expect(cards[0]!.compareDocumentPosition(detail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(detail.compareDocumentPosition(cards[1]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Thu gọn chi tiết' }));
+    expect(screen.queryByText('Công trình thực tế trên Dezon')).toBeNull();
+
+    // Nút so sánh cả danh sách: nút nổi bật có icon (không còn là link chữ).
+    const all = screen.getByRole('button', { name: 'So sánh 3 nhà thầu trong bảng' });
+    expect(all).toHaveClass('dz-btn--compare');
+    expect(all.querySelector('svg')).not.toBeNull();
 
     const compareBtns = screen.getAllByRole('button', { name: 'So sánh' });
     fireEvent.click(compareBtns[0]!);
     fireEvent.click(compareBtns[1]!);
     const bar = screen.getByRole('region', { name: 'Nhà thầu đã chọn' });
     fireEvent.click(within(bar).getByRole('button', { name: 'So sánh' }));
-    expect(actions.compare).toHaveBeenCalledWith([1, 2], MATCH_FIXTURE.criteria.estimate_session_id);
+    expect(actions.loadComparison).toHaveBeenCalledWith([1, 2], MATCH_FIXTURE.criteria.estimate_session_id);
+    expect(actions.compare).not.toHaveBeenCalled();
+  });
+});
+
+describe('ContractorList — bảng so sánh ngay dưới nút bấm', () => {
+  it('"So sánh N nhà thầu trong bảng" mở bảng ngay dưới nút (trước thẻ đầu tiên), bấm lại để thu gọn', async () => {
+    const { actions } = renderWithWidget(<BlockRenderer block={{ type: 'contractor_list', data: MATCH_FIXTURE }} active />, {
+      loadComparison: vi.fn(async () => COMPARISON_FIXTURE),
+    });
+    const btn = screen.getByRole('button', { name: 'So sánh 3 nhà thầu trong bảng' });
+    fireEvent.click(btn);
+    expect(actions.loadComparison).toHaveBeenCalledWith([1, 2, 3], MATCH_FIXTURE.criteria.estimate_session_id);
+    expect(actions.compare).not.toHaveBeenCalled();
+    const table = await screen.findByRole('region', { name: 'Bảng so sánh nhà thầu' });
+    const firstCard = document.querySelector('.dz-ccard')!;
+    expect(btn.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(table.compareDocumentPosition(firstCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Thu gọn bảng so sánh' }));
+    expect(screen.queryByRole('region', { name: 'Bảng so sánh nhà thầu' })).toBeNull();
+  });
+
+  it('bấm tên nhà thầu trong bảng -> mở hồ sơ dưới thẻ của nhà thầu đó (không thêm tin nhắn)', async () => {
+    const { actions } = renderWithWidget(<BlockRenderer block={{ type: 'contractor_list', data: MATCH_FIXTURE }} active />, {
+      loadComparison: vi.fn(async () => COMPARISON_FIXTURE),
+      loadContractor: vi.fn(async (slug: string) => PROFILES[slug]!),
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'So sánh 3 nhà thầu trong bảng' }));
+    const table = await screen.findByRole('region', { name: 'Bảng so sánh nhà thầu' });
+    const first = COMPARISON_FIXTURE.contractors[0]!;
+    fireEvent.click(within(table).getByRole('button', { name: `Xem chi tiết ${first.name}` }));
+    expect(actions.openContractor).not.toHaveBeenCalled();
+    expect(actions.loadContractor).toHaveBeenCalledWith(first.slug);
+    expect(await screen.findByRole('button', { name: 'Thu gọn chi tiết' })).toBeInTheDocument();
+  });
+
+  it('đổi lựa chọn trên thẻ -> bảng so sánh của thanh "Đã chọn" đóng (không so sánh theo lựa chọn cũ)', async () => {
+    renderWithWidget(<BlockRenderer block={{ type: 'contractor_list', data: MATCH_FIXTURE }} active />, {
+      loadComparison: vi.fn(async () => COMPARISON_FIXTURE),
+    });
+    const cmpBtns = screen.getAllByRole('button', { name: 'So sánh' });
+    fireEvent.click(cmpBtns[0]!);
+    fireEvent.click(cmpBtns[1]!);
+    const bar = screen.getByRole('region', { name: 'Nhà thầu đã chọn' });
+    fireEvent.click(within(bar).getByRole('button', { name: 'So sánh' }));
+    await screen.findByRole('region', { name: 'Bảng so sánh nhà thầu' });
+    fireEvent.click(screen.getAllByRole('button', { name: 'So sánh' })[0]!); // chọn thêm nhà thầu thứ 3
+    expect(screen.queryByRole('region', { name: 'Bảng so sánh nhà thầu' })).toBeNull();
+  });
+});
+
+describe('ContractorList — báo giá ngay dưới thẻ', () => {
+  it('nút "Yêu cầu báo giá" mở form ngay dưới thẻ (không thêm tin nhắn), bấm lại để thu gọn; nút trong hồ sơ cũng mở tại chỗ', async () => {
+    const { actions } = renderWithWidget(<BlockRenderer block={{ type: 'contractor_list', data: MATCH_FIXTURE }} active />, {
+      loadContractor: vi.fn(async (slug: string) => PROFILES[slug]!),
+    });
+    const cards = () => document.querySelectorAll('.dz-ccard');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Yêu cầu báo giá' })[1]!);
+    expect(actions.openQuoteForm).not.toHaveBeenCalled();
+    expect(actions.recordClick).toHaveBeenCalledWith(2, 101);
+    const form = screen.getByRole('form', { name: 'Yêu cầu báo giá' });
+    expect(within(form).getByRole('checkbox', { name: MATCH_FIXTURE.results[1]!.contractor.name })).toBeChecked();
+    expect(cards()[1]!.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(form.compareDocumentPosition(cards()[2]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(document.activeElement).toBe(form.querySelector('input[autocomplete="name"]'));
+    fireEvent.click(screen.getByRole('button', { name: 'Thu gọn báo giá' }));
+    expect(screen.queryByRole('form', { name: 'Yêu cầu báo giá' })).toBeNull();
+
+    // Nút "Yêu cầu báo giá" trong hồ sơ đang mở dưới thẻ -> form cũng mở dưới thẻ đó.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Xem chi tiết' })[0]!);
+    const detail = (await screen.findByText('Công trình thực tế trên Dezon')).closest('section')!;
+    fireEvent.click(within(detail).getByRole('button', { name: 'Yêu cầu báo giá' }));
+    expect(actions.openQuoteForm).not.toHaveBeenCalled();
+    const form2 = screen.getByRole('form', { name: 'Yêu cầu báo giá' });
+    expect(form2.compareDocumentPosition(cards()[1]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('gửi xong rồi thu gọn, mở lại -> vẫn là thẻ "Đã gửi" kèm mã (không cho gửi trùng)', async () => {
+    renderWithWidget(<BlockRenderer block={{ type: 'contractor_list', data: MATCH_FIXTURE }} active />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Yêu cầu báo giá' })[0]!);
+    const form = screen.getByRole('form', { name: 'Yêu cầu báo giá' });
+    fireEvent.change(form.querySelector('input[autocomplete="name"]')!, { target: { value: 'Nguyễn Văn A' } });
+    fireEvent.change(form.querySelector('input[type="tel"]')!, { target: { value: '0901234567' } });
+    fireEvent.submit(form);
+    expect(await screen.findByText('DZ-TEST-0001')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Thu gọn báo giá' }));
+    expect(screen.queryByText('DZ-TEST-0001')).toBeNull();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Yêu cầu báo giá' })[0]!);
+    expect(screen.getByText('DZ-TEST-0001')).toBeInTheDocument();
+    expect(screen.queryByRole('form', { name: 'Yêu cầu báo giá' })).toBeNull();
+  });
+});
+
+describe('ContractorList — thanh "Đã chọn" và các trường hợp biên của báo giá', () => {
+  const bar = () => screen.getByRole('region', { name: 'Nhà thầu đã chọn' });
+
+  it('chọn ≥ 2 -> form chung dưới danh sách; đổi lựa chọn -> form đóng (không gửi nhầm nhà thầu)', () => {
+    renderWithWidget(<BlockRenderer block={{ type: 'contractor_list', data: MATCH_FIXTURE }} active />);
+    const cmp = screen.getAllByRole('button', { name: 'So sánh' });
+    fireEvent.click(cmp[0]!);
+    fireEvent.click(cmp[1]!);
+    fireEvent.click(within(bar()).getByRole('button', { name: 'Yêu cầu báo giá' }));
+    const form = screen.getByRole('form', { name: 'Yêu cầu báo giá' });
+    expect(within(form).getAllByRole('checkbox')).toHaveLength(2);
+    expect(within(bar()).getByRole('button', { name: 'Thu gọn báo giá' })).toHaveAttribute('aria-expanded', 'true');
+    // Bỏ tích một nhà thầu trên thẻ -> form chung đóng.
+    fireEvent.click(screen.getAllByRole('button', { name: '✓ Đã chọn so sánh' })[1]!);
+    expect(screen.queryByRole('form', { name: 'Yêu cầu báo giá' })).toBeNull();
+    expect(within(bar()).getByRole('button', { name: 'Yêu cầu báo giá' })).toBeInTheDocument();
+  });
+
+  it('chọn 1 nhà thầu -> "Yêu cầu báo giá" trên thanh mở form ngay dưới thẻ của nhà thầu đó', () => {
+    renderWithWidget(<BlockRenderer block={{ type: 'contractor_list', data: MATCH_FIXTURE }} active />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'So sánh' })[1]!);
+    fireEvent.click(within(bar()).getByRole('button', { name: 'Yêu cầu báo giá' }));
+    const form = screen.getByRole('form', { name: 'Yêu cầu báo giá' });
+    const cards = document.querySelectorAll('.dz-ccard');
+    expect(cards[1]!.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(form.compareDocumentPosition(cards[2]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Thu gọn báo giá' })).toBeInTheDocument(); // nút trên thẻ
+  });
+
+  it('form dưới thẻ đã mở -> nút báo giá trong hồ sơ đưa con trỏ về form (không im lặng)', async () => {
+    renderWithWidget(<BlockRenderer block={{ type: 'contractor_list', data: MATCH_FIXTURE }} active />, {
+      loadContractor: vi.fn(async (slug: string) => PROFILES[slug]!),
+    });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Yêu cầu báo giá' })[0]!);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Xem chi tiết' })[0]!);
+    const detail = (await screen.findByText('Công trình thực tế trên Dezon')).closest('section')!;
+    const detailBtn = within(detail).getByRole('button', { name: 'Yêu cầu báo giá' });
+    detailBtn.focus();
+    fireEvent.click(detailBtn);
+    const form = screen.getByRole('form', { name: 'Yêu cầu báo giá' });
+    expect(form.contains(document.activeElement)).toBe(true);
+    expect(screen.getAllByRole('form', { name: 'Yêu cầu báo giá' })).toHaveLength(1);
+  });
+
+  it('mở -> đóng -> mở lại chi tiết: kết quả tải của lượt cũ về muộn không đè lượt mới', async () => {
+    let rejectFirst: (e: Error) => void = () => undefined;
+    let call = 0;
+    const loadContractor = vi.fn((slug: string) => {
+      call += 1;
+      if (call === 1) return new Promise<never>((_, rej) => (rejectFirst = rej));
+      return Promise.resolve(PROFILES[slug]!);
+    });
+    renderWithWidget(<BlockRenderer block={{ type: 'contractor_list', data: MATCH_FIXTURE }} active />, { loadContractor });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Xem chi tiết' })[0]!);
+    fireEvent.click(screen.getByRole('button', { name: 'Thu gọn chi tiết' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Xem chi tiết' })[0]!);
+    await screen.findByText('Công trình thực tế trên Dezon');
+    rejectFirst(new Error('late'));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.getByText('Công trình thực tế trên Dezon')).toBeInTheDocument();
+    expect(screen.queryByText(/chưa tải được hồ sơ/)).toBeNull();
   });
 });
 
@@ -178,8 +347,14 @@ describe('ContractorDetail', () => {
     expect(proj).toHaveAttribute('href', 'https://dezon.vn/nha-thau/kien-phong/indochine-villa-quan-7-sai-gon/');
     expect(screen.getAllByText(/Đơn vị thi công: Kiến Phong/)).toHaveLength(3);
     expect(screen.getByRole('link', { name: 'Mở hồ sơ đầy đủ trên Dezon ↗' })).toHaveAttribute('target', '_blank');
+    // "Yêu cầu báo giá" mở form ngay dưới hồ sơ (không thêm tin nhắn ở cuối hội thoại); bấm lại để thu gọn.
     fireEvent.click(screen.getByRole('button', { name: 'Yêu cầu báo giá' }));
-    expect(actions.openQuoteForm).toHaveBeenCalledWith([{ id: 1, name: 'Kiến Phong' }], 'est-9');
+    expect(actions.openQuoteForm).not.toHaveBeenCalled();
+    const form = screen.getByRole('form', { name: 'Yêu cầu báo giá' });
+    expect(within(form).getByRole('checkbox', { name: 'Kiến Phong' })).toBeChecked();
+    expect(screen.getByText('Mở hồ sơ đầy đủ trên Dezon ↗').compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Thu gọn báo giá' }));
+    expect(screen.queryByRole('form', { name: 'Yêu cầu báo giá' })).toBeNull();
   });
 
   it('hồ sơ thiếu dữ liệu -> bảng thông tin và công trình hiển thị "Chưa có dữ liệu"', () => {

@@ -15,7 +15,7 @@ import { ContractorDetail, infoLabel } from './components/blocks/ContractorDetai
 import { ContractorList } from './components/blocks/ContractorList';
 import { QuoteRequestForm } from './components/blocks/QuoteRequestForm';
 import { SourcePopoverProvider } from './components/common/SourcePopover';
-import { MOCK_SESSION_KEY, localMessagesKey, mergeLocals, type UIMessage } from './state/useChat';
+import { MOCK_SESSION_KEY, mergeLocals, quoteCodesKey, type UIMessage } from './state/useChat';
 import { renderWithWidget } from './test/utils';
 
 // vitest không nạp nội dung CSS (css: false) -> đọc thẳng file; cwd = thư mục frontend.
@@ -195,7 +195,7 @@ describe('W-F8 — giữ hồ sơ/so sánh/mã báo giá sau khi tải lại tra
     expect(screen.getByText('DZ-EE351D')).toBeInTheDocument();
   });
 
-  it('luồng thật: mở hồ sơ + gửi báo giá -> tải lại trang vẫn còn hồ sơ và mã DZ-…', async () => {
+  it('luồng thật: mở hồ sơ (ngay dưới thẻ) + gửi báo giá -> tải lại trang vẫn còn danh sách và mã DZ-…', async () => {
     window.localStorage.clear();
     const storage = memoryStorage();
     const client = createMockClient({ delayMs: 0, storage });
@@ -212,6 +212,11 @@ describe('W-F8 — giữ hồ sơ/so sánh/mã báo giá sau khi tải lại tra
     await screen.findByText('Công trình thực tế trên Dezon');
     fireEvent.click(screen.getAllByRole('button', { name: 'Yêu cầu báo giá' })[0]!);
     const form = await screen.findByRole('form', { name: 'Yêu cầu báo giá' });
+    // Form mở ngay dưới thẻ nhà thầu thứ nhất (trước thẻ thứ hai), không thêm tin nhắn mới ở cuối hội thoại.
+    const cards = document.querySelectorAll('.dz-ccard');
+    expect(cards[0]!.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(form.compareDocumentPosition(cards[1]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Thu gọn báo giá' })).toBeInTheDocument();
     fireEvent.change(form.querySelector('input[autocomplete="name"]')!, { target: { value: 'Nguyễn Văn A' } });
     const tel = form.querySelector<HTMLInputElement>('input[type="tel"]')!;
     fireEvent.change(tel, { target: { value: '0901234567' } });
@@ -221,18 +226,17 @@ describe('W-F8 — giữ hồ sơ/so sánh/mã báo giá sau khi tải lại tra
     const codeEl = await screen.findByText(/^DZ-/);
     const code = codeEl.textContent!;
     const sid = window.localStorage.getItem(MOCK_SESSION_KEY)!;
-    await waitFor(() => expect(window.localStorage.getItem(localMessagesKey(MOCK_SESSION_KEY, sid))).toContain(code));
+    await waitFor(() => expect(window.localStorage.getItem(quoteCodesKey(MOCK_SESSION_KEY, sid))).toContain(code));
     unmount();
 
     // Tải lại trang: client mới cùng storage của mock server.
     render(<App client={createMockClient({ delayMs: 0, storage })} initiallyOpen />);
     expect(await screen.findByText(code)).toBeInTheDocument();
-    expect(screen.getByText('Công trình thực tế trên Dezon')).toBeInTheDocument();
     expect(screen.getByText('Đã gửi yêu cầu báo giá')).toBeInTheDocument();
-    // Thứ tự: hồ sơ đứng sau danh sách nhà thầu, thẻ thành công ở cuối.
-    const log = screen.getByRole('log');
-    const text = log.textContent!;
-    expect(text.indexOf('3 nhà thầu phù hợp nhất')).toBeLessThan(text.indexOf('Công trình thực tế trên Dezon'));
-    expect(text.indexOf('Công trình thực tế trên Dezon')).toBeLessThan(text.indexOf(code));
+    // Hồ sơ mở ngay dưới thẻ là trạng thái giao diện (không lưu); thẻ "Đã gửi" vẫn nằm ngay dưới thẻ nhà thầu thứ nhất.
+    const success = screen.getByText('Đã gửi yêu cầu báo giá');
+    const cards2 = document.querySelectorAll('.dz-ccard');
+    expect(cards2[0]!.compareDocumentPosition(success) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(success.compareDocumentPosition(cards2[1]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

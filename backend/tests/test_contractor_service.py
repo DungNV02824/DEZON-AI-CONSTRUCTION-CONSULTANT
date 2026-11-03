@@ -123,7 +123,9 @@ def test_compare_with_criteria_and_order(db):
     m = svc.compare_contractors(db, ids, MatchCriteria(province=HCM, building_type="nha_pho"))
     assert [c.slug for c in m.contractors] == ["huy-hoang", "kien-phong"]
     fit = next(r for r in m.rows if r.key == "fit")
-    assert fit.cells[0].display.startswith(FIT_REVIEW) and fit.cells[0].display.endswith("/100")
+    # Nhãn "Cần đánh giá thêm" không hiển thị cho khách: ô chỉ có điểm (giá trị vẫn giữ fit_label).
+    assert fit.cells[0].value["fit_label"] == FIT_REVIEW
+    assert FIT_REVIEW not in fit.cells[0].display and fit.cells[0].display.endswith("/100")
     assert fit.cells[1].status == "reference"
     assert "Dezon Matching v1" in fit.cells[1].source.label
 

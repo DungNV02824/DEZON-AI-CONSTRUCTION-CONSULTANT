@@ -508,3 +508,21 @@
     max-width: 88%;
   }
 }
+
+/* Nút "So sánh N nhà thầu trong bảng": tông đen-trắng làm nút chìm -> dùng xanh của link để dễ nhận biết. */
+.dz-root--page .dz-btn--compare {
+  border-color: #1d4ed8;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.dz-root--page .dz-btn--compare:hover:not(:disabled) {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #fff;
+}
+
+/* Mỗi block là con trực tiếp của tin nhắn (xen kẽ với đoạn chữ): giữ khoảng 12px giữa hai block liền nhau như trước. */
+.dz-root--page .dz-blocks + .dz-blocks {
+  margin-top: 4px;
+}

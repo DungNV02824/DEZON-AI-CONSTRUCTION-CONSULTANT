@@ -2284,3 +2284,36 @@ thead .dz-sticky {
   font-size: 13px;
   font-weight: 600;
 }
+
+/* Nút "So sánh N nhà thầu trong bảng" trên danh sách: nổi hơn link chữ (nền xanh nhạt, viền, icon bảng). */
+.dz-btn--compare {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  border-color: var(--dz-primary);
+  background: var(--dz-primary-soft);
+  color: var(--dz-primary);
+  font-weight: 600;
+}
+
+.dz-btn--compare:hover:not(:disabled) {
+  background: var(--dz-primary);
+  border-color: var(--dz-primary);
+  color: #fff;
+}
+
+/* Mốc cuộn tới thẻ nhà thầu (bấm tên trong bảng so sánh mở ngay trong danh sách): không chiếm chỗ, bù khoảng gap. */
+.dz-clist__anchor {
+  height: 0;
+  margin-bottom: -10px;
+  scroll-margin-top: 8px;
+}
+
+/* Bảng so sánh mở ngay trong danh sách: rộng bằng danh sách, cuộn ngang bên trong (không tràn ra ngoài). */
+.dz-clist__head > .dz-compare,
+.dz-clist > .dz-compare {
+  align-self: stretch;
+  min-width: 0;
+  max-width: 100%;
+}

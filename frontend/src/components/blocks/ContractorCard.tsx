@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import type { EvidenceValue, MatchedContractor, WorkScope } from '../../api/types';
+import { FIT_REVIEW, type EvidenceValue, type MatchedContractor, type WorkScope } from '../../api/types';
 import { NO_DATA, viNumber } from '../../utils/format';
 import { FINISH_PRICE_LABEL_VI, FIT_CLASS, SCOPES_WITHOUT_CONTRACTOR_PRICE } from '../../utils/labels';
 import { ContactStaffButton } from '../common/ContactStaffButton';
@@ -14,7 +14,11 @@ export interface ContractorCardProps {
   canSelectMore?: boolean;
   onToggleCompare?: (id: number) => void;
   onDetail?: () => void;
+  /** Chi tiết đang mở ngay dưới thẻ -> nút "Xem chi tiết" thành "Thu gọn chi tiết". */
+  detailOpen?: boolean;
   onQuote?: () => void;
+  /** Form báo giá đang mở ngay dưới thẻ -> nút thành "Thu gọn báo giá". */
+  quoteOpen?: boolean;
   /** Ghi nhận lượt bấm (recommendation_logs). */
   onClickTrack?: () => void;
   /** Phạm vi thi công khách chọn (MatchResult.criteria.work_scope). */
@@ -39,7 +43,9 @@ export function ContractorCardView({
   canSelectMore = true,
   onToggleCompare,
   onDetail,
+  detailOpen = false,
   onQuote,
+  quoteOpen = false,
   onClickTrack,
   workScope,
 }: ContractorCardProps) {
@@ -87,7 +93,8 @@ export function ContractorCardView({
             </h4>
             <div className="dz-ccard__tags">
               {c.badge && <span className="dz-pill dz-pill--brand">{c.badge}</span>}
-              <span className={`dz-pill dz-fit dz-fit--${fitCls}`}>{item.fit_label}</span>
+              {/* Chủ sản phẩm yêu cầu bỏ nhãn "Cần đánh giá thêm"; giữ "Phù hợp cao" / "Phù hợp". */}
+              {item.fit_label !== FIT_REVIEW && <span className={`dz-pill dz-fit dz-fit--${fitCls}`}>{item.fit_label}</span>}
               <span className="dz-score" title="Điểm phù hợp theo tiêu chí của anh/chị (tham khảo)">
                 Điểm {item.score}/100
               </span>
@@ -188,12 +195,13 @@ export function ContractorCardView({
           <button
             type="button"
             className="dz-btn dz-btn--sm"
+            aria-expanded={detailOpen}
             onClick={() => {
-              onClickTrack?.();
+              if (!detailOpen) onClickTrack?.();
               onDetail?.();
             }}
           >
-            Xem chi tiết
+            {detailOpen ? 'Thu gọn chi tiết' : 'Xem chi tiết'}
           </button>
           <button
             type="button"
@@ -208,12 +216,13 @@ export function ContractorCardView({
           <button
             type="button"
             className="dz-btn dz-btn--sm dz-btn--primary"
+            aria-expanded={quoteOpen}
             onClick={() => {
-              onClickTrack?.();
+              if (!quoteOpen) onClickTrack?.();
               onQuote?.();
             }}
           >
-            Yêu cầu báo giá
+            {quoteOpen ? 'Thu gọn báo giá' : 'Yêu cầu báo giá'}
           </button>
           <ContactStaffButton />
         </div>

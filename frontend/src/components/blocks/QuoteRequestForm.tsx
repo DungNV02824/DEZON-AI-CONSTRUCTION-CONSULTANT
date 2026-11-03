@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import type { QuoteRequestFormBlock } from '../../api/types';
 import { useWidget } from '../../state/context';
 import { isValidEmail, isValidVnPhone, toNationalPhone } from '../../utils/format';
@@ -14,7 +14,19 @@ interface Errors {
   submit?: string;
 }
 
-export function QuoteRequestForm({ block }: { block: QuoteRequestFormBlock }) {
+/**
+ * `onSubmitted`: form mở ngay dưới thẻ nhà thầu (không phải tin nhắn) -> danh sách giữ lại mã đã gửi.
+ * `focusOnMount`: form vừa mở tại chỗ -> đưa con trỏ vào ô Họ tên (cuộn tới form nếu đang ở xa).
+ */
+export function QuoteRequestForm({
+  block,
+  onSubmitted,
+  focusOnMount = false,
+}: {
+  block: QuoteRequestFormBlock;
+  onSubmitted?: (code: string) => void;
+  focusOnMount?: boolean;
+}) {
   const { submitQuote, quoteSubmitted, estimateSessionId, chatSessionId } = useWidget();
   const uid = useId();
   const [name, setName] = useState('');
@@ -26,6 +38,14 @@ export function QuoteRequestForm({ block }: { block: QuoteRequestFormBlock }) {
   const [submitting, setSubmitting] = useState(false);
   const [code, setCode] = useState<string | null>(block.submitted_code ?? null);
   const estimateId = block.estimate_session_id ?? estimateSessionId;
+  const nameRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (focusOnMount) nameRef.current?.focus();
+  }, [focusOnMount]);
+  // Cùng nhà thầu vừa gửi ở form khác (vd thẻ và hồ sơ) -> form đang mở chuyển sang thẻ "Đã gửi", không gửi trùng.
+  useEffect(() => {
+    if (block.submitted_code) setCode(block.submitted_code);
+  }, [block.submitted_code]);
 
   const validate = (): Errors => {
     const e: Errors = {};
@@ -63,6 +83,7 @@ export function QuoteRequestForm({ block }: { block: QuoteRequestFormBlock }) {
       });
       setCode(res.code);
       quoteSubmitted(block, res.code);
+      onSubmitted?.(res.code);
     } catch {
       setErrors({ submit: 'Xin lỗi, em chưa gửi được yêu cầu. Anh/chị vui lòng thử lại sau ít phút.' });
     } finally {
@@ -118,6 +139,7 @@ export function QuoteRequestForm({ block }: { block: QuoteRequestFormBlock }) {
           Họ tên <span aria-hidden="true">*</span>
         </label>
         <input
+          ref={nameRef}
           id={field('name')}
           type="text"
           autoComplete="name"

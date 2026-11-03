@@ -1,11 +1,14 @@
+import { useState } from 'react';
 import type { ContractorDetailBlock, ContractorInfoKey, ImageRef, ProjectSummary } from '../../api/types';
 import { useWidget } from '../../state/context';
+import { useSavedQuoteCodes } from '../../state/quoteCodes';
 import { formatDateVi, NO_DATA } from '../../utils/format';
 import { BUILDING_TYPE_VI, FINISH_PRICE_LABEL_VI, PROJECT_ROLE_VI } from '../../utils/labels';
 import { EvidenceCell } from '../common/EvidenceCell';
 import { ExternalLink } from '../common/ExternalLink';
 import { GalleryTiles } from '../common/Lightbox';
 import { SafeImage } from '../common/SafeImage';
+import { QuoteRequestForm } from './QuoteRequestForm';
 
 const INFO_LABELS: Record<ContractorInfoKey, string> = {
   founded_year: 'Năm thành lập',
@@ -58,11 +61,17 @@ function profileImages(images: ImageRef[], projects: ProjectSummary[]): ImageRef
   return images.map((img) => withProject(img, img.project_slug ? bySlug.get(img.project_slug) : undefined));
 }
 
-/** Hồ sơ mở rộng (mục 8.3). */
-export function ContractorDetail({ block }: { block: ContractorDetailBlock }) {
-  const { openQuoteForm, estimateSessionId } = useWidget();
+/**
+ * Hồ sơ mở rộng (mục 8.3). "Yêu cầu báo giá" mở form ngay dưới hồ sơ (không thêm tin nhắn ở cuối hội thoại).
+ * `onQuote`: hồ sơ đang mở dưới thẻ trong danh sách -> danh sách tự mở form dưới thẻ đó.
+ */
+export function ContractorDetail({ block, onQuote }: { block: ContractorDetailBlock; onQuote?: () => void }) {
+  const { estimateSessionId, isMock, chatSessionId } = useWidget();
   const p = block.data;
   const c = p.card;
+  const [quoteCodes, rememberQuote] = useSavedQuoteCodes(isMock, chatSessionId, `detail-${c.id}`);
+  const quoteKey = String(c.id);
+  const [quoteOpen, setQuoteOpen] = useState(() => !onQuote && !!quoteCodes[quoteKey]);
   const images = profileImages(p.images ?? [], p.projects ?? []);
   // Ảnh trên Dezon nhiều hơn số ảnh backend gửi -> thêm link xem toàn bộ trên hồ sơ gốc.
   const total = Math.max(p.total_images ?? 0, images.length);
@@ -159,11 +168,24 @@ export function ContractorDetail({ block }: { block: ContractorDetailBlock }) {
         <button
           type="button"
           className="dz-btn dz-btn--sm dz-btn--primary"
-          onClick={() => openQuoteForm([{ id: c.id, name: c.name }], estimateId)}
+          aria-expanded={onQuote ? undefined : quoteOpen}
+          onClick={() => (onQuote ? onQuote() : setQuoteOpen((v) => !v))}
         >
-          Yêu cầu báo giá
+          {!onQuote && quoteOpen ? 'Thu gọn báo giá' : 'Yêu cầu báo giá'}
         </button>
       </div>
+      {!onQuote && quoteOpen && (
+        <QuoteRequestForm
+          block={{
+            type: 'quote_request_form',
+            contractors: [{ id: c.id, name: c.name }],
+            estimate_session_id: estimateId,
+            submitted_code: quoteCodes[quoteKey] ?? null,
+          }}
+          onSubmitted={(code) => rememberQuote(quoteKey, code)}
+          focusOnMount
+        />
+      )}
     </section>
   );
 }

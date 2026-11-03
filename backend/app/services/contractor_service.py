@@ -55,6 +55,7 @@ from app.evidence import EvidenceValue, SourceRef, VerificationStatus, make_evid
 from app.formatting import format_m2, format_price_per_m2_range, vi_number
 from app.schemas.common import BUILDING_TYPE_VI, BuildingType
 from app.schemas.matching import (
+    FIT_REVIEW,
     ComparedContractor,
     ComparisonMatrix,
     ComparisonRow,
@@ -535,7 +536,9 @@ def _projects_cell(c: Contractor) -> EvidenceValue:
 def _fit_cell(s: ScoredContractor, version: int) -> EvidenceValue:
     ref = SourceRef(label=f"Đánh giá theo tiêu chí của anh/chị — Dezon Matching v{version}", url=None,
                     updated_at=date.today())
-    return make_evidence({"score": s.score, "fit_label": s.fit_label}, f"{s.fit_label} · {s.score}/100",
+    # Chủ sản phẩm yêu cầu không hiển thị nhãn "Cần đánh giá thêm" cho khách: chỉ hiện điểm.
+    display = f"{s.score}/100" if s.fit_label == FIT_REVIEW else f"{s.fit_label} · {s.score}/100"
+    return make_evidence({"score": s.score, "fit_label": s.fit_label}, display,
                          source=ref, status=VerificationStatus.reference)
 
 

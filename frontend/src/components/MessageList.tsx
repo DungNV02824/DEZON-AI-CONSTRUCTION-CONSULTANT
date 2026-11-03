@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
+import type { UIBlock } from '../api/types';
 import type { UIMessage } from '../state/useChat';
 import { BlockRenderer } from './blocks/BlockRenderer';
+import { layoutMessage, type MessagePart } from '../utils/messageLayout';
 import { BlockBoundary } from './common/BlockBoundary';
 
 function TypingDots() {
@@ -104,25 +106,27 @@ export function MessageList({
               <div className="dz-bubble dz-bubble--user">{m.content}</div>
             ) : (
               <>
-                {m.content && (
-                  <div className="dz-bubble dz-bubble--bot">
-                    {m.content}
-                    {m.pending && <span className="dz-caret" aria-hidden="true" />}
-                  </div>
-                )}
                 {m.pending && !m.content && m.blocks.length === 0 && (
                   <div className="dz-bubble dz-bubble--bot">
                     <TypingDots />
                   </div>
                 )}
-                {m.blocks.length > 0 && (
-                  <div className="dz-blocks">
-                    {m.blocks.map((b, i) => (
-                      <BlockBoundary key={i}>
-                        <BlockRenderer block={b} active={active} />
+                {/* Mỗi đoạn chữ đứng ngay trên block nó nói tới (khái toán -> bảng, nhà thầu -> danh sách, câu hỏi ngân
+                    sách -> nút chọn) — utils/messageLayout.ts. Đang nhận: giữ chữ trước, block sau (không nhảy chỗ).
+                    Block là con trực tiếp, key theo chỉ số gốc -> đổi thứ tự khi nhận xong không mount lại block. */}
+                {(m.pending ? pendingParts(m.content, m.blocks) : layoutMessage(m.content, m.blocks)).map((part, pi, all) =>
+                  part.kind === 'text' ? (
+                    <div key={`t${all.slice(0, pi).filter((x) => x.kind === 'text').length}`} className="dz-bubble dz-bubble--bot">
+                      {part.text}
+                      {m.pending && <span className="dz-caret" aria-hidden="true" />}
+                    </div>
+                  ) : part.block.type === 'source_badges' ? null /* không hiển thị (BlockRenderer) -> không chừa khoảng trống */ : (
+                    <div key={`b${part.index}`} className="dz-blocks">
+                      <BlockBoundary>
+                        <BlockRenderer block={part.block} active={active} />
                       </BlockBoundary>
-                    ))}
-                  </div>
+                    </div>
+                  ),
                 )}
                 {m.error && (
                   <div className="dz-bubble dz-bubble--error" role="alert">
@@ -141,4 +145,10 @@ export function MessageList({
       })}
     </div>
   );
+}
+
+/** Tin nhắn đang nhận: chữ trước, block sau (thứ tự gốc). */
+function pendingParts(content: string, blocks: UIBlock[]): MessagePart[] {
+  const parts: MessagePart[] = content ? [{ kind: 'text', text: content }] : [];
+  return parts.concat(blocks.map((block, index) => ({ kind: 'block' as const, block, index })));
 }

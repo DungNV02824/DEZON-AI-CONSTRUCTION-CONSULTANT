@@ -80,6 +80,7 @@ export function App({ client, initiallyOpen = false, registerControls, mode = 'w
       busy,
       send: (text) => void send(text),
       focusInput: () => inputRef.current?.focus(),
+      loadContractor: (slug) => client.getContractor(slug),
       openContractor: (slug) =>
         void runLocal(async () => {
           const profile = await client.getContractor(slug);
@@ -88,6 +89,7 @@ export function App({ client, initiallyOpen = false, registerControls, mode = 'w
             blocks: [{ type: 'contractor_detail', data: profile, estimate_session_id: estimateSessionId }],
           };
         }, 'Xin lỗi, em chưa tải được hồ sơ nhà thầu. Anh/chị vui lòng thử lại sau.'),
+      loadComparison: (ids, estId) => client.compare(ids, estId ?? estimateSessionId),
       compare: (ids, estId) =>
         void runLocal(async () => {
           const matrix = await client.compare(ids, estId ?? estimateSessionId);
@@ -238,7 +240,7 @@ export function App({ client, initiallyOpen = false, registerControls, mode = 'w
                   <p>Đang kết nối…</p>
                 </div>
               ) : (
-                <MessageList messages={chat.messages} busy={chat.busy} onRetry={chat.retry} />
+                <MessageList key={chat.sessionId ?? ''} messages={chat.messages} busy={chat.busy} onRetry={chat.retry} />
               )}
 
               <Composer ref={inputRef} disabled={chat.status !== 'ready'} busy={chat.busy} onSend={(t) => void chat.send(t)} />
