@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     allowed_origins: str = "https://dezon.vn,http://localhost:5173,http://localhost:8080"
     admin_token: str = "change-me"
     chat_rate_limit_per_min: int = 20
+    contact_rate_limit_per_min: int = 5  # POST /api/contact-requests theo IP
     max_tool_rounds: int = 6
 
     s3_endpoint: str = ""

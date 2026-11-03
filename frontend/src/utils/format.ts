@@ -71,6 +71,14 @@ export function toNationalPhone(raw: string): string {
   return p.replace(/^\+?84(?=[235789]\d{8,9}$)/, '0');
 }
 
+/** SĐT hiển thị cho khách: "0901234567" -> "0901 234 567"; cố định 11 số "02838221234" -> "028 3822 1234". */
+export function formatVnPhone(raw: string): string {
+  const p = toNationalPhone(raw);
+  if (/^0\d{9}$/.test(p)) return `${p.slice(0, 4)} ${p.slice(4, 7)} ${p.slice(7)}`;
+  if (/^0\d{10}$/.test(p)) return `${p.slice(0, 3)} ${p.slice(3, 7)} ${p.slice(7)}`;
+  return raw.trim();
+}
+
 export function isValidEmail(raw: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(raw.trim());
 }

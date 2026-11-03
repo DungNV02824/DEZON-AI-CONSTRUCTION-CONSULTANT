@@ -1057,3 +1057,32 @@ Test hồi quy chính: `tests/test_chat_fixes.py` (luồng thật qua orchestrat
   đầu) -> ngay trên `contractor_list`; đoạn cuối là câu hỏi (kết thúc "?" hoặc có "cho em biết", vd `BUDGET_TAIL`) ->
   ngay trên `quick_replies` cuối tin. Không tách được thì giữ thứ tự cũ (chữ trước, block sau). Tin đang stream vẫn
   chữ trước block sau; block key theo chỉ số gốc nên đổi thứ tự khi nhận xong không mount lại block.
+
+## Gợi ý câu hỏi tiếp theo cuối lượt (block `suggestions`)
+
+- Theo yêu cầu chủ sản phẩm: khi luồng chính đã xong (đã xác nhận, có khái toán, có nhà thầu đề xuất) và lượt không
+  chờ khách trả lời (không phải thẻ câu hỏi / bản xác nhận / câu hỏi ngân sách / chọn mục sửa / form báo giá), cuối tin
+  nhắn có thêm tối đa 5 nút gợi ý câu hỏi tiếp theo theo ngữ cảnh. Nút "So sánh các nhà thầu" / "Yêu cầu báo giá" giữ
+  nguyên; gợi ý nằm sau cùng.
+- Cập nhật: lượt ngay sau "Tính ngay" (khái toán + nhà thầu + câu hỏi ngân sách) cũng có gợi ý, nằm sau nút ngân sách.
+- Nguồn gợi ý (`app/ai/suggestions.py`): LLM (`provider.extract`, JSON schema) chạy ở luồng nền SONG SONG với câu trả
+  lời chính, chờ thêm tối đa 3 giây sau khi câu trả lời xong; lỗi/chậm/provider mock -> câu mẫu theo ngữ cảnh (hồ sơ
+  nhà thầu đã đề xuất, so sánh 2 nhà thầu, đổi phạm vi xây thô/trọn gói, thêm 1 tầng, đơn giá tham khảo, khái toán
+  chưa gồm gì, nhà thầu khác trong khu vực). Chỉ gợi ý câu trả lời được bằng dữ liệu Dezon. Lọc chung: 8–90 ký tự, có
+  dấu tiếng Việt, không "tốt nhất", không trùng nút sẵn có / câu khách vừa nhắn. Chọn ngẫu nhiên cố định theo phiên +
+  lượt (tải lại không đổi).
+
+## "Liên hệ nhân viên" thu thập họ tên + số điện thoại (bảng `contact_requests`)
+
+- Thay nút chỉ-giao-diện trước đây: khách để lại họ tên + SĐT (+ ghi chú) để nhân viên Dezon gọi lại.
+  `POST /api/contact-requests` (công khai, giới hạn 5 lượt/phút/IP — `contact_rate_limit_per_min`, Redis prefix
+  `dezon:rl:contact`, không dùng chung hạn mức chat), trả mã `LH-XXXXXX`. Migration `0003_contact_requests`.
+- Vị trí: nút nhỏ tông chìm "Liên hệ nhân viên" (icon tai nghe) luôn hiện ở góc phải dòng chú thích dưới ô chat (khung
+  chat và giao diện mở rộng) -> khung bật lên phía trên ô chat (đóng bằng ×, Esc, bấm ra ngoài); nút trên thẻ nhà thầu và
+  trong hồ sơ nhà thầu mở form ngay bên dưới, gắn nhà thầu đó. Nguồn: `composer` / `contractor_card` / `contractor_detail`.
+- Chống gửi trùng: cùng SĐT + cùng phiên chat + cùng nhà thầu trong 10 phút, yêu cầu cũ còn "Mới" -> trả lại mã cũ,
+  nhưng ghi nhận thông tin mới hơn (họ tên, ghi chú nối thêm, trang). Yêu cầu đã được xử lý -> tạo yêu cầu mới.
+- Trang quản trị: tab "Yêu cầu liên hệ" (đếm số yêu cầu Mới) liệt kê thời gian, mã, họ tên, SĐT (bấm gọi), nhà thầu,
+  tóm tắt công trình từ phiên chat (lấy theo thông tin hiện tại của phiên), ghi chú, nguồn; đổi trạng thái Mới / Đã liên
+  hệ / Xong + ghi chú xử lý. SĐT chỉ trả qua API admin (có mã quản trị), không qua endpoint công khai.
+- Form điền sẵn họ tên + SĐT lần gửi thành công trước (localStorage `dezon_contact_info`).

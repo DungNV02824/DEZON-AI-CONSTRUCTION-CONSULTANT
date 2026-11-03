@@ -111,8 +111,19 @@ class QuoteRequestFormBlock(BaseModel):
     estimate_session_id: UUID | None = None
 
 
+class SuggestionsBlock(BaseModel):
+    """Gợi ý câu hỏi tiếp theo theo ngữ cảnh (cuối lượt trả lời, khi luồng chính đã xong — app/ai/suggestions.py).
+
+    Bấm một gợi ý -> gửi `value` như tin nhắn của khách. Chỉ lượt mới nhất hiển thị (như quick_replies).
+    """
+    type: Literal["suggestions"] = "suggestions"
+    title: str = "Gợi ý cho anh/chị"
+    options: list[QuickReply]
+
+
 UIBlock = Annotated[
     QuickRepliesBlock | QuestionStepBlock | SummaryConfirmBlock | EstimateTableBlock | BudgetOptionsBlock
-    | ContractorListBlock | ComparisonTableBlock | ContractorDetailBlock | SourceBadgesBlock | QuoteRequestFormBlock,
+    | ContractorListBlock | ComparisonTableBlock | ContractorDetailBlock | SourceBadgesBlock | QuoteRequestFormBlock
+    | SuggestionsBlock,
     Field(discriminator="type"),
 ]

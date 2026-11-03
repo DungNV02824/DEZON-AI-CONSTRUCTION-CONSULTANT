@@ -42,6 +42,11 @@
   pre { background: #f8fafc; border: 1px solid var(--line); border-radius: 6px; padding: 10px; overflow: auto; max-height: 360px; font-size: 12px; }
   .scroll { max-height: 560px; overflow: auto; }
   .sum.bad { color: var(--err); font-weight: 600; } .sum.good { color: var(--ok); font-weight: 600; }
+  .count { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9px; font-size: 11px; line-height: 18px; text-align: center; background: var(--err); color: #fff; font-weight: 600; }
+  .count[hidden] { display: none; }
+  .badge.new { background: #fef0c7; color: var(--warn); } .badge.contacted { background: #dbeafe; color: #1e40af; } .badge.done { background: #dcfae6; color: var(--ok); }
+  .handle { display: flex; flex-direction: column; gap: 4px; min-width: 200px; } .handle textarea { min-height: 38px; resize: vertical; }
+  td.wrap { max-width: 260px; white-space: pre-wrap; word-break: break-word; }
 </style>
 </head>
 <body>
@@ -56,6 +61,7 @@
 </header>
 <nav id="tabs">
   <button data-tab="metrics" class="active">Chỉ số</button>
+  <button data-tab="contacts">Yêu cầu liên hệ<span class="count" id="contactCount" hidden></span></button>
   <button data-tab="violations">Vi phạm guardrail</button>
   <button data-tab="rates">Đơn giá</button>
   <button data-tab="rules">Hệ số khái toán</button>
@@ -74,6 +80,18 @@
     <table id="ruleTable"><thead><tr><th>Quy tắc</th><th>Số lần</th></tr></thead><tbody></tbody></table>
     <h3>Tổng số bản ghi</h3>
     <table id="totalsTable"><tbody></tbody></table>
+  </section>
+
+  <section id="tab-contacts">
+    <div class="row">
+      <h2 style="margin:0">Yêu cầu liên hệ nhân viên</h2>
+      <label>Trạng thái<select id="cStatus"><option value="">Tất cả</option><option value="new">Mới</option><option value="contacted">Đã liên hệ</option><option value="done">Xong</option></select></label>
+      <label>Số dòng<select id="cLimit"><option>50</option><option>100</option><option>200</option></select></label>
+      <button class="btn secondary" id="reloadContacts">Tải</button>
+      <span class="muted" id="cTotal"></span>
+    </div>
+    <p class="muted">Khách để lại họ tên và số điện thoại qua nút "Liên hệ nhân viên" để được gọi lại. Đổi trạng thái sau khi đã gọi cho khách.</p>
+    <div class="scroll"><table id="cTable"><thead><tr><th>Thời gian</th><th>Mã</th><th>Họ tên</th><th>SĐT</th><th>Nhà thầu</th><th>Công trình</th><th>Ghi chú</th><th>Nguồn</th><th>Trạng thái</th></tr></thead><tbody></tbody></table></div>
   </section>
 
   <section id="tab-violations">
@@ -205,6 +223,8 @@
   var TOTALS = { chat_sessions: 'Phiên chat', assistant_messages: 'Câu trả lời của trợ lý', estimate_sessions: 'Khái toán',
                  recommendation_logs: 'Lượt đề xuất nhà thầu', quote_requests: 'Yêu cầu báo giá', contractor_quotes: 'Báo giá thực tế',
                  guardrail_violations: 'Vi phạm guardrail', active_contractors: 'Nhà thầu đang hoạt động' };
+  var CSRC = { composer: 'Ô chat', contractor_card: 'Thẻ nhà thầu', contractor_detail: 'Hồ sơ nhà thầu' };
+  var CST = { new: 'Mới', contacted: 'Đã liên hệ', done: 'Xong' };
   var $ = function (id) { return document.getElementById(id); };
   var tokenInput = $('token');
   tokenInput.value = sessionStorage.getItem('dezonAdminToken') || '';
@@ -268,7 +288,7 @@
   $('saveToken').addEventListener('click', function () {
     sessionStorage.setItem('dezonAdminToken', tokenInput.value.trim());
     var active = document.querySelector('#tabs button.active').dataset.tab;
-    if (loaders[active]) loaders[active]().then(function () { toast('Đã lưu mã cho phiên làm việc này.', true); }).catch(function () {});
+    if (loaders[active]) loaders[active]().then(function () { toast('Đã lưu mã cho phiên làm việc này.', true); refreshContactCount(); }).catch(function () {});
   });
   $('clearToken').addEventListener('click', function () { sessionStorage.removeItem('dezonAdminToken'); tokenInput.value = ''; });
 
@@ -306,6 +326,45 @@
     Object.keys(data.totals).forEach(function (k) { tb.appendChild(el('tr', null, [el('th', { text: TOTALS[k] || k }), td(fmtInt(data.totals[k]))])); });
   };
   $('reloadMetrics').addEventListener('click', function () { loaders.metrics().catch(function () {}); });
+
+  // ---------------------------------------------------------------- contact requests
+  // Mọi chuỗi do khách nhập (họ tên, ghi chú…) chỉ gán qua textContent (hàm el/td) — không dùng innerHTML.
+  function setContactCount(n) {
+    var c = $('contactCount'); c.textContent = n > 99 ? '99+' : String(n || 0); c.hidden = !(n > 0);
+  }
+  loaders.contacts = async function () {
+    var q = new URLSearchParams({ limit: $('cLimit').value });
+    if ($('cStatus').value) q.set('status', $('cStatus').value);
+    var data = await api('/api/admin/contact-requests?' + q);
+    setContactCount(data.new_count);
+    $('cTotal').textContent = 'Tổng: ' + fmtInt(data.total) + ' · Chưa xử lý: ' + fmtInt(data.new_count);
+    var tb = $('cTable').tBodies[0]; tb.innerHTML = '';
+    if (!data.items.length) tb.appendChild(el('tr', null, [el('td', { colspan: 9, class: 'muted', text: 'Chưa có yêu cầu liên hệ nào' })]));
+    data.items.forEach(function (c) {
+      var sel = el('select', null, Object.keys(CST).map(function (k) { return el('option', { value: k, text: CST[k] }); }));
+      sel.value = c.status;
+      var note = el('textarea', { maxlength: '1000', placeholder: 'Ghi chú xử lý' }); note.value = c.handled_note || '';
+      var save = el('button', { class: 'btn', text: 'Lưu', onclick: async function () {
+        save.disabled = true;
+        try {
+          await api('/api/admin/contact-requests/' + encodeURIComponent(c.id), { method: 'PATCH', json: { status: sel.value, handled_note: note.value.trim() || null } });
+          toast('Đã lưu yêu cầu ' + c.code + '.', true); loaders.contacts().catch(function () {});
+        } catch (e) { save.disabled = false; }
+      } });
+      var phone = el('a', { href: 'tel:' + String(c.customer_phone).replace(/[^0-9+]/g, ''), text: c.customer_phone });
+      var src = [CSRC[c.source] || c.source || '—'];
+      // Chỉ tạo link cho URL http(s) — địa chỉ trang do trình duyệt khách gửi, không để lọt "javascript:".
+      if (c.page_url) src.push(el('div', { class: 'muted' }, [/^https?:\/\//i.test(c.page_url) ? el('a', { href: c.page_url, target: '_blank', rel: 'noopener noreferrer', text: 'Trang khách đang xem' }) : c.page_url]));
+      tb.appendChild(el('tr', null, [td(fmtDate(c.created_at)), td(c.code), td(c.customer_name), td(phone),
+        td(c.contractor ? c.contractor.name : null), el('td', { class: 'wrap' }, [c.project || '—']), el('td', { class: 'wrap' }, [c.note || '—']),
+        el('td', null, src), el('td', null, [el('div', { class: 'handle' }, [el('span', { class: 'badge ' + c.status, text: CST[c.status] || c.status }), sel, note, save])])]));
+    });
+  };
+  $('reloadContacts').addEventListener('click', function () { loaders.contacts().catch(function () {}); });
+  $('cStatus').addEventListener('change', function () { loaders.contacts().catch(function () {}); });
+  function refreshContactCount() {
+    return api('/api/admin/contact-requests?status=new&limit=1').then(function (d) { setContactCount(d.new_count); }).catch(function () {});
+  }
 
   // ---------------------------------------------------------------- violations
   loaders.violations = async function () {
@@ -466,7 +525,7 @@
     catch (e) { $('syncResult').textContent = String(e.message || e); }
   });
 
-  if (tokenInput.value.trim()) loaders.metrics().catch(function () {});
+  if (tokenInput.value.trim()) { loaders.metrics().catch(function () {}); refreshContactCount(); }
 })();
 </script>
 </body>

@@ -42,7 +42,7 @@ describe('App mode="page" (AI for Planning)', () => {
     const client = createMockClient({ delayMs: 0, storage: window.localStorage });
     render(<App client={client} mode="page" loginUrl="https://dezon.vn/dang-nhap/" />);
 
-    expect(screen.getByText('DEZON', { selector: '.dz-plan__logo' })).toBeTruthy();
+    expect(screen.getAllByAltText('Vua Thầu').some((el) => el.classList.contains('dz-plan__logo'))).toBe(true);
     expect(screen.getByRole('button', { name: /New chat/ })).toBeTruthy();
     expect(screen.getByRole('link', { name: /Đăng nhập \/ Đăng ký/ }).getAttribute('href')).toBe('https://dezon.vn/dang-nhap/');
     expect(screen.getByText('Chưa có cuộc trò chuyện nào.')).toBeTruthy();
@@ -90,6 +90,40 @@ describe('App mode="page" (AI for Planning)', () => {
     await waitFor(() => expect(screen.getByText('Chưa có cuộc trò chuyện nào.')).toBeTruthy());
     // Không cấu hình loginUrl -> ẩn nút đăng nhập
     expect(screen.queryByRole('link', { name: /Đăng nhập/ })).toBeNull();
+  });
+});
+
+describe('giao diện mở rộng — nút "Liên hệ nhân viên" dưới ô nhập', () => {
+  it('luôn hiện cạnh chú thích; mở popover phía trên ô nhập, nút × và Esc đóng', async () => {
+    const client = createMockClient({ delayMs: 0, storage: window.localStorage });
+    render(<App client={client} mode="page" />);
+    await waitFor(() => expect(document.querySelector('.dz-qstep')).toBeTruthy());
+    const btn = screen.getByRole('button', { name: 'Liên hệ nhân viên' });
+    expect(btn.closest('.dz-plan__composer')).toBeTruthy();
+    expect(btn.closest('.dz-footrow')).toBeTruthy();
+
+    fireEvent.click(btn);
+    const pop = screen.getByRole('dialog', { name: 'Liên hệ nhân viên Dezon' });
+    expect(pop.closest('.dz-plan__composer')).toBeTruthy();
+    expect(within(pop).getByLabelText(/Họ tên/)).toHaveFocus();
+    fireEvent.click(within(pop).getByRole('button', { name: 'Đóng' }));
+    expect(screen.queryByRole('dialog', { name: 'Liên hệ nhân viên Dezon' })).toBeNull();
+
+    fireEvent.click(btn);
+    fireEvent.keyDown(screen.getByLabelText(/Số điện thoại/), { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Liên hệ nhân viên Dezon' })).toBeNull();
+  });
+
+  it('trong overlay "Mở rộng" của widget: Esc trong popover chỉ đóng popover, không thu nhỏ overlay', async () => {
+    const client = createMockClient({ delayMs: 0, storage: window.localStorage });
+    render(<App client={client} initiallyOpen />);
+    await screen.findByText(/Xin chào anh\/chị/);
+    fireEvent.click(screen.getByRole('button', { name: /Mở rộng/ }));
+    const overlay = screen.getByRole('dialog', { name: 'Dezon AI for Planning' });
+    fireEvent.click(within(overlay).getByRole('button', { name: 'Liên hệ nhân viên' }));
+    fireEvent.keyDown(within(overlay).getByLabelText(/Họ tên/), { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Liên hệ nhân viên Dezon' })).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Dezon AI for Planning' })).toBeInTheDocument();
   });
 });
 

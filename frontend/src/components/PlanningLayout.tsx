@@ -5,7 +5,9 @@
 import { useState, type RefObject } from 'react';
 import type { ChatController } from '../state/useChat';
 import { Composer } from './Composer';
+import { ComposerFootnote } from './common/ContactStaffPopover';
 import { MessageList } from './MessageList';
+import vuathauLogo from '../assets/vuathau-logo.png';
 
 export interface PlanningLayoutProps {
   chat: ChatController;
@@ -62,7 +64,8 @@ export function PlanningLayout({ chat, isMock, loginUrl, inputRef, onMinimize }:
     <div className={`dz-plan${collapsed ? ' dz-plan--collapsed' : ''}${drawer ? ' dz-plan--drawer' : ''}`}>
       <aside className="dz-plan__side" aria-label="Lịch sử trò chuyện">
         <div className="dz-plan__brand">
-          <span className="dz-plan__logo">DEZON</span>
+          {/* Logo Vua Thầu (chữ trắng, dùng trên nền navy của thanh bên) — lấy từ vuathau.com.vn. */}
+          <img className="dz-plan__logo" src={vuathauLogo} alt="Vua Thầu" />
           <span className="dz-plan__product">AI for Planning</span>
           <button
             type="button"
@@ -152,7 +155,10 @@ export function PlanningLayout({ chat, isMock, loginUrl, inputRef, onMinimize }:
             </button>
           )}
           <span className="dz-plan__toptitle">
-            <b>DEZON</b> AI for Planning
+            <span className="dz-plan__toplogo">
+              <img src={vuathauLogo} alt="Vua Thầu" />
+            </span>{' '}
+            AI for Planning
           </span>
           {isMock && <span className="dz-mock-tag">Chế độ giả lập</span>}
           <span className="dz-plan__spacer" />
@@ -193,7 +199,7 @@ export function PlanningLayout({ chat, isMock, loginUrl, inputRef, onMinimize }:
               busy={chat.busy}
               onSend={(t) => void chat.send(t)}
             />
-            <p className="dz-footnote">Khái toán chỉ mang tính tham khảo, không phải báo giá thi công.</p>
+            <ComposerFootnote />
           </div>
         </div>
       </main>

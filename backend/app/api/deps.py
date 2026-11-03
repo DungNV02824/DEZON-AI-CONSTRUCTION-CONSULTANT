@@ -68,6 +68,7 @@ _FIELD_VI = {
     "rooftop_terrace": "sân thượng", "converted_area_m2": "diện tích quy đổi",
     "content": "nội dung tin nhắn", "user_id": "mã người dùng",
     "contractor_name": "tên nhà thầu", "request_id": "mã yêu cầu liên hệ",
+    "page_url": "địa chỉ trang", "handled_note": "ghi chú xử lý",
 }
 
 
@@ -189,3 +190,9 @@ def log_event(db: Session, event: str, session_id: uuid.UUID | None = None, comm
     except Exception:  # noqa: BLE001
         log.exception("Không ghi được analytics_events %s", event)
         db.rollback()
+
+
+def client_ip(request) -> str:
+    """IP khách cho rate limit. X-Forwarded-For chỉ được tin khi uvicorn chạy với --proxy-headers /
+    --forwarded-allow-ips (khi đó request.client đã là IP thật)."""
+    return request.client.host if request.client else "unknown"

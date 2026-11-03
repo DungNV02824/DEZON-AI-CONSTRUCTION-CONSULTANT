@@ -4,6 +4,7 @@ import { useWidget } from '../../state/context';
 import { useSavedQuoteCodes } from '../../state/quoteCodes';
 import { formatDateVi, NO_DATA } from '../../utils/format';
 import { BUILDING_TYPE_VI, FINISH_PRICE_LABEL_VI, PROJECT_ROLE_VI } from '../../utils/labels';
+import { ContactStaffButton } from '../common/ContactStaffButton';
 import { EvidenceCell } from '../common/EvidenceCell';
 import { ExternalLink } from '../common/ExternalLink';
 import { GalleryTiles } from '../common/Lightbox';
@@ -173,6 +174,7 @@ export function ContractorDetail({ block, onQuote }: { block: ContractorDetailBl
         >
           {!onQuote && quoteOpen ? 'Thu gọn báo giá' : 'Yêu cầu báo giá'}
         </button>
+        <ContactStaffButton source="contractor_detail" contractor={{ id: c.id, name: c.name }} />
       </div>
       {!onQuote && quoteOpen && (
         <QuoteRequestForm

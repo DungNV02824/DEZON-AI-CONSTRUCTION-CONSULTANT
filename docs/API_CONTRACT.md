@@ -40,8 +40,16 @@ Văn bản chỉ được stream **sau khi** validator (mục 2.1) duyệt, nên
 Bấm nút `quick_replies` / `question_step` / `summary_confirm` = gửi `value` của nút như một tin nhắn mới.
 
 `UIBlock.type` ∈ `quick_replies | question_step | summary_confirm | estimate_table | budget_options |
-contractor_list | comparison_table | contractor_detail | source_badges | quote_request_form` — xem
+contractor_list | comparison_table | contractor_detail | source_badges | quote_request_form | suggestions` — xem
 `app/schemas/ui_blocks.py`.
+
+### Gợi ý câu hỏi tiếp theo `suggestions`
+
+`{type: "suggestions", title: "Gợi ý cho anh/chị", options: [{label, value}]}` — tối đa 5 câu hỏi theo ngữ cảnh hội
+thoại, luôn là block CUỐI của tin nhắn. Chỉ có khi luồng chính đã xong (đã xác nhận, có khái toán và nhà thầu đề xuất — kể cả
+lượt ngay sau "Tính ngay" đang hỏi ngân sách, khi đó gợi ý nằm sau nút ngân sách) và lượt đó không chờ khách trả lời
+câu khác (thẻ câu hỏi, bản xác nhận, form báo giá). Bấm = gửi `value` như
+tin nhắn mới. Frontend chỉ hiện ở tin nhắn mới nhất (như `quick_replies`).
 
 ### Thẻ câu hỏi từng bước `question_step`
 
@@ -180,6 +188,29 @@ Ghi chú gửi nhà thầu (`quote_requests.note`) = ghi chú của khách + mon
 một mục: `Phong cách thiết kế: <nhãn>`, `Mức đầu tư mong muốn: <nhãn>`. Phiên chat lấy theo `chat_session_id` (tùy
 chọn) hoặc phiên chat gắn với `estimate_session_id`.
 
+## Yêu cầu liên hệ nhân viên
+
+Nút "Liên hệ nhân viên" (ô chat, thẻ nhà thầu, hồ sơ nhà thầu): khách để lại họ tên + số điện thoại để nhân viên Dezon
+gọi lại. Không gửi cho nhà thầu, không cần khái toán. Công khai (không cần token).
+
+| Method | Path | Body | Trả về |
+|---|---|---|---|
+| POST | `/api/contact-requests` | `{customer_name, customer_phone, note?, chat_session_id?, contractor_id?, source?, page_url?}` | `{id: uuid, code: string}` (201) |
+
+- `customer_name`: bắt buộc, 1..200 ký tự sau khi bỏ khoảng trắng hai đầu. Rỗng → 422 "Vui lòng nhập họ tên người
+  liên hệ."
+- `customer_phone`: số Việt Nam, chuẩn hóa như yêu cầu báo giá (`+84 912.345.678` → `0912345678`); sai → 422
+  "Số điện thoại không hợp lệ (cần dạng 0xxxxxxxxx)".
+- `note` ≤ 1000 ký tự; `page_url` ≤ 500 ký tự (địa chỉ trang khách đang xem); chuỗi rỗng/chỉ khoảng trắng → `null`.
+- `source`: `"composer"` (ô chat) | `"contractor_card"` (thẻ nhà thầu) | `"contractor_detail"` (hồ sơ nhà thầu) |
+  `null`; giá trị khác → 422 "Nguồn yêu cầu liên hệ không hợp lệ."
+- `contractor_id`: 1..2^63−1 (ngoài khoảng → 422 "Mã nhà thầu không hợp lệ."). `chat_session_id` / `contractor_id`
+  không tồn tại → bỏ qua (lưu `null`), không lỗi.
+- `code`: `LH-` + 6 ký tự chữ in hoa/số, duy nhất — hiển thị cho khách để đối chiếu khi nhân viên gọi.
+- Chống gửi trùng: cùng SĐT (sau chuẩn hóa) + cùng `chat_session_id` + cùng `contractor_id` (kể cả cùng `null`) trong
+  10 phút → trả lại `{id, code}` của yêu cầu cũ (vẫn 201), không tạo bản ghi mới.
+- Ghi `analytics_events` `contact_requested` `{code, source, has_contractor}` (chỉ khi tạo mới).
+
 ## Admin (header `X-Admin-Token: $ADMIN_TOKEN`)
 
 Thiếu/sai token → 401. `APP_ENV=production` mà `ADMIN_TOKEN` còn mặc định → 503 (trang quản trị bị khóa).
@@ -207,12 +238,20 @@ Lỗi trả `{detail: string}` tiếng Việt. Trang HTML: `GET /admin` (không 
 | POST | `/api/admin/sources/{id}/verify` | `{verified_by?}` | `SourceOut` (status `verified`) |
 | GET | `/api/admin/guardrail-violations?limit=&offset=&rule=` | — | `{items, total}` |
 | GET | `/api/admin/metrics` | — | `MetricsReport` (mục 12) |
+| GET | `/api/admin/contact-requests?status=new\|contacted\|done&limit=1..500 (50)&offset=` | — | `{items: ContactRequestOut[], total, new_count}` — mới nhất trước; `total` theo bộ lọc; `new_count` = số yêu cầu trạng thái `new` (không phụ thuộc bộ lọc) |
+| PATCH | `/api/admin/contact-requests/{id}` | `{status?: new\|contacted\|done, handled_note?: string\|null (≤ 1000)}` | `ContactRequestOut`; trường không gửi giữ nguyên, `handled_note: null`/rỗng → xóa; không có → 404 |
 | POST | `/api/admin/import/{rates\|rules}` | multipart `file` (.csv/.xlsx) hoặc thân thô + `?filename=`, hoặc JSON `{path}` (file trong `IMPORT_DIR`); tham số `dry_run`, `force` | `ImportReport` `{kind, filename, total_rows, inserted, updated, unchanged, skipped, error_count, errors[{row, field, message}], source_id, status: ok\|partial\|failed\|unchanged, dry_run}`. `dry_run=true`: không ghi DB nhưng báo đúng số dòng **sẽ** thêm/cập nhật/giữ nguyên/bị chặn (`skipped` = bị nguồn ưu tiên cao hơn chặn). File Excel hỏng → `status: failed` |
 | POST | `/api/admin/sync/csv` | như `import`, thêm `kind=rates\|rules` | `{status: "done", source: "csv", report: ImportReport}` |
 | POST | `/api/admin/sync/{api\|crawl\|reindex\|after_sync}` | `?max_pages=1..1000` (api, crawl) | `{status: "queued", source, job, job_id, params, warning?}`; Redis chưa sẵn sàng → 503 |
 | GET | `/api/admin/sync/jobs/{job_id}` | — | `{job_id, job, status: queued\|started\|finished\|failed\|…, status_vi, enqueued_at, started_at, ended_at, result, error}` — `result` là thống kê job (vd `{reindexed_chunks}`, `{profile_completeness, reindexed_chunks}`, `{status: "skipped", reason}`); `error` là dòng cuối traceback. Kết quả giữ 7 ngày; không có/hết hạn → 404; Redis lỗi → 503 |
 
 `after_sync` = tính lại `profile_completeness` + re-embed toàn bộ; `reindex` = chỉ re-embed.
+
+`ContactRequestOut` = `{id, code, customer_name, customer_phone, note, source, page_url, status, handled_note,
+created_at, contractor: {id, name} | null, project: string | null}`; `project` = tóm tắt công trình khách đã nêu trong
+phiên chat, vd `"Nhà phố · TP. Hồ Chí Minh · 100 m² · 4 tầng · Xây thô · Ngân sách 2–4 tỷ"` (chỉ gồm mục đã có;
+không có phiên/chưa có thông tin → `null`). Trang `/admin` có tab "Yêu cầu liên hệ" (ngay sau "Chỉ số", huy hiệu số
+yêu cầu mới) để lọc theo trạng thái, gọi khách (link `tel:`) và cập nhật trạng thái + ghi chú xử lý.
 
 ## Lỗi chung (mọi endpoint)
 

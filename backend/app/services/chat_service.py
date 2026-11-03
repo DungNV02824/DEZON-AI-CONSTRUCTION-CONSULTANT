@@ -214,20 +214,29 @@ class RedisRateLimiter:
         return False, max(1, int(self.window - (now - first)) + 1)
 
 
-@lru_cache
-def get_rate_limiter() -> RateLimiter:
-    """FastAPI dependency (singleton). Test có thể override bằng app.dependency_overrides."""
+def _make_rate_limiter(limit: int, prefix: str, what: str) -> RateLimiter:
     settings = get_settings()
-    limit = settings.chat_rate_limit_per_min
     try:
         import redis
 
         client = redis.Redis.from_url(settings.redis_url, socket_connect_timeout=0.3, socket_timeout=0.3)
         client.ping()
-        return RedisRateLimiter(client, limit)
+        return RedisRateLimiter(client, limit, prefix=prefix)
     except Exception:  # noqa: BLE001
-        log.warning("Không kết nối được Redis — rate limit chat dùng bộ nhớ trong tiến trình")
+        log.warning("Không kết nối được Redis — rate limit %s dùng bộ nhớ trong tiến trình", what)
         return MemoryRateLimiter(limit)
+
+
+@lru_cache
+def get_rate_limiter() -> RateLimiter:
+    """FastAPI dependency (singleton). Test có thể override bằng app.dependency_overrides."""
+    return _make_rate_limiter(get_settings().chat_rate_limit_per_min, "dezon:rl:chat", "chat")
+
+
+@lru_cache
+def get_contact_rate_limiter() -> RateLimiter:
+    """Rate limit riêng cho POST /api/contact-requests (công khai, lưu SĐT): không dùng chung hạn mức chat."""
+    return _make_rate_limiter(get_settings().contact_rate_limit_per_min, "dezon:rl:contact", "liên hệ")
 
 
 @lru_cache

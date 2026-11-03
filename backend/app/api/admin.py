@@ -10,6 +10,7 @@ from collections.abc import Callable
 from enum import StrEnum
 from pathlib import Path as FsPath
 from typing import Annotated, Any
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.concurrency import run_in_threadpool
@@ -22,6 +23,7 @@ from app.db.session import get_db
 from app.evidence import SourceType, VerificationStatus
 from app.schemas.common import BuildingType, QualityTier, WorkScope
 from app.services import admin_service as svc
+from app.services import contact_service as contact_svc
 from app.services.metrics_service import MetricsReport, compute_metrics
 
 STATIC_DIR = FsPath(__file__).resolve().parent.parent / "static"
@@ -183,6 +185,23 @@ def list_violations(limit: int = Query(50, ge=1, le=500), offset: int = Query(0,
 @api.get("/metrics", response_model=MetricsReport)
 def metrics(db: Session = Depends(get_db)) -> MetricsReport:
     return compute_metrics(db)
+
+
+# ------------------------------------------------------------------ yêu cầu liên hệ nhân viên
+@api.get("/contact-requests", response_model=contact_svc.ContactRequestList)
+def list_contact_requests(status: contact_svc.ContactStatus | None = None,
+                          limit: int = Query(50, ge=1, le=500), offset: int = Query(0, ge=0),
+                          db: Session = Depends(get_db)) -> contact_svc.ContactRequestList:
+    return contact_svc.list_contact_requests(db, status, limit, offset)
+
+
+@api.patch("/contact-requests/{request_id}", response_model=contact_svc.ContactRequestOut)
+def update_contact_request(request_id: UUID, body: contact_svc.ContactRequestUpdate,
+                           db: Session = Depends(get_db)) -> contact_svc.ContactRequestOut:
+    out = contact_svc.update_contact_request(db, request_id, body)
+    if out is None:
+        raise HTTPException(status_code=404, detail="Không tìm thấy yêu cầu liên hệ.")
+    return out
 
 
 # ------------------------------------------------------------------ đồng bộ & nhập file

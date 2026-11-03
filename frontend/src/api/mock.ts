@@ -26,7 +26,7 @@ import type {
   UIBlock,
 } from './types';
 import { ApiError } from './client';
-import { formatVnd } from '../utils/format';
+import { formatVnd, isValidVnPhone, toNationalPhone } from '../utils/format';
 import { newId } from '../utils/id';
 
 export interface MockOptions {
@@ -738,9 +738,28 @@ function matchReply(session: MockSession): MockReply {
   }
   return {
     text,
-    blocks: [{ type: 'contractor_list', data: match }, qr([`So sánh ${names.length} nhà thầu`, 'Yêu cầu báo giá'], false)],
+    blocks: [
+      { type: 'contractor_list', data: match },
+      qr([`So sánh ${names.length} nhà thầu`, 'Yêu cầu báo giá'], false),
+      mockSuggestions(names, session.slots),
+    ],
     stage: 'match',
   };
+}
+
+/** Như backend (app/ai/suggestions.py, provider mock): câu mẫu theo ngữ cảnh — gợi ý câu hỏi tiếp theo ở cuối lượt. */
+function mockSuggestions(names: string[], s: MockSession['slots']): UIBlock {
+  const where = s.province ? ` tại ${s.province}` : '';
+  const bt = (BUILDING_LABEL[s.building_type ?? ''] ?? 'công trình').toLowerCase();
+  const all = [
+    ...(names[0] ? [`Hồ sơ của ${names[0]} có những công trình nào?`] : []),
+    ...(names.length >= 2 ? [`${names[0]} và ${names[1]} khác nhau thế nào?`] : []),
+    `Đơn giá xây thô ${bt}${where} hiện khoảng bao nhiêu?`,
+    'Khái toán này chưa bao gồm những chi phí nào?',
+    ...(names[2] ? [`Hồ sơ của ${names[2]} có những công trình nào?`] : []),
+    ...(s.province ? [`Còn nhà thầu nào khác${where} không?`] : []),
+  ];
+  return { type: 'suggestions', title: 'Gợi ý cho anh/chị', options: all.slice(0, 5).map((l) => ({ label: l, value: l })) };
 }
 
 function budgetReply(session: MockSession): MockReply {
@@ -962,6 +981,8 @@ export function createMockClient(opts: MockOptions = {}): ApiClient {
   const delay = opts.delayMs ?? 30;
   const storage = opts.storage === undefined ? safeLocalStorage() : opts.storage;
   const sessions = new Map<string, MockSession>();
+  /** Yêu cầu liên hệ đã nhận (chống gửi trùng 10 phút, như backend). */
+  const contactRequests = new Map<string, { id: string; code: string; at: number }>();
   let activeId: string | undefined; // phiên khách đang dùng — nút "So sánh" trên danh sách nhà thầu chấm theo phiên này
 
   const save = (s: MockSession) => {
@@ -1061,10 +1082,40 @@ export function createMockClient(opts: MockOptions = {}): ApiClient {
       const code = `DZ-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}-${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`;
       return { ids: body.contractor_ids.map(() => newId()), code };
     },
+    async createContactRequest(body) {
+      await sleep(delay * 3);
+      const name = (body.customer_name ?? '').trim();
+      if (!name || name.length > 200) throw new ApiError(422, 'Vui lòng nhập họ tên (tối đa 200 ký tự).');
+      if (!isValidVnPhone(body.customer_phone ?? '')) {
+        throw new ApiError(422, 'Số điện thoại chưa đúng định dạng Việt Nam (vd 0901 234 567).');
+      }
+      if (body.source != null && !CONTACT_SOURCES.includes(body.source)) {
+        throw new ApiError(422, 'Nguồn yêu cầu liên hệ không hợp lệ.');
+      }
+      if ((body.note ?? '').length > 1000) throw new ApiError(422, 'Ghi chú tối đa 1000 ký tự.');
+      // Như backend: cùng SĐT + cùng phiên + cùng nhà thầu trong 10 phút -> trả lại yêu cầu cũ, không tạo trùng.
+      const key = `${toNationalPhone(body.customer_phone)}|${body.chat_session_id ?? ''}|${body.contractor_id ?? ''}`;
+      const now = Date.now();
+      const prev = contactRequests.get(key);
+      if (prev && now - prev.at < CONTACT_DEDUPE_MS) return { id: prev.id, code: prev.code };
+      const res = { id: newId(), code: contactCode() };
+      contactRequests.set(key, { ...res, at: now });
+      return res;
+    },
     async recordClick() {
       return { ok: true };
     },
   };
+}
+
+const CONTACT_SOURCES: readonly string[] = ['composer', 'contractor_card', 'contractor_detail'];
+const CONTACT_DEDUPE_MS = 10 * 60 * 1000;
+
+/** "LH-" + 6 ký tự HEX in hoa (như backend). */
+function contactCode(): string {
+  let s = '';
+  for (let i = 0; i < 6; i++) s += '0123456789ABCDEF'[Math.floor(Math.random() * 16)];
+  return `LH-${s}`;
 }
 
 function safeLocalStorage(): Storage | null {

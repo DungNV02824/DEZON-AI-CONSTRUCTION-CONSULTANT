@@ -6,6 +6,7 @@ import { useChat } from '../state/useChat';
 import { Composer } from './Composer';
 import { MessageList } from './MessageList';
 import { PlanningLayout } from './PlanningLayout';
+import { ComposerFootnote } from './common/ContactStaffPopover';
 import { LightboxProvider } from './common/Lightbox';
 import { SourcePopoverProvider } from './common/SourcePopover';
 
@@ -19,6 +20,15 @@ function sessionFlag(get: boolean, value?: boolean): boolean {
     /* bị chặn */
   }
   return false;
+}
+
+/** Trang khách đang xem (gửi kèm yêu cầu liên hệ); giới hạn 500 ký tự theo hợp đồng API. */
+function currentPageUrl(): string | null {
+  try {
+    return typeof window !== 'undefined' ? window.location.href.slice(0, 500) : null;
+  } catch {
+    return null;
+  }
 }
 
 export interface AppProps {
@@ -113,6 +123,12 @@ export function App({ client, initiallyOpen = false, registerControls, mode = 'w
         client.recordClick(id, contractorId).catch(() => undefined);
       },
       submitQuote: (body) => client.createQuoteRequest(body),
+      submitContact: (body) =>
+        client.createContactRequest({
+          ...body,
+          chat_session_id: body.chat_session_id ?? sessionId ?? null,
+          page_url: body.page_url ?? currentPageUrl(),
+        }),
       quoteSubmitted: markQuoteSubmitted,
       estimateSessionId,
       chatSessionId: sessionId,
@@ -243,8 +259,10 @@ export function App({ client, initiallyOpen = false, registerControls, mode = 'w
                 <MessageList key={chat.sessionId ?? ''} messages={chat.messages} busy={chat.busy} onRetry={chat.retry} />
               )}
 
-              <Composer ref={inputRef} disabled={chat.status !== 'ready'} busy={chat.busy} onSend={(t) => void chat.send(t)} />
-              <p className="dz-footnote">Khái toán chỉ mang tính tham khảo, không phải báo giá thi công.</p>
+              <div className="dz-composer-area">
+                <Composer ref={inputRef} disabled={chat.status !== 'ready'} busy={chat.busy} onSend={(t) => void chat.send(t)} />
+                <ComposerFootnote />
+              </div>
             </div>
           )}
 

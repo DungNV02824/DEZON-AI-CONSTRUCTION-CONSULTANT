@@ -62,6 +62,7 @@ describe('createHttpClient', () => {
     await client.createQuoteRequest({ contractor_ids: [1], customer_name: 'An', customer_phone: '0901234567' });
     await client.recordClick(101, 2);
     await client.createSession();
+    await client.createContactRequest({ customer_name: 'An', customer_phone: '0901234567', source: 'composer' });
     const calls = fetchMock.mock.calls as unknown as [string, RequestInit][];
     expect(calls.map(([u, i]) => `${i.method} ${u}`)).toEqual([
       'GET http://localhost:8000/api/contractors/kien-phong',
@@ -69,7 +70,9 @@ describe('createHttpClient', () => {
       'POST http://localhost:8000/api/quote-requests',
       'POST http://localhost:8000/api/recommendations/101/click',
       'POST http://localhost:8000/api/chat/sessions',
+      'POST http://localhost:8000/api/contact-requests',
     ]);
+    expect(JSON.parse(calls[5]![1].body as string)).toEqual({ customer_name: 'An', customer_phone: '0901234567', source: 'composer' });
     expect(JSON.parse(calls[1]![1].body as string)).toEqual({ contractor_ids: [1, 2], estimate_session_id: 'est-1' });
     expect(JSON.parse(calls[3]![1].body as string)).toEqual({ contractor_id: 2 });
   });

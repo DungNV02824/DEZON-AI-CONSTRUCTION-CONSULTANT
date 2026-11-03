@@ -7,6 +7,7 @@ import { EstimateTable } from './EstimateTable';
 import { QuestionStep } from './QuestionStep';
 import { QuickReplies } from './QuickReplies';
 import { QuoteRequestForm } from './QuoteRequestForm';
+import { Suggestions } from './Suggestions';
 import { SummaryConfirm } from './SummaryConfirm';
 
 /**
@@ -36,6 +37,8 @@ export function BlockRenderer({ block, active }: { block: UIBlock; active: boole
       return null; // chủ sản phẩm yêu cầu bỏ dòng "Nguồn:"
     case 'quote_request_form':
       return <QuoteRequestForm block={block} />;
+    case 'suggestions':
+      return <Suggestions block={block} active={active} />;
     default:
       return null;
   }

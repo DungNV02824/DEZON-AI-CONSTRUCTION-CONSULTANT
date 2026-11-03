@@ -389,3 +389,36 @@ describe('useChat — khôi phục phiên', () => {
     expect(sendMessage).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('App (widget) — nút "Liên hệ nhân viên" dưới ô nhập', () => {
+  it('luôn hiện cạnh chú thích; mở popover, Esc đóng popover mà không đóng khung chat; gửi kèm phiên + page_url', async () => {
+    const mock = createMockClient({ delayMs: 0, storage: memoryStorage() });
+    const createContactRequest = vi.fn(mock.createContactRequest);
+    const client = fakeClient({ createSession: mock.createSession, getSession: mock.getSession, createContactRequest });
+    render(<App client={client} initiallyOpen />);
+    await screen.findByText(/Xin chào anh\/chị/);
+    const panel = screen.getByRole('dialog', { name: 'Dezon AI Consultant' });
+    const btn = screen.getByRole('button', { name: 'Liên hệ nhân viên' });
+    expect(btn.closest('.dz-footrow')).toBeTruthy();
+    expect(panel).toContainElement(btn);
+
+    fireEvent.click(btn);
+    const pop = screen.getByRole('dialog', { name: 'Liên hệ nhân viên Dezon' });
+    expect(pop.closest('.dz-composer-area')).toBeTruthy();
+    fireEvent.keyDown(screen.getByLabelText(/Họ tên/), { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Liên hệ nhân viên Dezon' })).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Dezon AI Consultant' })).toBeInTheDocument();
+
+    fireEvent.click(btn);
+    fireEvent.change(screen.getByLabelText(/Họ tên/), { target: { value: 'Anh Bình' } });
+    fireEvent.change(screen.getByLabelText(/Số điện thoại/), { target: { value: '0903 111 222' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu liên hệ' }));
+    expect(await screen.findByText(/Mã yêu cầu:/)).toHaveTextContent(/LH-[0-9A-F]{6}/);
+    const body = createContactRequest.mock.calls[0]![0];
+    expect(body).toMatchObject({ customer_name: 'Anh Bình', customer_phone: '0903111222', source: 'composer', contractor_id: null });
+    expect(body.chat_session_id).toBeTruthy();
+    expect(body.page_url).toBe(window.location.href);
+    fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+    expect(screen.queryByRole('dialog', { name: 'Liên hệ nhân viên Dezon' })).toBeNull();
+  });
+});

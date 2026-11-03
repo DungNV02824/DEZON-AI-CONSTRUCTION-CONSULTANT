@@ -7,8 +7,10 @@
   --dz-primary: #111827;
   --dz-primary-dark: #000000;
   --dz-primary-soft: #f3f4f6;
-  --dz-plan-side: #f7f7f8;
+  --dz-plan-side: #001c33; /* thanh bên: navy của vuathau.com.vn */
   --dz-plan-line: #ececee;
+  --dz-plan-side-line: #0a3354;
+  --dz-plan-accent: #ffb51c; /* vàng nhấn của vuathau.com.vn */
   height: 100%;
   font-family: var(--dz-font);
   font-size: 14px;
@@ -47,7 +49,8 @@
   min-height: 0;
   padding: 16px 16px 0;
   background: var(--dz-plan-side);
-  border-right: 1px solid var(--dz-plan-line);
+  border-right: 1px solid var(--dz-plan-side-line);
+  color: #d5dce3;
   transition: margin-left 0.18s ease;
 }
 
@@ -64,18 +67,36 @@
 }
 
 .dz-plan__logo {
-  font-size: 26px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-  line-height: 1;
-  color: #111;
+  display: block;
+  flex: 0 0 auto;
+  width: auto;
+  height: 22px;
 }
 
 .dz-plan__product {
   flex: 1 1 auto;
-  font-size: 15px;
-  color: #222;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12.5px;
+  color: #d5dce3;
   white-space: nowrap;
+}
+
+/* Thanh trên (khi thu gọn thanh bên / điện thoại): logo trắng đặt trên nhãn navy. */
+.dz-plan__toplogo {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--dz-plan-side);
+  vertical-align: middle;
+}
+
+.dz-plan__toplogo img {
+  display: block;
+  width: auto;
+  height: 16px;
 }
 
 .dz-plan__iconbtn {
@@ -96,6 +117,25 @@
   background: rgba(0, 0, 0, 0.06);
 }
 
+.dz-plan__side .dz-plan__iconbtn {
+  color: #d5dce3;
+}
+
+/* Hàng logo: logo + "AI for Planning" + nút thu gọn vừa 232px của thanh bên. */
+.dz-plan__side .dz-plan__brand {
+  gap: 8px;
+}
+
+.dz-plan__brand .dz-plan__iconbtn {
+  width: 30px;
+  margin-right: -6px;
+}
+
+.dz-plan__side .dz-plan__iconbtn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
 .dz-plan__iconbtn:focus-visible,
 .dz-plan__new:focus-visible,
 .dz-plan__item:focus-visible,
@@ -103,6 +143,14 @@
 .dz-plan__clear:focus-visible {
   outline: 2px solid #111;
   outline-offset: 2px;
+}
+
+.dz-plan__side .dz-plan__iconbtn:focus-visible,
+.dz-plan__new:focus-visible,
+.dz-plan__item:focus-visible,
+.dz-plan__login:focus-visible,
+.dz-plan__clear:focus-visible {
+  outline-color: var(--dz-plan-accent);
 }
 
 .dz-plan__new {
@@ -114,10 +162,10 @@
   padding: 0 16px;
   border: 0;
   border-radius: 10px;
-  background: #ebebed;
-  color: #111;
+  background: var(--dz-plan-accent);
+  color: #001c33;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 700;
   text-align: left;
   cursor: pointer;
 }
@@ -128,7 +176,7 @@
 }
 
 .dz-plan__new:hover:not(:disabled) {
-  background: #e2e2e5;
+  background: #ffc547;
 }
 
 .dz-plan__new:disabled {
@@ -143,7 +191,7 @@
   margin: 26px 4px 8px;
   font-size: 12px;
   font-weight: 700;
-  color: #111;
+  color: #fff;
 }
 
 .dz-plan__clear {
@@ -153,14 +201,14 @@
   padding: 2px 4px;
   border: 0;
   background: transparent;
-  color: #9ca3af;
+  color: #9aa3ad;
   font-size: 12px;
   font-weight: 400;
   cursor: pointer;
 }
 
 .dz-plan__clear:hover:not(:disabled) {
-  color: #b91c1c;
+  color: #fca5a5;
 }
 
 .dz-plan__list {
@@ -170,6 +218,7 @@
   margin: 0 -4px;
   padding: 0 4px 12px;
   list-style: none;
+  scrollbar-color: #0a3354 transparent;
 }
 
 .dz-plan__list li {
@@ -191,7 +240,7 @@
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: #333;
+  color: #d5dce3;
   font-size: 14px;
   text-align: left;
   cursor: pointer;
@@ -199,17 +248,23 @@
 
 .dz-plan__item svg {
   flex: 0 0 auto;
-  color: #9ca3af;
+  color: #9aa3ad;
 }
 
 .dz-plan__item:hover:not(:disabled) {
-  background: #efeff1;
+  background: #05243e;
+  color: #fff;
 }
 
 .dz-plan__item--active {
-  background: #e8e8eb;
-  color: #111;
+  background: #0a3354;
+  color: #fff;
   font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--dz-plan-accent);
+}
+
+.dz-plan__item--active svg {
+  color: var(--dz-plan-accent);
 }
 
 .dz-plan__item:disabled {
@@ -225,7 +280,7 @@
 
 .dz-plan__empty {
   padding: 8px 10px;
-  color: var(--dz-muted);
+  color: #9aa3ad;
   font-size: 13px;
 }
 
@@ -233,7 +288,7 @@
   flex: 0 0 auto;
   margin: 0 -16px;
   padding: 14px 12px 16px;
-  border-top: 1px solid var(--dz-plan-line);
+  border-top: 1px solid var(--dz-plan-side-line);
 }
 
 .dz-root--page a.dz-plan__login {
@@ -242,8 +297,9 @@
   justify-content: center;
   gap: 8px;
   min-height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 10px;
-  background: #000;
+  background: transparent;
   color: #fff;
   font-size: 14px;
   font-weight: 600;
@@ -251,7 +307,9 @@
 }
 
 .dz-root--page a.dz-plan__login:hover {
-  background: #222;
+  border-color: var(--dz-plan-accent);
+  background: #05243e;
+  color: var(--dz-plan-accent);
   text-decoration: none;
 }
 
@@ -449,6 +507,31 @@
 .dz-plan__composer .dz-footnote {
   padding: 6px 0 0;
   background: transparent;
+}
+
+/* Mốc định vị cho popover "Liên hệ nhân viên" (neo phía trên ô nhập). */
+.dz-plan__composer {
+  position: relative;
+}
+
+.dz-plan__composer .dz-footrow {
+  padding: 4px 4px 0 8px;
+  background: transparent;
+}
+
+.dz-plan__composer .dz-footrow .dz-footnote {
+  padding: 0;
+}
+
+.dz-root--page .dz-contactpop {
+  right: max(16px, calc((100% - 950px) / 2));
+}
+
+@media (max-width: 639.98px) {
+  .dz-root--page .dz-contactpop {
+    left: 10px;
+    right: 10px;
+  }
 }
 
 /* ----------------------------------------------------------- màn hình hẹp: thanh bên thành ngăn kéo */

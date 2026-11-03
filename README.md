@@ -31,7 +31,8 @@ docker compose up -d --build
 
 | Dịch vụ | Địa chỉ |
 |---|---|
-| Trang demo nhúng widget | http://localhost:8080 |
+| Giao diện đầy đủ AI for Planning (trang chủ) | http://localhost:8080 |
+| Trang demo nhúng widget nổi | http://localhost:8080/widget-demo |
 | Backend API + Swagger | http://localhost:8000/docs |
 | Trang quản trị | http://localhost:8000/admin (nhập `ADMIN_TOKEN`) |
 | PostgreSQL + pgvector | localhost:5433 (user/pass/db: `dezon`) |

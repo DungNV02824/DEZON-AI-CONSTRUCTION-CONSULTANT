@@ -16,6 +16,7 @@ export function makeActions(overrides: Partial<WidgetActions> = {}): WidgetActio
     openQuoteForm: vi.fn(),
     recordClick: vi.fn(),
     submitQuote: vi.fn(async () => ({ ids: ['x'], code: 'DZ-TEST-0001' })),
+    submitContact: vi.fn(async () => ({ id: 'contact-1', code: 'LH-TEST01' })),
     ...overrides,
   };
 }

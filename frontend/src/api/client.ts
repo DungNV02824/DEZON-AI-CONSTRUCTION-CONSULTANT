@@ -7,6 +7,8 @@ import type {
   ChatStreamEvent,
   ClickResponse,
   ComparisonMatrix,
+  ContactRequestBody,
+  ContactRequestResponse,
   ContractorProfile,
   CreateSessionResponse,
   QuoteRequestBody,
@@ -36,6 +38,8 @@ export interface ApiClient {
   getContractor(slug: string): Promise<ContractorProfile>;
   compare(contractorIds: number[], estimateSessionId?: UUID | null): Promise<ComparisonMatrix>;
   createQuoteRequest(body: QuoteRequestBody): Promise<QuoteRequestResponse>;
+  /** Khách để lại họ tên + SĐT để nhân viên Dezon liên hệ (nút "Liên hệ nhân viên"). */
+  createContactRequest(body: ContactRequestBody): Promise<ContactRequestResponse>;
   recordClick(logId: number, contractorId: number): Promise<ClickResponse>;
 }
 
@@ -128,6 +132,7 @@ export function createHttpClient(apiBase: string, fetchImpl: typeof fetch = (...
         ...(estimateSessionId ? { estimate_session_id: estimateSessionId } : {}),
       }),
     createQuoteRequest: (body) => json('POST', '/api/quote-requests', body),
+    createContactRequest: (body) => json('POST', '/api/contact-requests', body),
     recordClick: (logId, contractorId) =>
       json('POST', `/api/recommendations/${encodeURIComponent(String(logId))}/click`, { contractor_id: contractorId }),
   };

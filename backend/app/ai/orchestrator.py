@@ -35,7 +35,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai import blocks as ui
-from app.ai import fallback, slot_filling, validator
+from app.ai import fallback, slot_filling, suggestions, validator
 from app.ai.dialog import (
     DETAIL_KEYS,
     GREETING_EXPECTED_SLOTS,
@@ -540,6 +540,30 @@ def _quote_form(content: str, state: SessionState, outcomes: list[ToolOutcome]):
 # ============================================================================================
 # Vòng lặp chính
 # ============================================================================================
+def _wants_suggestions(plan: CodePlan, slots: Slots, state: SessionState) -> bool:
+    """Gợi ý câu hỏi tiếp theo khi luồng chính đã xong (đã xác nhận, có khái toán, có nhà thầu đề xuất) — kể cả lượt
+    ngay sau "Tính ngay" đang hỏi ngân sách — và lượt này không chờ khách trả lời câu khác (thẻ câu hỏi, bản xác nhận,
+    chọn mục cần sửa...). Nút ngân sách / "So sánh các nhà thầu" / "Yêu cầu báo giá" vẫn giữ, gợi ý thêm ở cuối."""
+    if not (slots.confirmed and state.estimate is not None and state.contractors):
+        return False
+    if plan.step is not None or plan.summary is not None or plan.question:
+        return False
+    if plan.tail == BUDGET_TAIL:  # ngay sau "Tính ngay": gợi ý cả khi đang hỏi ngân sách (nút ngân sách giữ nguyên)
+        return True
+    if plan.tail:
+        return False
+    return plan.quick is None or [o.label for o in plan.quick.options] == [o.label for o in ui.NEXT_ACTION_REPLIES]
+
+
+def _suggest_context(slots: Slots, state: SessionState, content: str, sid: uuid.UUID) -> suggestions.SuggestContext:
+    return suggestions.SuggestContext(
+        building_type=str(slots.building_type) if slots.building_type else None, province=slots.province,
+        floors=slots.floors, land_area_m2=slots.land_area_m2,
+        work_scope=str(slots.work_scope) if slots.work_scope else None, budget_vnd=slots.budget_vnd,
+        contractors=[c.name for c in state.contractors], last_user_message=content,
+        seed=f"{sid}:{state.user_turns}")
+
+
 def _as_uuid(session_id: uuid.UUID | str) -> uuid.UUID:
     if isinstance(session_id, uuid.UUID):
         return session_id
@@ -662,6 +686,10 @@ def handle_message(db: Session, session_id: uuid.UUID | str, content: str,
         plan.ack = REQUIRED_SKIP_ACK
     stage_now = _stage(ctx.slots, state)
 
+    # Gợi ý câu hỏi tiếp theo (cuối lượt, khi luồng chính đã xong): gọi LLM gợi ý song song với câu trả lời chính.
+    sugg_ctx = _suggest_context(ctx.slots, state, content, sid)
+    sugg_future = suggestions.start(provider, sugg_ctx) if _wants_suggestions(plan, ctx.slots, state) else None
+
     # 4. Gọi LLM.
     state_block = _state_block(ctx.slots, state, u, plan, outcomes, stage_now, chosen, prev_contractor_ids)
     system = _system_with_state(state_block)
@@ -764,6 +792,10 @@ def handle_message(db: Session, session_id: uuid.UUID | str, content: str,
     blocks = ui.build_ui_blocks(outcomes, estimate_session_id=est_id, summary=plan.summary,
                                 quick_replies=plan.quick, quote_request=_quote_form(content, state, outcomes),
                                 question_step=plan.step)
+    if _wants_suggestions(plan, ctx.slots, state) and not any(b.type == "quote_request_form" for b in blocks):
+        sugg_block = suggestions.build(_suggest_context(ctx.slots, state, content, sid), sugg_future)
+        if sugg_block is not None:
+            blocks.append(sugg_block)  # luôn ở cuối tin nhắn (sau nút chọn nhanh)
     for o in outcomes:
         db.add(ChatMessage(session_id=sid, role="tool", tool_name=o.name, tool_payload=o.payload))
     assistant = ChatMessage(session_id=sid, role="assistant", content=text,

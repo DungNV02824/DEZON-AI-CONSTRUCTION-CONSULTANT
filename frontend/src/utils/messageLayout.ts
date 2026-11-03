@@ -36,14 +36,23 @@ export function layoutMessage(content: string, blocks: UIBlock[]): MessagePart[]
     return parts;
   }
 
+  // Gợi ý câu hỏi tiếp theo (suggestions) luôn ở cuối tin nhắn; phần sắp xếp bên dưới xét các block trước nó.
+  let end = blocks.length;
+  while (end > 0 && blocks[end - 1]!.type === 'suggestions') end--;
+  if (end === 0) {
+    pushText(paras);
+    blockParts(0, blocks.length);
+    return parts;
+  }
+
   // Câu hỏi cuối tin nhắn -> ngay trên nút trả lời (quick_replies là block cuối và không phải block duy nhất).
-  const last = blocks.length - 1;
+  const last = end - 1;
   let question: string | null = null;
   if (blocks[last]!.type === 'quick_replies' && last > 0 && isQuestion(paras[paras.length - 1]!)) {
     question = paras[paras.length - 1]!;
     paras = paras.slice(0, -1);
   }
-  const qrStart = question !== null ? last : blocks.length;
+  const qrStart = question !== null ? last : end;
 
   // Đoạn giới thiệu nhà thầu -> ngay trên danh sách nhà thầu (khi trước danh sách còn block khác).
   const ci = blocks.findIndex((b) => b.type === 'contractor_list');
@@ -59,7 +68,8 @@ export function layoutMessage(content: string, blocks: UIBlock[]): MessagePart[]
   }
   if (question !== null) {
     pushText([question]);
-    blockParts(qrStart, blocks.length);
+    blockParts(qrStart, end);
   }
+  blockParts(end, blocks.length);
   return parts;
 }

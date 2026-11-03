@@ -320,3 +320,26 @@ class AnalyticsEvent(Base):
     event: Mapped[str] = mapped_column(Text)
     props: Mapped[dict] = mapped_column(JSONB, server_default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ContactRequest(Base):
+    """Yêu cầu liên hệ (migration 0003): khách để lại họ tên + SĐT để nhân viên Dezon gọi lại."""
+    __tablename__ = "contact_requests"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True,
+                                          server_default=func.gen_random_uuid())
+    code: Mapped[str] = mapped_column(Text, unique=True)
+    customer_name: Mapped[str] = mapped_column(Text)
+    customer_phone: Mapped[str] = mapped_column(Text)
+    note: Mapped[str | None] = mapped_column(Text)
+    chat_session_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("chat_sessions.id", ondelete="SET NULL"))
+    contractor_id: Mapped[int | None] = mapped_column(ForeignKey("contractors.id", ondelete="SET NULL"))
+    source: Mapped[str | None] = mapped_column(Text)  # composer | contractor_card | contractor_detail
+    page_url: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text, server_default="new")  # new | contacted | done
+    handled_note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(),
+                                                 onupdate=func.now())
+
+    contractor: Mapped[Contractor | None] = relationship()
+    chat_session: Mapped[ChatSession | None] = relationship()

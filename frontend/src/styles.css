@@ -2180,6 +2180,194 @@ thead .dz-sticky {
   gap: 8px;
 }
 
+/* ----------------------------------------------------------- "Liên hệ nhân viên" (họ tên + SĐT) */
+/* Form ngay dưới hàng nút của thẻ / hồ sơ nhà thầu: chiếm trọn một dòng (hàng nút là flex-wrap). */
+.dz-actions--wrap > .dz-contact-inline,
+.dz-contact-inline {
+  flex: 1 0 100%;
+  min-width: 0;
+  margin-top: 2px;
+}
+
+.dz-contactform {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dz-contactform .dz-field textarea {
+  resize: vertical;
+}
+
+.dz-contactform--done {
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid #a6f4c5;
+  border-radius: 10px;
+  background: #ecfdf3;
+  color: #067647;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.dz-contactform--done.dz-card {
+  padding: 10px 12px;
+}
+
+.dz-contactform--done .dz-code {
+  font-size: 14px;
+}
+
+.dz-contactform--done .dz-linkbtn {
+  align-self: flex-start;
+  color: #067647;
+}
+
+/* Khối ô nhập + dòng chú thích: mốc định vị cho popover liên hệ. */
+.dz-composer-area {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+/* Dòng chú thích dưới ô nhập: chữ "tham khảo" bên trái, nút liên hệ nhỏ bên phải. */
+.dz-footrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 6px 12px;
+  background: #fff;
+}
+
+.dz-footrow .dz-footnote {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  text-align: left;
+}
+
+/* Nút "Liên hệ nhân viên" luôn hiện: cùng mẫu với các nút hiện có (.dz-btn: nền trắng, viền xám, chữ đậm màu chữ;
+   rê chuột -> viền + chữ màu chủ đạo) + chấm xanh nhỏ "đang trực". */
+.dz-contactbtn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #fff;
+  color: var(--dz-text);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+/* Chấm xanh "đang trực" nhấp nháy nhẹ trước icon. */
+.dz-contactbtn::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5);
+  animation: dz-contact-pulse 2s ease-out infinite;
+}
+
+/* Icon tai nghe to theo nút. */
+.dz-contactbtn svg {
+  width: 18px;
+  height: 18px;
+}
+
+@keyframes dz-contact-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+.dz-contactbtn:hover,
+.dz-contactbtn[aria-expanded='true'] {
+  border-color: var(--dz-primary);
+  color: var(--dz-primary);
+}
+
+.dz-contactbtn:focus-visible {
+  outline: 2px solid var(--dz-primary);
+  outline-offset: 2px;
+}
+
+/* Popover form liên hệ: neo ngay trên ô nhập, góc phải; không che toàn bộ khung chat. */
+.dz-contactpop {
+  position: absolute;
+  right: 10px;
+  bottom: calc(100% + 6px);
+  z-index: 6;
+  width: calc(100% - 20px);
+  max-width: 360px;
+  /* Vừa khoảng trống phía trên ô chat trong khung widget (cao tối đa 100vh - 108px, ô chat ~140px): không bị cắt mép
+     trên (tiêu đề, nút đóng) ở màn hình thấp. */
+  max-height: min(480px, calc(100vh - 248px));
+  overflow-y: auto;
+  padding: 12px;
+  border: 1px solid var(--dz-border);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.16), 0 2px 6px rgba(15, 23, 42, 0.06);
+  animation: dz-in 0.15s ease-out;
+}
+
+.dz-contactpop .dz-contactform__title {
+  padding-right: 28px;
+}
+
+.dz-contactpop__close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dz-muted);
+  cursor: pointer;
+}
+
+.dz-contactpop__close:hover {
+  background: var(--dz-bg-soft);
+  color: var(--dz-text);
+}
+
+.dz-contactpop .dz-contactform--done {
+  margin-right: 28px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dz-contactpop {
+    animation: none;
+  }
+  .dz-contactbtn {
+    transition: none;
+  }
+  .dz-contactbtn::before {
+    animation: none;
+  }
+}
+
 /* Đặt cuối file: media query không tăng specificity nên phải đứng sau các rule gốc. */
 @media (max-width: 639.98px) {
   /* Vùng chạm ≥ 44px và chữ ≥ 13px trên điện thoại. */
@@ -2259,18 +2447,22 @@ thead .dz-sticky {
   .dz-mock-tag {
     font-size: 12px;
   }
-}
-
-/* Nút "Liên hệ nhân viên" (chỉ giao diện) */
-.dz-contact-notice {
-  flex: 1 0 100%;
-  margin: 2px 0 0;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: #ecfdf3;
-  color: #067647;
-  font-size: 13px;
-  line-height: 1.5;
+  /* "Liên hệ nhân viên": nút nhỏ dưới ô nhập + popover rộng hết khung chat. */
+  .dz-contactbtn {
+    min-height: 44px;
+    font-size: 14px;
+  }
+  .dz-contactpop {
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-width: none;
+    max-height: min(480px, calc(100vh - 160px));
+  }
+  .dz-contactpop__close {
+    width: 36px;
+    height: 36px;
+  }
 }
 
 /* Thẻ xác nhận gọn: các mục phụ gom vào "Xem thêm N mục" */
@@ -2316,4 +2508,64 @@ thead .dz-sticky {
   align-self: stretch;
   min-width: 0;
   max-width: 100%;
+}
+
+/* Gợi ý câu hỏi tiếp theo (cuối lượt trả lời): tiêu đề nhỏ + nút dạng thẻ, xuống dòng khi hẹp. */
+.dz-suggest {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.dz-suggest__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--dz-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* Bóng đèn vàng: làm nổi mục gợi ý. */
+.dz-suggest__title svg {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  color: #f59e0b;
+  filter: drop-shadow(0 0 3px rgba(245, 158, 11, 0.45));
+}
+
+.dz-suggest__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dz-suggest__btn {
+  max-width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--dz-border);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--dz-text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dz-suggest__btn:hover:not(:disabled) {
+  border-color: var(--dz-primary);
+  color: var(--dz-primary);
+}
+
+.dz-suggest__btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* Thẻ "Đã gửi" nhận focus sau khi gửi (đọc màn hình / phím Esc): không viền focus mặc định. */
+.dz-contactform--done:focus {
+  outline: none;
 }

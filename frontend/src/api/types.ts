@@ -407,6 +407,13 @@ export interface QuickRepliesBlock {
   allow_free_text?: boolean;
 }
 
+/** Gợi ý câu hỏi tiếp theo theo ngữ cảnh (cuối lượt trả lời, khi luồng chính đã xong). */
+export interface SuggestionsBlock {
+  type: 'suggestions';
+  title?: string;
+  options: QuickReply[];
+}
+
 /**
  * Thẻ câu hỏi từng bước khi thu thập thông tin (thay quick_replies cho câu hỏi slot).
  * Chọn một dòng/chip -> gửi `value` như tin nhắn của khách; ô nhập tự do -> gửi chữ đã gõ.
@@ -519,7 +526,8 @@ export type UIBlock =
   | ComparisonTableBlock
   | ContractorDetailBlock
   | SourceBadgesBlock
-  | QuoteRequestFormBlock;
+  | QuoteRequestFormBlock
+  | SuggestionsBlock;
 
 export type UIBlockType = UIBlock['type'];
 
@@ -534,6 +542,7 @@ export const UI_BLOCK_TYPES: readonly UIBlockType[] = [
   'contractor_detail',
   'source_badges',
   'quote_request_form',
+  'suggestions',
 ] as const;
 
 // ---------------------------------------------------------------- Chat API (docs/API_CONTRACT.md)
@@ -605,4 +614,25 @@ export interface QuoteRequestResponse {
 
 export interface ClickResponse {
   ok: boolean;
+}
+
+/** Nơi khách bấm "Liên hệ nhân viên" (POST /api/contact-requests `source`). */
+export type ContactSource = 'composer' | 'contractor_card' | 'contractor_detail';
+
+/** POST /api/contact-requests — khách để lại họ tên + SĐT để nhân viên Dezon gọi lại. */
+export interface ContactRequestBody {
+  customer_name: string;
+  /** SĐT Việt Nam dạng trong nước "0xxxxxxxxx". */
+  customer_phone: string;
+  note?: string | null;
+  chat_session_id?: UUID | null;
+  contractor_id?: number | null;
+  source?: ContactSource | null;
+  page_url?: string | null;
+}
+
+export interface ContactRequestResponse {
+  id: UUID;
+  /** "LH-XXXXXX" */
+  code: string;
 }

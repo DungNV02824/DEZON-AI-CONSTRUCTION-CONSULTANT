@@ -41,6 +41,30 @@ describe('layoutMessage — mỗi đoạn chữ đứng ngay trên block của n
     expect(order(layoutMessage('Dạ.', []))).toEqual(['T:Dạ.']);
   });
 
+  it('gợi ý câu hỏi tiếp theo (suggestions) luôn ở cuối, sau nút chọn nhanh', () => {
+    const sugg = { type: 'suggestions', options: [] } as unknown as UIBlock;
+    expect(order(layoutMessage(`${P_EST}
+
+${P_CON}`, [est, list, qr, sugg]))).toEqual([
+      'T:Chi',
+      'estimate_table',
+      'T:Em',
+      'contractor_list',
+      'quick_replies',
+      'suggestions',
+    ]);
+    expect(order(layoutMessage(`${P_CON}
+
+${BUDGET_Q}`, [list, qr, sugg]))).toEqual([
+      'T:Em',
+      'contractor_list',
+      'T:Anh/chị',
+      'quick_replies',
+      'suggestions',
+    ]);
+    expect(order(layoutMessage('Dạ, đây là hồ sơ.', [sugg]))).toEqual(['T:Dạ,', 'suggestions']);
+  });
+
   it('giữ nguyên chỉ số block gốc (index) để làm key ổn định', () => {
     const parts = layoutMessage(`${P_EST}\n\n${P_CON}\n\n${BUDGET_Q}`, [est, list, qr]);
     expect(parts.filter((p) => p.kind === 'block').map((p) => (p as { index: number }).index)).toEqual([0, 1, 2]);

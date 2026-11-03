@@ -17,6 +17,11 @@ export interface WidgetActions {
   openQuoteForm(contractors: QuoteFormContractor[], estimateSessionId?: string | null): void;
   recordClick(contractorId: number, logId?: number | null): void;
   submitQuote: import('../api/client').ApiClient['createQuoteRequest'];
+  /**
+   * Gửi yêu cầu "Liên hệ nhân viên" (họ tên + SĐT). App tự gắn chat_session_id (phiên hiện tại) và page_url
+   * khi form không truyền.
+   */
+  submitContact: import('../api/client').ApiClient['createContactRequest'];
   /** Form báo giá đã gửi thành công -> ghi mã vào block (giữ thẻ thành công sau khi tải lại trang). */
   quoteSubmitted(block: import('../api/types').QuoteRequestFormBlock, code: string): void;
   /** estimate_session_id gần nhất trong hội thoại (để đính kèm báo giá/so sánh). */
@@ -39,6 +44,7 @@ export const defaultActions: WidgetActions = {
   openQuoteForm: noop,
   recordClick: noop,
   submitQuote: () => Promise.reject(new Error('Chưa cấu hình client')),
+  submitContact: () => Promise.reject(new Error('Chưa cấu hình client')),
   quoteSubmitted: noop,
   estimateSessionId: null,
   chatSessionId: null,

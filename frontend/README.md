@@ -29,7 +29,8 @@ npm run preview    # http://localhost:4173/?dezon_mock=1
 ```
 
 Docker: `docker build --build-arg VITE_API_BASE_URL=http://localhost:8000 -t dezon-frontend .`
-→ nginx cổng 80 phục vụ `/dezon-widget.js` và trang demo `/` (compose map ra `localhost:8080`).
+→ nginx cổng 80 phục vụ `/dezon-widget.js` và trang chủ `/` = giao diện đầy đủ (`planning.html`, cũng ở `/planning`), trang demo widget nổi ở `/widget-demo`
+(compose map ra `localhost:8080`).
 
 ## Cấu trúc
 

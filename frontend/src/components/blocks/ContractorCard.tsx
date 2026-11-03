@@ -224,7 +224,7 @@ export function ContractorCardView({
           >
             {quoteOpen ? 'Thu gọn báo giá' : 'Yêu cầu báo giá'}
           </button>
-          <ContactStaffButton />
+          <ContactStaffButton source="contractor_card" contractor={{ id: c.id, name: c.name }} />
         </div>
       </div>
     </article>

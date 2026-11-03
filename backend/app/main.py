@@ -17,6 +17,7 @@ ROUTER_MODULES = [
     "app.api.estimates",
     "app.api.contractors",
     "app.api.quotes",
+    "app.api.contact",
     "app.api.admin",
 ]
 

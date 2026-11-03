@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.ai.orchestrator import SessionNotFoundError
 from app.ai.providers.base import LLMProvider
-from app.api.deps import VietnameseRoute
+from app.api.deps import VietnameseRoute, client_ip
 from app.db.session import get_db
 from app.services import chat_service
 from app.services.chat_service import RateLimiter, SessionCreatedOut, SessionStateOut
@@ -50,8 +50,7 @@ def get_chat_provider() -> LLMProvider:
 
 
 def _client_ip(request: Request) -> str:
-    # X-Forwarded-For chỉ được tin khi uvicorn chạy với --proxy-headers/--forwarded-allow-ips (đặt request.client).
-    return request.client.host if request.client else "unknown"
+    return client_ip(request)
 
 
 @router.post("/sessions", response_model=SessionCreatedOut)
