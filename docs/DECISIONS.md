@@ -1086,3 +1086,17 @@ Test hồi quy chính: `tests/test_chat_fixes.py` (luồng thật qua orchestrat
   tóm tắt công trình từ phiên chat (lấy theo thông tin hiện tại của phiên), ghi chú, nguồn; đổi trạng thái Mới / Đã liên
   hệ / Xong + ghi chú xử lý. SĐT chỉ trả qua API admin (có mã quản trị), không qua endpoint công khai.
 - Form điền sẵn họ tên + SĐT lần gửi thành công trước (localStorage `dezon_contact_info`).
+
+## Thông báo nhóm Lark khi có yêu cầu báo giá / liên hệ nhân viên
+
+- `app/services/notify_service.py`: sau khi lưu DB, gửi thẻ (interactive card) tới bot webhook Lark ở luồng nền —
+  Lark chậm/lỗi không ảnh hưởng yêu cầu của khách (chỉ ghi log). Cấu hình ở `.env` (không commit): `LARK_WEBHOOK_URL`
+  (rỗng -> tắt), `LARK_WEBHOOK_SECRET` (khi bật "Set signature verification"; ký HMAC-SHA256 theo chuẩn Lark),
+  `ADMIN_PUBLIC_URL` (nút "Mở trang quản trị" trên thẻ).
+- Liên hệ nhân viên: mã LH-…, họ tên, SĐT, nhà thầu, nguồn (nút dưới ô chat / thẻ / hồ sơ), công trình (tóm tắt phiên
+  chat), ghi chú, thời gian (giờ VN), trang. Gửi lại trùng không có gì mới -> không báo; có thông tin mới -> thẻ
+  "Cập nhật yêu cầu".
+- Yêu cầu báo giá (form hoặc qua chat với AI): mã DZ-…, họ tên, SĐT, email, các nhà thầu nhận yêu cầu, công trình, khái
+  toán đính kèm (khoảng chi phí + diện tích sàn quy đổi), ghi chú gửi nhà thầu (gồm phong cách / mức đầu tư), kênh gửi.
+- Nội dung khách nhập luôn là `plain_text` (không lark_md) để không chèn được link / `<at id=all>`. Test đặt
+  `LARK_WEBHOOK_URL=""` trong conftest nên không bao giờ gửi tin thật.

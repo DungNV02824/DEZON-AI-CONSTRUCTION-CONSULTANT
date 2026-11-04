@@ -20,7 +20,8 @@ function demoPagePlugin(apiBase: string): Plugin {
   // index.html: trang demo widget nổi; planning.html: trang demo giao diện mở rộng (data-mode="page").
   const pages: Array<{ file: string; extra: string }> = [
     { file: 'index.html', extra: '' },
-    { file: 'planning.html', extra: ' data-mode="page" data-login-url="https://dezon.vn/wp-login.php"' },
+    // Không truyền data-login-url: chủ sản phẩm bỏ nút "Đăng nhập / Đăng ký" ở thanh bên.
+    { file: 'planning.html', extra: ' data-mode="page"' },
   ];
   return {
     name: 'dezon-demo-page',

@@ -11,7 +11,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai.state import split_raw
+from app.config import get_settings
 from app.db.models import AnalyticsEvent, ChatSession, Contractor, EstimateSession, QuoteRequest
+from app.formatting import format_m2, format_vnd_range
 from app.schemas.slots import Slots, project_preferences
 
 _PHONE_RE = re.compile(r"^0\d{9,10}$")
@@ -123,5 +125,29 @@ def create_quote_requests(db: Session, data: QuoteRequestIn, chat_session_id: UU
                                  "estimate_session_id": str(data.estimate_session_id)
                                  if data.estimate_session_id else None}))
     db.commit()
-    return QuoteRequestResult(ids=ids, code=code, contractor_names=[by_id[i].name for i in data.contractor_ids],
+    names = [by_id[i].name for i in data.contractor_ids]
+    _notify(db, data, code=code, names=names, note=note, slots=slots,
+            via_chat=chat_session_id is not None)
+    return QuoteRequestResult(ids=ids, code=code, contractor_names=names,
                               estimate_session_id=data.estimate_session_id)
+
+
+def _notify(db: Session, data: QuoteRequestIn, *, code: str, names: list[str], note: str | None,
+            slots: Slots | None, via_chat: bool) -> None:
+    """Báo nhóm Lark (nếu cấu hình LARK_WEBHOOK_URL): đủ thông tin khách điền + nhà thầu + công trình + khái toán."""
+    if not get_settings().lark_webhook_url.strip():
+        return
+    from app.services import notify_service  # noqa: PLC0415 — tránh vòng import (contact_service dùng quote_service)
+    from app.services.contact_service import slots_summary  # noqa: PLC0415
+
+    estimate = None
+    est = db.get(EstimateSession, data.estimate_session_id) if data.estimate_session_id else None
+    if est is not None and est.cost_min is not None and est.cost_max is not None:
+        estimate = (f"{format_vnd_range(float(est.cost_min), float(est.cost_max))} "
+                    f"(diện tích sàn quy đổi {format_m2(float(est.converted_area_m2))})")
+    elif est is not None:
+        estimate = f"Chưa có chi phí (diện tích sàn quy đổi {format_m2(float(est.converted_area_m2))})"
+    notify_service.send_card(notify_service.quote_card(
+        code=code, name=data.customer_name.strip(), phone=data.customer_phone, email=data.customer_email,
+        note=note, contractors=names, project=slots_summary(slots) if slots is not None else None,
+        estimate=estimate, channel="Chat với trợ lý AI" if via_chat else "Form yêu cầu báo giá"))

@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     admin_token: str = "change-me"
     chat_rate_limit_per_min: int = 20
     contact_rate_limit_per_min: int = 5  # POST /api/contact-requests theo IP
+    # Bot webhook Lark: thông báo nhóm khi khách gửi yêu cầu báo giá / liên hệ (rỗng -> tắt). KHÔNG commit giá trị.
+    lark_webhook_url: str = ""
+    lark_webhook_secret: str = ""  # chỉ khi bật "Set signature verification" cho bot
+    admin_public_url: str = ""  # tùy chọn: nút "Mở trang quản trị" trên thẻ thông báo
     max_tool_rounds: int = 6
 
     s3_endpoint: str = ""

@@ -18,9 +18,12 @@ from sqlalchemy.orm import Session
 
 from app.ai.dialog import describe_budget, describe_location
 from app.ai.state import split_raw
+from app.config import get_settings
 from app.db.models import AnalyticsEvent, ChatSession, ContactRequest, Contractor
 from app.formatting import format_m2
 from app.schemas.common import BUILDING_TYPE_VI, WORK_SCOPE_VI
+from app.schemas.slots import Slots
+from app.services import notify_service
 from app.services.quote_service import normalize_phone
 
 CONTACT_SOURCES = ("composer", "contractor_card", "contractor_detail")
@@ -163,6 +166,7 @@ def create_contact_request(db: Session, data: ContactRequestIn) -> ContactReques
         if changed:
             existing.updated_at = func.now()
             db.commit()
+            _notify(db, existing, updated=True)
         return ContactRequestCreated(id=existing.id, code=existing.code)
 
     code = _new_code(db)
@@ -173,7 +177,21 @@ def create_contact_request(db: Session, data: ContactRequestIn) -> ContactReques
     db.add(AnalyticsEvent(session_id=sid, event="contact_requested",
                           props={"code": code, "source": data.source, "has_contractor": cid is not None}))
     db.commit()
+    _notify(db, req)
     return ContactRequestCreated(id=req.id, code=code)
+
+
+def _notify(db: Session, req: ContactRequest, updated: bool = False) -> None:
+    """Báo nhóm Lark (nếu cấu hình LARK_WEBHOOK_URL) — đủ thông tin khách điền + nhà thầu + công trình."""
+    if not get_settings().lark_webhook_url.strip():
+        return
+    contractor = db.get(Contractor, req.contractor_id) if req.contractor_id else None
+    chat = db.get(ChatSession, req.chat_session_id) if req.chat_session_id else None
+    notify_service.send_card(notify_service.contact_card(
+        code=req.code, name=req.customer_name, phone=req.customer_phone, note=req.note,
+        contractor=contractor.name if contractor is not None else None,
+        project=project_summary(chat.slots) if chat is not None else None,
+        source=req.source, page_url=req.page_url, created_at=req.created_at, updated=updated))
 
 
 # ------------------------------------------------------------------ admin
@@ -184,6 +202,11 @@ def project_summary(raw_slots: dict | None) -> str | None:
         slots = split_raw(raw_slots)[0]
     except ValueError:
         return None
+    return slots_summary(slots)
+
+
+def slots_summary(slots: Slots) -> str | None:
+    """Như project_summary nhưng nhận Slots đã đọc sẵn (dùng cả cho thông báo yêu cầu báo giá)."""
     parts: list[str] = []
     if slots.building_type:
         parts.append(BUILDING_TYPE_VI.get(str(slots.building_type), str(slots.building_type)))

@@ -22,6 +22,9 @@ os.environ["SEED_SNAPSHOT"] = "0"
 # Đơn giá fixture (seed.seed_rates, nhãn "Đơn giá tham khảo (seed dev …") chỉ được select_rate dùng khi bật cờ này;
 # môi trường thật không bao giờ dùng bảng giá tự đặt.
 os.environ["ALLOW_SEED_DEV_RATES"] = "1"
+# Không bao giờ gửi thông báo thật vào nhóm Lark khi chạy test (kể cả khi .env của máy dev có LARK_WEBHOOK_URL).
+os.environ["LARK_WEBHOOK_URL"] = ""
+os.environ["LARK_WEBHOOK_SECRET"] = ""
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
