@@ -35,6 +35,7 @@ Phân vai cốt lõi:
 | **MVP** | Chatbot hỏi nhu cầu, khái toán, tìm nhà thầu, bảng so sánh, ảnh + link hồ sơ gốc | **Làm trước** |
 | V2 | Hiển thị đầy đủ ảnh dự án, nguồn dữ liệu chi tiết, phân tích báo giá nhà thầu, tải PDF | Tiếp theo |
 | V3 | Upload bản vẽ, đọc BOQ, bóc tách khối lượng, phân tích tài chính, tối ưu vật liệu | Phát triển sau |
+| **Mở rộng toàn quốc (Vua Thầu)** | Giai đoạn 5–9 (mục 16): tăng tốc phản hồi, phủ dữ liệu 34 tỉnh/thành, phân phối lead tới nhà thầu, đa kênh, tối ưu bằng dữ liệu | Sau MVP, chạy song song V2 |
 
 **MVP gồm đúng 5 chức năng:**
 1. Thu thập thông tin công trình (hội thoại từng bước).
@@ -946,6 +947,8 @@ S3_ENDPOINT=... S3_BUCKET=... S3_KEY=... S3_SECRET=...
 - Backend ưu tiên Go hay Python?
 - Nhà cung cấp LLM và model được chọn.
 - Quy trình chuyển yêu cầu báo giá tới nhà thầu (email, Zalo, dashboard nhà thầu?).
+- (Mở rộng toàn quốc, mục 16) Thứ tự tỉnh/thành ưu tiên mở rộng; có Zalo OA / tài khoản ZNS chưa; đội sales chia vùng
+  thế nào (để phân lead và nhóm Lark theo vùng); ngân sách chi phí LLM/tháng; mục tiêu p95 thời gian phản hồi.
 
 ---
 
@@ -963,3 +966,219 @@ S3_ENDPOINT=... S3_BUCKET=... S3_KEY=... S3_SECRET=...
 - Bóc tách khối lượng sơ bộ.
 - Phân tích tài chính: dòng tiền theo tiến độ thi công.
 - Gợi ý tối ưu vật liệu theo ngân sách.
+
+---
+
+## 16. Lộ trình mở rộng toàn quốc — Vua Thầu (Giai đoạn 5–9)
+
+> **Dành cho team Dev.** Giai đoạn 1–4 (mục 5–8) là các bước của *luồng tư vấn*; Giai đoạn 5–9 dưới đây là các đợt
+> *triển khai* để đưa luồng đó lên quy mô toàn quốc. Mỗi module có mã `M-xx` để tạo ticket. Làm theo thứ tự giai đoạn;
+> trong cùng giai đoạn, các module không phụ thuộc nhau chạy song song. Mọi module vẫn phải tuân thủ mục 2
+> (guardrails): mở rộng không được đổi lấy việc AI tự tạo số liệu.
+
+### 16.1 Hiện trạng và điểm nghẽn (đo trên bản chạy 11/2026)
+
+| Hạng mục | Hiện trạng | Điểm nghẽn khi lên toàn quốc |
+|---|---|---|
+| Tốc độ | Mỗi lượt đều gọi LLM (`gpt-4.1-mini`), kể cả khi khách chỉ bấm nút trên thẻ câu hỏi | ~4–5 s mỗi lần bấm; chi phí LLM tăng tuyến tính theo số phiên |
+| Dữ liệu nhà thầu | 336 nhà thầu trong DB, nhưng chỉ 38 có tỉnh/thành (33 TP.HCM, 5 Hà Nội) và 40 có đơn giá | Ngoài TP.HCM/Hà Nội gần như không lọc được theo khu vực |
+| Dự án | 88 công trình ở 11 tỉnh/thành | Thiếu "dự án tương tự" ở hầu hết khu vực |
+| Đơn giá | Đơn giá thị trường tổng hợp từ hồ sơ nhà thầu, cần ≥ 3 nhà thầu/tỉnh, thiếu thì dùng mức toàn quốc; chưa có giá riêng phần hoàn thiện / nội thất | Khái toán ở đa số tỉnh chỉ là "dữ liệu tham khảo" toàn quốc |
+| Địa giới hành chính | So khớp tên tỉnh/quận bằng chuỗi (`norm_place`), slot có `district` | Từ 01/07/2025 còn 34 tỉnh/thành, chính quyền 2 cấp (bỏ cấp huyện); dữ liệu và câu khách gõ lẫn tên cũ/mới |
+| Lead | Yêu cầu báo giá + liên hệ nhân viên lưu DB, báo một nhóm Lark | Chưa chuyển tới nhà thầu, chưa phân vùng, chưa đo thời gian phản hồi |
+| Quản trị | Một `ADMIN_TOKEN` dùng chung | Không phân quyền, không nhật ký thao tác; rủi ro vì có SĐT khách |
+| Hạ tầng | 1 backend + 1 worker (docker compose), ảnh lấy thẳng từ dezon.vn | Chưa đo p95/chi phí, chưa có CDN, chưa load test |
+| Thương hiệu | Màu/logo Vua Thầu sửa trực tiếp trong CSS | Mỗi site/đối tác mới phải sửa code |
+
+### 16.2 Danh sách module
+
+Ước lượng tính cho 1 dev: **S** ≤ 1 tuần, **M** 2–3 tuần, **L** ≥ 4 tuần (để lập kế hoạch, chốt lại khi grooming).
+
+| Mã | Module | Giai đoạn | Team | Ước lượng | Phụ thuộc |
+|---|---|---|---|---|---|
+| M-01 | Fast path không gọi LLM cho lượt bấm nút | 5 | BE | M | — |
+| M-02 | Song song hóa tool + cache theo hash slot | 5 | BE | S | — |
+| M-03 | Định tuyến model + kiểm soát chi phí LLM | 5 | BE | S | M-04 |
+| M-04 | Observability (log có cấu trúc, trace, cảnh báo) | 5 | DevOps | M | — |
+| M-05 | Scale ngang + CDN + load test | 5 | DevOps | M | M-04 |
+| M-06 | Chuẩn hóa địa giới 34 tỉnh/thành + ánh xạ tên cũ | 6 | BE/Data | M | — |
+| M-07 | Cổng nhà thầu (tự cập nhật hồ sơ, đơn giá, dự án) | 6 | FE/BE | L | M-06, M-13 |
+| M-08 | Chỉ số đơn giá theo vùng (regional price index) | 6 | Data/BE | M | M-06 |
+| M-09 | Đồng bộ dữ liệu tăng dần + kiểm tra chất lượng dữ liệu | 6 | Data | M | M-06 |
+| M-10 | Pipeline ảnh (S3 + CDN, webp) | 6 | BE/DevOps | S | M-05 |
+| M-11 | Phân phối lead tới nhà thầu (email / Zalo ZNS / cổng) | 7 | BE | M | M-07 |
+| M-12 | Hộp thư lead cho nhân viên (CRM nhẹ, chia vùng, SLA) | 7 | FE/BE | M | M-13 |
+| M-13 | Tài khoản quản trị + phân quyền + nhật ký | 7 (làm sớm) | BE/FE | M | — |
+| M-14 | Nhà thầu gửi báo giá trên cổng + so với khái toán | 7 | FE/BE | M | M-07, M-11 |
+| M-15 | Kênh Zalo OA / Zalo Mini App (adapter kênh) | 8 | BE/FE | L | M-01 |
+| M-16 | Trang SEO theo tỉnh × loại công trình | 8 | FE/BE | M | M-08 |
+| M-17 | Thương hiệu đa site (white-label theo cấu hình) | 8 | FE | S | — |
+| M-18 | Tài khoản khách (OTP SĐT), đồng bộ lịch sử, xuất PDF | 8 | FE/BE | M | M-13 |
+| M-19 | Vòng phản hồi độ chính xác khái toán | 9 | Data | M | M-14 |
+| M-20 | A/B test trọng số matching và luồng hỏi | 9 | BE/Data | S | M-04 |
+| M-21 | Đánh giá nhà thầu sau bàn giao | 9 | FE/BE | M | M-11 |
+| M-22 | Bộ đánh giá hội thoại tự động (eval) chạy mỗi PR | 9 | BE | M | — |
+
+### 16.3 Giai đoạn 5 — Tăng tốc phản hồi và ổn định hạ tầng
+
+Mục tiêu: lượt bấm nút gần như tức thì; biết rõ chi phí và độ trễ trước khi mở rộng lưu lượng.
+
+**M-01 · Fast path không gọi LLM** (`app/ai/orchestrator.py`, `app/ai/dialog.py`)
+- Lượt mà ý định đã rõ do khách bấm nút được xử lý hoàn toàn bằng code: chọn đáp án trên `question_step`, "Quay lại",
+  "Sửa", "Cung cấp thêm", "Tính ngay", chọn khoảng ngân sách. Luồng: slot filling quy tắc → tool → văn bản template
+  (đã có sẵn ở `fallback.py`, `STEP_ACK`…). LLM chỉ được gọi khi khách gõ tự do hoặc hỏi câu mở.
+- Văn bản template vẫn đi qua validator (mục 2.1) như câu trả lời LLM.
+- Nghiệm thu: p95 lượt bấm nút trên thẻ câu hỏi < 800 ms; số lần gọi LLM/phiên giảm ≥ 50%; toàn bộ tiêu chí mục 13
+  vẫn đạt.
+
+**M-02 · Song song hóa tool + cache** (`app/ai/tools.py`, Redis)
+- `calculate_estimate` và `search_contractors` sau "Tính ngay" chạy song song. Kết quả cache theo hash slot + version dữ
+  liệu (đơn giá, trọng số), để "Sửa → Đúng rồi" không tính lại khi không đổi gì.
+- Nghiệm thu: p95 lượt "Tính ngay" < 3 s (lời dẫn của LLM stream sau, không tính vào).
+
+**M-03 · Định tuyến model + kiểm soát chi phí LLM**
+- Trích slot: regex/quy tắc trước, chỉ gọi LLM khi còn mơ hồ. Câu hỏi tự do dùng model chính; gợi ý `suggestions` dùng
+  model rẻ nhất. Ghi số token vào/ra theo phiên vào `analytics_events`.
+- Ngưỡng chi phí/ngày cấu hình được; vượt ngưỡng thì các lượt phụ chuyển sang template + cảnh báo Lark.
+- Nghiệm thu: trang quản trị hiển thị chi phí LLM theo ngày và chi phí trung bình/phiên.
+
+**M-04 · Observability**
+- Log JSON có `request_id`, `session_id`, thời gian từng tool, số lần gọi LLM; trace (OpenTelemetry) từ widget tới DB;
+  theo dõi lỗi (Sentry hoặc tương đương); `/healthz`, `/readyz`.
+- Cảnh báo khi tỉ lệ lỗi > 2% trong 5 phút hoặc p95 vượt mục tiêu.
+- Nghiệm thu: dashboard p50/p95 theo endpoint và theo loại lượt (bấm nút / gõ tự do).
+
+**M-05 · Scale ngang + CDN + load test**
+- Backend stateless chạy nhiều worker sau load balancer; PgBouncer; Redis cho rate limit, cache, hàng đợi;
+  `dezon-widget.js` qua CDN (giữ `no-cache` + ETag, hoặc đổi sang tên file có hash).
+- Load test (k6/Locust) theo kịch bản thật: 500 phiên đồng thời, 70% bấm nút / 30% gõ tự do.
+- Nghiệm thu: đạt mục tiêu p95 của M-01/M-02 ở 500 phiên đồng thời, không lỗi 5xx.
+
+### 16.4 Giai đoạn 6 — Phủ dữ liệu toàn quốc
+
+Mục tiêu: khách ở bất kỳ tỉnh/thành nào cũng nhận khái toán theo đơn giá khu vực và danh sách nhà thầu thật.
+
+**M-06 · Chuẩn hóa địa giới hành chính** (`app/engines/matching/criteria.py`, `province_neighbors`, migration mới)
+- Bảng `admin_units` (34 tỉnh/thành + xã/phường theo chính quyền 2 cấp) và bảng ánh xạ tên cũ → mới (tỉnh cũ, quận/huyện
+  cũ → tỉnh mới, xã/phường mới). `norm_place` tra bảng thay vì chỉ so chuỗi.
+- Chuyển dữ liệu `contractors.province`, `projects.province/district`, `contractor_capabilities`. Slot `district` giữ để
+  tương thích nhưng ánh xạ sang đơn vị mới. Cập nhật `province_neighbors` theo 34 đơn vị.
+- Suy tỉnh cho 298 nhà thầu chưa có tỉnh từ địa chỉ, dự án, khu vực hoạt động. Không suy được thì để trống, **không
+  đoán** (mục 2).
+- Nghiệm thu: khách gõ tên tỉnh/quận cũ vẫn khớp; báo cáo % nhà thầu có tỉnh (mục tiêu đề xuất ≥ 80%).
+
+**M-07 · Cổng nhà thầu**
+- Nhà thầu đăng nhập (M-13), tự cập nhật năng lực, khu vực hoạt động, dự án + ảnh, và đơn giá theo khu vực × phạm vi:
+  xây thô, trọn gói, **hoàn thiện, nội thất** (lấp chỗ trống hiện tại).
+- Dữ liệu vào trạng thái `on_dezon`; Dezon duyệt → `verified` (mục 4.4). Hiển thị % đầy đủ hồ sơ để nhà thầu tự bổ sung.
+- Nghiệm thu: nhà thầu cập nhật đơn giá trong ≤ 5 phút; sau khi duyệt, thay đổi vào matching kèm nguồn.
+
+**M-08 · Chỉ số đơn giá theo vùng** (`app/services/market_rates.py`)
+- Nguồn theo thứ tự ưu tiên mục 2.10: bảng giá chính thức Dezon → đơn giá nhà thầu đã xác minh → hồ sơ công khai →
+  báo giá thực nhận được (M-14).
+- Thiếu mẫu ở tỉnh thì lùi theo bậc **tỉnh → vùng (Bắc / Trung / Nam) → toàn quốc**, ghi rõ bậc đã dùng trong nguồn, trạng
+  thái `reference`. Có version và ngày hiệu lực.
+- Nghiệm thu: mỗi tỉnh/thành có đơn giá xây thô và trọn gói kèm nguồn + bậc dữ liệu; phạm vi hoàn thiện có dữ liệu ở các
+  tỉnh ưu tiên (Dezon chốt danh sách).
+
+**M-09 · Đồng bộ tăng dần + chất lượng dữ liệu** (`app/ingestion/*`, `app/jobs.py`)
+- Ưu tiên API/DB nội bộ (mục 11), đồng bộ tăng dần theo `updated_at` thay vì crawl toàn bộ.
+- Job kiểm tra hằng ngày: đơn giá ngoài khoảng hợp lý, thiếu trường bắt buộc, dữ liệu quá `STALE_DAYS`, ảnh hỏng → báo
+  cáo trên trang quản trị + cảnh báo Lark.
+- Nghiệm thu: báo cáo "Độ phủ dữ liệu" (mục 12) tách theo tỉnh/thành.
+
+**M-10 · Pipeline ảnh**
+- Tải ảnh dự án về S3 (mục 3.1), tạo bản webp nhiều kích thước, phục vụ qua CDN; không hotlink dezon.vn.
+- Nghiệm thu: ảnh trên thẻ nhà thầu ≤ 200 KB trên mobile; ảnh hỏng không còn để lại ô trống.
+
+### 16.5 Giai đoạn 7 — Vận hành lead và kết nối nhà thầu
+
+Mục tiêu: mỗi yêu cầu của khách tới đúng người trong thời gian cam kết và đo được kết quả.
+
+**M-11 · Phân phối lead tới nhà thầu** (`quote_requests.status`: new → sent → viewed → quoted → won/lost)
+- Gửi yêu cầu báo giá (kèm khái toán, công trình, ghi chú) tới nhà thầu qua kênh nhà thầu chọn: email, Zalo ZNS hoặc cổng
+  nhà thầu (M-07). Theo dõi "đã xem"; nhắc tự động khi quá hạn; báo khách khi nhà thầu phản hồi.
+- Nghiệm thu: 100% yêu cầu chuyển sang `sent` trong 5 phút; có báo cáo thời gian nhà thầu phản hồi.
+
+**M-12 · Hộp thư lead cho nhân viên**
+- Gộp "Yêu cầu liên hệ" (đã có) và "Yêu cầu báo giá" vào một hộp thư. Tự phân công theo vùng (M-06); thông báo Lark theo
+  nhóm vùng (một webhook mỗi vùng); SLA gọi lại; ghi chú cuộc gọi; xuất CSV.
+- Nghiệm thu: thời gian phản hồi lead trung vị hiển thị theo vùng và theo nhân viên.
+
+**M-13 · Tài khoản quản trị + phân quyền + nhật ký** (làm sớm, ngay Giai đoạn 5–6)
+- Thay `ADMIN_TOKEN` dùng chung bằng đăng nhập (SSO hoặc email + OTP). Vai trò: quản trị, sales theo vùng, data, nhà thầu
+  (M-07). SĐT khách chỉ hiện với vai trò cần gọi; ghi nhật ký mọi lần xem/sửa dữ liệu khách.
+- Nghiệm thu: không còn endpoint quản trị dùng token chung; có nhật ký truy cập SĐT.
+
+**M-14 · Nhà thầu gửi báo giá + so với khái toán**
+- Nhà thầu tải báo giá (tổng, đơn giá/m², hạng mục) lên `contractor_quotes`; hệ thống so với khái toán của khách
+  (V2 "Phân tích báo giá") và chỉ ra chênh lệch theo hạng mục.
+- Báo giá thực là nguồn dữ liệu cho M-08 và M-19.
+
+### 16.6 Giai đoạn 8 — Tăng trưởng đa kênh
+
+Mục tiêu: khách tiếp cận Vua Thầu ở nơi họ đang dùng, không chỉ trên website.
+
+**M-15 · Kênh Zalo OA / Zalo Mini App**
+- Tách "adapter kênh": orchestrator giữ nguyên, mỗi kênh chuyển `ui_blocks` sang định dạng của kênh. Với Zalo: tin văn bản
+  + nút, ảnh, link mở Mini App cho bảng khái toán / so sánh.
+- Nghiệm thu: luồng 5 câu hỏi → khái toán → nhà thầu → yêu cầu báo giá chạy trọn trên Zalo, cùng guardrail.
+
+**M-16 · Trang SEO theo tỉnh × loại công trình**
+- Sinh trang tĩnh "Chi phí xây nhà phố tại {tỉnh}", "Nhà thầu biệt thự tại {tỉnh}"… từ engine + chỉ số đơn giá (M-08) +
+  nhà thầu thật. Mọi số có nguồn + ngày cập nhật. Nút mở chat với slot điền sẵn (deep link
+  `?building_type=nha_pho&province=...`). Không sinh trang cho tỉnh chưa đủ dữ liệu.
+- Nghiệm thu: có sitemap, dữ liệu cấu trúc (schema.org), Lighthouse ≥ 90 trên mobile.
+
+**M-17 · Thương hiệu đa site (white-label)**
+- Cấu hình thương hiệu (tên, logo, màu chủ đạo/nhấn, tên trợ lý, link) qua `data-brand` hoặc API cấu hình, ánh xạ vào CSS
+  variables; bỏ màu/logo cứng trong CSS. Dezon và Vua Thầu là 2 cấu hình.
+- Nghiệm thu: thêm một thương hiệu mới mà không sửa code.
+
+**M-18 · Tài khoản khách**
+- Đăng nhập bằng OTP SĐT; lịch sử chat và dự án đồng bộ giữa các thiết bị (hiện chỉ lưu localStorage); xuất PDF khái toán
+  + so sánh (V2); form báo giá/liên hệ tự điền từ tài khoản.
+
+### 16.7 Giai đoạn 9 — Tối ưu bằng dữ liệu (liên tục)
+
+**M-19 · Vòng phản hồi độ chính xác khái toán**
+- Đối chiếu báo giá thực (M-14) với khoảng khái toán theo tỉnh × loại × phạm vi (chỉ số mục 12). Đề xuất hiệu chỉnh hệ
+  số/đơn giá để Dezon duyệt; **không tự áp dụng**.
+
+**M-20 · A/B test**
+- Thử trọng số matching (`matching_weights` theo version) và các biến thể luồng hỏi. Chỉ số: tỉ lệ hoàn thành khái toán,
+  tỉ lệ yêu cầu báo giá, thứ hạng nhà thầu được chọn.
+
+**M-21 · Đánh giá nhà thầu sau bàn giao**
+- Khách chấm điểm sau công trình (qua M-11/M-18). Đủ mẫu mới thêm tiêu chí "chất lượng thi công" vào matching; trước đó
+  guardrail 8 (không nói "tốt nhất") giữ nguyên.
+
+**M-22 · Bộ đánh giá hội thoại tự động**
+- Bộ ≥ 200 kịch bản tiếng Việt (gõ tắt, không dấu, tên tỉnh cũ, câu hỏi đối kháng mục 13) chạy mỗi PR và hằng đêm với LLM
+  thật. Đo: hỏi lại thông tin đã có, vi phạm guardrail, số lần gọi LLM, thời gian phản hồi.
+- Nghiệm thu: PR làm xấu chỉ số quá ngưỡng thì bị chặn merge.
+
+### 16.8 Thứ tự triển khai và chỉ số mục tiêu
+
+```
+Giai đoạn 5 (tốc độ, hạ tầng) ──► Giai đoạn 6 (dữ liệu toàn quốc) ──► Giai đoạn 7 (lead, nhà thầu)
+        │                                  │                                   │
+        └──► M-13 (tài khoản, phân quyền) ─┴──► M-07 (cổng nhà thầu) ──────────┘
+Giai đoạn 8 (đa kênh): bắt đầu khi có M-01 + M-08.   Giai đoạn 9: chạy liên tục từ khi có M-04 + M-14.
+```
+
+- M-13 làm sớm vì là điều kiện cho cổng nhà thầu và cho việc lưu SĐT khách an toàn.
+- Mỗi giai đoạn kết thúc bằng kiểm tra nghiệm thu như mục 13 + load test M-05.
+
+Chỉ số mục tiêu (đề xuất, Dezon chốt trước Giai đoạn 5):
+
+| Chỉ số | Hiện tại | Mục tiêu |
+|---|---|---|
+| p95 thời gian phản hồi lượt bấm nút | ~4–5 s | < 0,8 s |
+| p95 lượt "Tính ngay" (khái toán + nhà thầu) | ≥ 5 s (ước tính, chưa đo p95) | < 3 s |
+| % nhà thầu có tỉnh/thành | 11% (38/336) | ≥ 80% |
+| % nhà thầu có đơn giá | 12% (40/336) | ≥ 60% |
+| Tỉnh/thành có đơn giá khu vực (không dùng mức toàn quốc) | 2/34 | ≥ 20/34 |
+| Thời gian từ khi khách gửi yêu cầu tới khi nhà thầu nhận | chưa đo | < 5 phút |
+| Thời gian phản hồi lead của nhân viên (trung vị) | chưa đo | < 30 phút trong giờ hành chính |
+| Chi phí LLM trung bình/phiên | chưa đo | đo ở Giai đoạn 5, đặt trần ở M-03 |
