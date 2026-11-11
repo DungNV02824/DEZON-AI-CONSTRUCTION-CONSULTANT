@@ -8,6 +8,7 @@ import { ContactStaffButton } from '../common/ContactStaffButton';
 import { EvidenceCell } from '../common/EvidenceCell';
 import { ExternalLink } from '../common/ExternalLink';
 import { GalleryTiles } from '../common/Lightbox';
+import { galleryImageCount, groupsFromImages, ShowAllPhotosButton, type GalleryGroup } from '../common/ProjectGallery';
 import { SafeImage } from '../common/SafeImage';
 import { QuoteRequestForm } from './QuoteRequestForm';
 
@@ -62,6 +63,25 @@ function profileImages(images: ImageRef[], projects: ProjectSummary[]): ImageRef
   return images.map((img) => withProject(img, img.project_slug ? bySlug.get(img.project_slug) : undefined));
 }
 
+/** Số ảnh thực có của công trình (payload cũ chưa có total_images -> số ảnh đã gửi). */
+function projectTotal(p: ProjectSummary): number {
+  return Math.max(p.total_images ?? 0, p.images?.length ?? 0);
+}
+
+/** Nhóm "Xem tất cả ảnh": mỗi công trình có ảnh là một mục (tên, link, dòng meta, đủ ảnh). */
+function projectGroups(projects: ProjectSummary[]): GalleryGroup[] {
+  return projects
+    .filter((pr) => (pr.images ?? []).length > 0)
+    .map((pr) => ({
+      key: pr.slug || String(pr.id),
+      name: pr.name,
+      url: pr.project_url,
+      meta: projectMeta(pr).join(' · ') || null,
+      images: projectImages(pr),
+      total: projectTotal(pr),
+    }));
+}
+
 /**
  * Hồ sơ mở rộng (mục 8.3). "Yêu cầu báo giá" mở form ngay dưới hồ sơ (không thêm tin nhắn ở cuối hội thoại).
  * `onQuote`: hồ sơ đang mở dưới thẻ trong danh sách -> danh sách tự mở form dưới thẻ đó.
@@ -76,6 +96,10 @@ export function ContractorDetail({ block, onQuote }: { block: ContractorDetailBl
   const images = profileImages(p.images ?? [], p.projects ?? []);
   // Ảnh trên Dezon nhiều hơn số ảnh backend gửi -> thêm link xem toàn bộ trên hồ sơ gốc.
   const total = Math.max(p.total_images ?? 0, images.length);
+  // "Xem tất cả ảnh": nhóm theo công trình của hồ sơ; payload cũ không có ảnh trong projects -> nhóm theo project_slug.
+  const projGroups = projectGroups(p.projects ?? []);
+  const groups = projGroups.length ? projGroups : groupsFromImages(images);
+  const groupCount = galleryImageCount(groups);
   const infoKeys = [...INFO_ORDER, ...Object.keys(p.info).filter((k) => !(INFO_ORDER as string[]).includes(k))];
   const chips = p.chips && p.chips.length ? p.chips : DEFAULT_CHIPS;
   const estimateId = block.estimate_session_id ?? estimateSessionId;
@@ -108,11 +132,23 @@ export function ContractorDetail({ block, onQuote }: { block: ContractorDetailBl
             className="dz-gallery"
             tileClassName="dz-gallery__item"
             fallbackAlt={(i) => `Ảnh dự án ${i + 1} của ${c.name}`}
+            order="by_project"
           />
-          {total > images.length && (
-            <ExternalLink href={c.profile_url} className="dz-extlink dz-small">
-              Xem toàn bộ {total} ảnh trên Dezon ↗
-            </ExternalLink>
+          {(groupCount > 3 || total > images.length) && (
+            <div className="dz-gallery__links">
+              {groupCount > 3 && (
+                <ShowAllPhotosButton
+                  request={{ groups, contractorName: c.name, fallbackUrl: c.profile_url }}
+                  className="dz-linkbtn"
+                  label={`Xem tất cả ${groupCount} ảnh theo công trình`}
+                />
+              )}
+              {total > images.length && (
+                <ExternalLink href={c.profile_url} className="dz-extlink dz-small">
+                  Xem toàn bộ {total} ảnh trên Dezon ↗
+                </ExternalLink>
+              )}
+            </div>
           )}
         </>
       ) : (
@@ -157,6 +193,11 @@ export function ContractorDetail({ block, onQuote }: { block: ContractorDetailBl
                 className="dz-pgallery"
                 fallbackAlt={(i) => `Ảnh ${i + 1} công trình ${pr.name}`}
               />
+              {projectTotal(pr) > (pr.images ?? []).length && (
+                <ExternalLink href={pr.project_url} className="dz-extlink dz-small">
+                  Xem thêm {projectTotal(pr) - (pr.images ?? []).length} ảnh trên trang công trình ↗
+                </ExternalLink>
+              )}
             </li>
           ))}
         </ul>

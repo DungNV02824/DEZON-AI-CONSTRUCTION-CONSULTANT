@@ -519,7 +519,10 @@ def parse_contractor_work(html: str, url: str) -> dict[str, Any]:
         if src:
             img = a.select_one("img")
             alt = img.get("alt") if img is not None else None
-            rec["images"].append({"url": src, "caption": clean_text(alt) or name, "sort_order": i})
+            # data-thumb: ảnh thu nhỏ dezon.vn tạo sẵn (cho ô ảnh gallery); thiếu -> upsert suy từ ảnh gốc.
+            thumb = _abs(a.get("data-thumb"))
+            rec["images"].append({"url": src, "caption": clean_text(alt) or name, "sort_order": i,
+                                  "thumb_url": thumb if thumb and thumb != src else None})
     rec["source_updated_at"] = page_modified_at(soup)
     return rec
 

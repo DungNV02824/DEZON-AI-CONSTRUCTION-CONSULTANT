@@ -295,6 +295,9 @@ def test_7c_free_question_overview_with_links(db):
     assert any(c.source and str(c.source.url or "").startswith("https://dezon.vn/") for c in projects_row.cells)
     assert "https://" not in r.text
     assert validator.check(r.text, r.tool_results, _user_texts(db, sid)).ok
+    # V2 — Nguồn dữ liệu: số tổng hợp của tổng quan (không có ô trên bảng) nằm ở source_badges.items.
+    items = {i.label: i for i in _block(r, "source_badges").items}
+    assert "Số nhà thầu phù hợp" in items and "Công trình ghi nhận trên Dezon (tổng các nhà thầu)" in items
 
 
 # ---------------------------------------------------------------------------------------------

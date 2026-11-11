@@ -22,8 +22,11 @@ from app.api.deps import MAX_BIGINT, VietnameseRoute, require_admin
 from app.db.session import get_db
 from app.evidence import SourceType, VerificationStatus
 from app.schemas.common import BuildingType, QualityTier, WorkScope
+from app.schemas.quote_analysis import QuoteAnalysisResult
 from app.services import admin_service as svc
+from app.services import chat_service as chat_svc
 from app.services import contact_service as contact_svc
+from app.services import quote_analysis_service as quote_svc
 from app.services.metrics_service import MetricsReport, compute_metrics
 
 STATIC_DIR = FsPath(__file__).resolve().parent.parent / "static"
@@ -202,6 +205,60 @@ def update_contact_request(request_id: UUID, body: contact_svc.ContactRequestUpd
     if out is None:
         raise HTTPException(status_code=404, detail="Không tìm thấy yêu cầu liên hệ.")
     return out
+
+
+# ------------------------------------------------------------------ yêu cầu báo giá & báo giá nhà thầu (V2 — quotes)
+@api.get("/quote-requests", response_model=quote_svc.QuoteRequestList)
+def list_quote_requests(status: quote_svc.QuoteRequestStatus | None = None,
+                        code: str | None = Query(None, max_length=20),
+                        limit: int = Query(50, ge=1, le=500), offset: int = Query(0, ge=0),
+                        db: Session = Depends(get_db)) -> quote_svc.QuoteRequestList:
+    return quote_svc.list_quote_requests(db, status, code, limit, offset)
+
+
+@api.get("/quote-requests/{quote_request_id}", response_model=quote_svc.QuoteRequestDetail)
+def get_quote_request(quote_request_id: UUID, db: Session = Depends(get_db)) -> quote_svc.QuoteRequestDetail:
+    return _call(quote_svc.get_quote_request, db, quote_request_id)
+
+
+@api.post("/quote-requests/{quote_request_id}/quotes", response_model=quote_svc.ContractorQuoteOut, status_code=201)
+def create_contractor_quote(quote_request_id: UUID, body: quote_svc.ContractorQuoteIn,
+                            db: Session = Depends(get_db)) -> quote_svc.ContractorQuoteOut:
+    return _call(quote_svc.create_contractor_quote, db, quote_request_id, body)
+
+
+@api.post("/quote-requests/{quote_request_id}/analysis-preview", response_model=QuoteAnalysisResult)
+def preview_quote_analysis(quote_request_id: UUID, body: quote_svc.ContractorQuoteIn,
+                           db: Session = Depends(get_db)) -> QuoteAnalysisResult:
+    """Phân tích từ dữ liệu form "Nhập báo giá" mà không lưu."""
+    return _call(quote_svc.preview_analysis, db, quote_request_id, body)
+
+
+@api.put("/contractor-quotes/{quote_id}", response_model=quote_svc.ContractorQuoteOut)
+def update_contractor_quote(quote_id: IdPath, body: quote_svc.ContractorQuoteIn,
+                            db: Session = Depends(get_db)) -> quote_svc.ContractorQuoteOut:
+    return _call(quote_svc.update_contractor_quote, db, quote_id, body)
+
+
+@api.delete("/contractor-quotes/{quote_id}", response_model=OkOut)
+def delete_contractor_quote(quote_id: IdPath, db: Session = Depends(get_db)) -> OkOut:
+    _call(quote_svc.delete_contractor_quote, db, quote_id)
+    return OkOut()
+
+
+@api.get("/contractor-quotes/{quote_id}/analysis", response_model=QuoteAnalysisResult)
+def contractor_quote_analysis(quote_id: IdPath, db: Session = Depends(get_db)) -> QuoteAnalysisResult:
+    return _call(quote_svc.analyze_contractor_quote, db, quote_id)
+
+
+# ------------------------------------------------------------------ hội thoại của khách (nút "Xem hội thoại")
+@api.get("/chat-sessions/{session_id}", response_model=chat_svc.SessionStateOut)
+def get_chat_session(session_id: UUID, db: Session = Depends(get_db)) -> chat_svc.SessionStateOut:
+    """Toàn bộ tin khách/trợ lý của một phiên (bỏ tin tool nội bộ) — cùng dạng GET /api/chat/sessions/{id}."""
+    view = chat_svc.get_session_view(db, session_id)
+    if view is None:
+        raise HTTPException(status_code=404, detail="Không tìm thấy phiên chat.")
+    return view
 
 
 # ------------------------------------------------------------------ đồng bộ & nhập file

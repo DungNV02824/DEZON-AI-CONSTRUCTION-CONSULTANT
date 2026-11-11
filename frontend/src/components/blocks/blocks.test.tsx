@@ -341,8 +341,10 @@ describe('ContractorDetail', () => {
     const { actions } = renderWithWidget(
       <BlockRenderer block={{ type: 'contractor_detail', data: PROFILES['kien-phong']!, estimate_session_id: 'est-9' }} active />,
     );
-    // 12 ảnh, hiển thị 3 ô; ô thứ 3 mang lớp "+9" (mở lightbox, không còn là link rời trang).
-    expect(screen.getByText('+9').closest('button')).toHaveAccessibleName('Xem ảnh 3/12 — France Indochine 22 Hà Nội');
+    // 12 ảnh, hiển thị 3 ô (ảnh đầu của 3 công trình khác nhau, V2 — gallery); ô thứ 3 mang lớp "+9" (mở lightbox,
+    // không còn là link rời trang).
+    expect(screen.getByText('+9').closest('button')).toHaveAccessibleName('Xem ảnh 9/12 — Indochine Villa Quận 7 Sài Gòn');
+    expect(screen.getByRole('button', { name: 'Xem tất cả 12 ảnh theo công trình' })).toBeInTheDocument();
     const proj = screen.getByRole('link', { name: 'Indochine Villa Quận 7 Sài Gòn ↗' });
     expect(proj).toHaveAttribute('href', 'https://dezon.vn/nha-thau/kien-phong/indochine-villa-quan-7-sai-gon/');
     expect(screen.getAllByText(/Đơn vị thi công: Kiến Phong/)).toHaveLength(3);

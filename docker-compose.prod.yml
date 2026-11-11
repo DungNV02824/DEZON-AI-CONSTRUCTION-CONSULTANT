@@ -1,0 +1,54 @@
+# Triển khai production tại https://pro.vuathau.com.vn trên máy chủ dùng chung 222.255.184.134.
+# Cổng 80/443 của máy do Caddy dự án qspro (container qspro-web-1, mạng qspro_default) giữ -> stack này KHÔNG mở
+# cổng nào ra ngoài; Caddy đó vào frontend/backend qua mạng qspro_default (khối site: deploy/Caddyfile.pro.vuathau).
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+name: vuathau-ai
+
+x-internal-urls: &internal-urls
+  # Tên riêng (alias) thay cho "db"/"redis": backend còn nối mạng qspro_default, nơi "db" là Postgres của qspro.
+  DATABASE_URL: postgresql+psycopg://dezon:dezon@vuathau-ai-db:5432/dezon
+  REDIS_URL: redis://vuathau-ai-redis:6379/0
+
+services:
+  db:
+    ports: !reset []
+    networks:
+      default:
+        aliases: [vuathau-ai-db]
+
+  redis:
+    ports: !reset []
+    networks:
+      default:
+        aliases: [vuathau-ai-redis]
+
+  backend:
+    ports: !reset []
+    environment:
+      <<: *internal-urls
+      ALLOWED_ORIGINS: https://pro.vuathau.com.vn
+      # Chỉ tin X-Forwarded-For từ Caddy trên mạng qspro_default (rate limit theo IP thật của khách).
+      FORWARDED_ALLOW_IPS: 172.30.0.0/24
+    networks:
+      default: {}
+      edge:
+        aliases: [vuathau-ai-backend]
+
+  worker:
+    environment:
+      <<: *internal-urls
+
+  frontend:
+    build:
+      args:
+        VITE_API_BASE_URL: https://pro.vuathau.com.vn
+    ports: !reset []
+    networks:
+      default: {}
+      edge:
+        aliases: [vuathau-ai-frontend]
+
+networks:
+  edge:
+    external: true
+    name: qspro_default

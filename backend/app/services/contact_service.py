@@ -110,6 +110,8 @@ class ContactRequestOut(BaseModel):
     created_at: datetime
     contractor: ContractorRef | None = None
     project: str | None = None  # tóm tắt công trình từ phiên chat, vd "Nhà phố · TP. Hồ Chí Minh · 4 tầng · Xây thô"
+    # Phiên chat của khách (None nếu gửi ngoài chat / phiên đã xóa) — trang admin dùng để mở "Xem hội thoại".
+    chat_session_id: UUID | None = None
 
 
 class ContactRequestList(BaseModel):
@@ -231,7 +233,8 @@ def _out(req: ContactRequest) -> ContactRequestOut:
         note=req.note, source=req.source, page_url=req.page_url, status=req.status, handled_note=req.handled_note,
         created_at=req.created_at,
         contractor=ContractorRef(id=contractor.id, name=contractor.name) if contractor is not None else None,
-        project=project_summary(req.chat_session.slots) if req.chat_session is not None else None)
+        project=project_summary(req.chat_session.slots) if req.chat_session is not None else None,
+        chat_session_id=req.chat_session_id)
 
 
 def list_contact_requests(db: Session, status: ContactStatus | None = None, limit: int = 50,

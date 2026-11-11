@@ -102,7 +102,13 @@ export function ContractorList({ block }: { block: ContractorListBlock }) {
         </p>
       );
     }
-    return <ComparisonTable block={{ type: 'comparison_table', data: cmp.matrix }} onOpenContractor={openDetailFromTable} />;
+    return (
+      <ComparisonTable
+        block={{ type: 'comparison_table', data: cmp.matrix }}
+        onOpenContractor={openDetailFromTable}
+        estimateId={estimateId}
+      />
+    );
   };
 
   /** "Xem chi tiết": mở/thu gọn hồ sơ ngay dưới thẻ (không đẩy xuống cuối hội thoại). */

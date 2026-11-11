@@ -1,8 +1,10 @@
-"""Ảnh cho slideshow: cover_images xoay vòng giữa các dự án (tối đa 12), gallery hồ sơ có tên/link dự án."""
+"""Ảnh cho slideshow: cover_images xoay vòng giữa các dự án (tối đa MAX_COVER_IMAGES = 80), gallery hồ sơ có
+tên/link dự án, ảnh thu nhỏ dezon.vn (thumb_url) và số ảnh thực có của từng công trình (total_images)."""
 from sqlalchemy import select
 
 from app.db.models import Contractor, Project, ProjectContractor, ProjectImage
-from app.schemas.matching import ImageRef
+from app.images import derive_thumb_url
+from app.schemas.matching import ImageRef, ProjectSummary
 from app.services import contractor_service as svc
 
 
@@ -104,3 +106,85 @@ def test_profile_total_images_counts_beyond_cap(db):
     shown = next(p for p in prof.projects if p.id == proj.id)
     assert len(shown.images) == svc.MAX_PROJECT_IMAGES
     assert len(prof.images) < prof.total_images
+
+
+# ---------------------------------------------------------------------------------------------------- ảnh thu nhỏ
+KP_ORIG = "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/UmjqbDGOsoPA8Sxm4xmliVZ7.jpg"
+KP_THUMB = "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/UmjqbDGOsoPA8Sxm4xmliVZ7.jpg"
+
+
+def test_derive_thumb_url_strict_pattern():
+    assert derive_thumb_url(KP_ORIG) == KP_THUMB
+    assert derive_thumb_url("https://www.dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/o/Ab_c-1.PNG") == (
+        "https://www.dezon.vn/wp-content/uploads/dz-data/nt/huy-hoang/Ab_c-1.PNG")
+    for url in (
+        None, "", KP_THUMB,  # đã là ảnh thu nhỏ
+        "https://dezon.vn/img/1-0.jpg",  # ngoài thư mục dz-data/nt
+        "https://evil.example/wp-content/uploads/dz-data/nt/kien-phong/o/x.jpg",  # khác tên miền
+        "https://dezon.vn.evil.example/wp-content/uploads/dz-data/nt/kien-phong/o/x.jpg",
+        "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/sub/x.jpg",  # lồng thêm thư mục
+        "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/x.jpg?w=300",  # có query
+        "https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/x.gif",  # đuôi lạ
+        "https://dezon.vn/wp-content/uploads/2026/03/o/x.jpg",
+    ):
+        assert derive_thumb_url(url) is None, url
+
+
+def test_image_ref_thumb_and_project_total_default():
+    assert ImageRef(url=KP_ORIG).thumb_url is None
+    assert ProjectSummary(id=1, slug="a", name="A", project_url="https://dezon.vn/a/").total_images == 0
+
+
+def test_parse_work_page_reads_data_thumb():
+    from pathlib import Path
+
+    from app.ingestion.crawler import parsers
+
+    html = (Path(__file__).parent / "fixtures" / "dezon" / "contractor_work_indochine_villa_quan_7.html").read_text(
+        encoding="utf-8")
+    rec = parsers.parse_contractor_work(html, "https://dezon.vn/nha-thau/kien-phong/indochine-villa-quan-7-sai-gon/")
+    first = rec["images"][0]
+    assert first["url"] == KP_ORIG and first["thumb_url"] == KP_THUMB
+    assert all(img["thumb_url"] and "/o/" not in img["thumb_url"] for img in rec["images"])
+
+
+def test_image_ref_thumb_from_column_or_derived():
+    p = Project(id=5, slug="du-an-5", name="Dự án 5", project_url="https://dezon.vn/nha-thau/demo/du-an-5/")
+    p.images.append(ProjectImage(id=1, url=KP_ORIG, sort_order=0))  # snapshot cũ: chưa có thumb_url
+    p.images.append(ProjectImage(id=2, url="https://dezon.vn/img/x.jpg", sort_order=1))  # không khớp mẫu
+    p.images.append(ProjectImage(id=3, url=KP_ORIG, sort_order=2, thumb_url="https://dezon.vn/thumb/3.jpg"))
+    refs = svc._image_refs(p)
+    assert [r.thumb_url for r in refs] == [KP_THUMB, None, "https://dezon.vn/thumb/3.jpg"]
+
+
+def test_project_summary_total_images_counts_beyond_cap():
+    p = _project(9, 25)
+    c = _contractor(p)
+    (summary,) = svc._project_summaries(c)
+    assert len(summary.images) == svc.MAX_PROJECT_IMAGES and summary.total_images == 25
+
+
+def test_sync_project_images_stores_thumbs_and_detects_thumb_change(db):
+    from app.ingestion.upsert import sync_project_images
+
+    p = Project(slug="du-an-thumb", name="Dự án thumb", project_url="https://dezon.vn/nha-thau/demo/du-an-thumb/")
+    db.add(p)
+    db.flush()
+    imgs = [{"url": KP_ORIG, "caption": "ảnh 1", "sort_order": 0}]
+    assert sync_project_images(db, p, imgs) is True
+    assert p.images[0].thumb_url == KP_THUMB  # suy từ ảnh gốc khi nguồn không có data-thumb
+    assert sync_project_images(db, p, imgs) is False
+    assert sync_project_images(db, p, [{**imgs[0], "thumb_url": "https://dezon.vn/t/1.jpg"}]) is True
+    assert p.images[0].thumb_url == "https://dezon.vn/t/1.jpg"
+
+
+def test_profile_images_carry_thumbs_and_project_totals(db):
+    prof = svc.get_contractor_profile(db, "kien-phong")
+    assert prof.projects
+    for proj in prof.projects:
+        assert proj.total_images == len(proj.images)
+        for img in proj.images:
+            assert img.thumb_url is None or (img.thumb_url != img.url and "/o/" not in img.thumb_url)
+    card = svc.build_contractor_card(db, db.scalar(select(Contractor).where(Contractor.slug == "kien-phong")))
+    dezon_imgs = [i for i in card.cover_images if "/dz-data/nt/" in i.url and "/o/" in i.url]
+    assert all(i.thumb_url == derive_thumb_url(i.url) for i in dezon_imgs)

@@ -3,6 +3,7 @@ import type { EstimateResult, EstimateTableBlock } from '../../api/types';
 import { formatCoefficient, formatDateVi, formatM2, viNumber } from '../../utils/format';
 import { BUILDING_TYPE_VI, NO_RATE_DISCLAIMER, WORK_SCOPE_VI } from '../../utils/labels';
 import { EvidenceCell } from '../common/EvidenceCell';
+import { PdfDownloadLink } from '../common/PdfDownloadLink';
 import { StatusBadge } from '../common/StatusBadge';
 
 /** Ghi chú miễn trừ mục 6.6 — dùng khi backend không gửi `disclaimer` (không bao giờ để trống). */
@@ -158,6 +159,8 @@ export function EstimateTable({ block }: { block: EstimateTableBlock }) {
         <strong>Lưu ý quan trọng: </strong>
         {disclaimer}
       </p>
+
+      <PdfDownloadLink estimateSessionId={d.estimate_session_id} label="Tải PDF khái toán" />
     </section>
   );
 }

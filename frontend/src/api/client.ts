@@ -41,6 +41,22 @@ export interface ApiClient {
   /** Khách để lại họ tên + SĐT để nhân viên Dezon liên hệ (nút "Liên hệ nhân viên"). */
   createContactRequest(body: ContactRequestBody): Promise<ContactRequestResponse>;
   recordClick(logId: number, contractorId: number): Promise<ClickResponse>;
+  /**
+   * Link tải PDF khái toán (V2): GET /api/estimates/{id}/pdf, kèm `contractor_ids` (2–5) để thêm bảng so sánh.
+   * null = không xuất được (chế độ mock) -> ẩn nút.
+   */
+  pdfUrl(estimateSessionId: UUID, contractorIds?: number[]): string | null;
+}
+
+/** Số nhà thầu backend chấp nhận khi xuất PDF kèm bảng so sánh (như POST /api/contractors/compare). */
+export const PDF_COMPARE_MIN = 2;
+export const PDF_COMPARE_MAX = 5;
+
+export function buildPdfUrl(apiBase: string, estimateSessionId: UUID, contractorIds: number[] = []): string {
+  const qs = new URLSearchParams();
+  for (const id of contractorIds) qs.append('contractor_ids', String(id));
+  const q = qs.toString();
+  return joinUrl(apiBase, `/api/estimates/${encodeURIComponent(estimateSessionId)}/pdf${q ? `?${q}` : ''}`);
 }
 
 export class ApiError extends Error {
@@ -135,5 +151,6 @@ export function createHttpClient(apiBase: string, fetchImpl: typeof fetch = (...
     createContactRequest: (body) => json('POST', '/api/contact-requests', body),
     recordClick: (logId, contractorId) =>
       json('POST', `/api/recommendations/${encodeURIComponent(String(logId))}/click`, { contractor_id: contractorId }),
+    pdfUrl: (estimateSessionId, contractorIds) => buildPdfUrl(apiBase, estimateSessionId, contractorIds),
   };
 }

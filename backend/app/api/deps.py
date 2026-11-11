@@ -67,8 +67,14 @@ _FIELD_VI = {
     "yard_area_m2": "diện tích sân", "roof_type": "loại mái", "foundation_type": "loại móng",
     "rooftop_terrace": "sân thượng", "converted_area_m2": "diện tích quy đổi",
     "content": "nội dung tin nhắn", "user_id": "mã người dùng",
-    "contractor_name": "tên nhà thầu", "request_id": "mã yêu cầu liên hệ",
+    "contractor_name": "tên nhà thầu", "request_id": "mã yêu cầu liên hệ", "session_id": "mã phiên chat",
     "page_url": "địa chỉ trang", "handled_note": "ghi chú xử lý",
+    # báo giá nhà thầu (V2 — quotes)
+    "total_amount": "tổng tiền báo giá", "price_per_m2": "đơn giá/m²", "scope_text": "phạm vi báo giá",
+    "file_url": "link file gốc", "received_at": "ngày nhận báo giá", "verified": "đã đối chiếu file gốc",
+    "entered_by": "người nhập", "lines": "dòng hạng mục", "group": "nhóm hạng mục", "label": "diễn giải",
+    "rule_code": "mã hệ số", "area_m2": "diện tích", "converted_m2": "diện tích quy đổi",
+    "amount_vnd": "thành tiền", "quote_id": "mã báo giá", "quote_request_id": "mã yêu cầu báo giá",
 }
 
 

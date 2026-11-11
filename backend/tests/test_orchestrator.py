@@ -127,6 +127,83 @@ def test_source_badges_dedupe_and_skip_customer_budget():
     assert blocks.source_badges([{"x": budget}]) is None
 
 
+def _src_block(out):
+    return next((b for b in out if getattr(b, "type", None) == "source_badges"), None)
+
+
+def test_source_items_for_reference_rates_without_block():
+    """V2 — Nguồn dữ liệu: đơn giá của get_reference_rates không có block -> vào source_badges.items."""
+    from app.schemas.estimate import RateData
+
+    src = SourceRef(label="Đơn giá tham khảo", updated_at="2026-10-01")
+    rate_ev = EvidenceValue(value=[5_000_000, 6_000_000], display="5–6 triệu/m²", status="reference", source=src)
+    rate = RateData(building_type="nha_pho", province="TP. Hồ Chí Minh", work_scope="xay_tho",
+                    quality_tier="trung_binh", price_min=5_000_000, price_max=6_000_000, effective_from="2026-10-01",
+                    source=src)
+    out = blocks.build_ui_blocks([tools.ToolOutcome("get_reference_rates", {}, {"rate": rate_ev, "rate_data": rate})])
+    block = _src_block(out)
+    assert block is not None and len(block.items) == 1
+    item = block.items[0]
+    assert item.label == "Đơn giá tham chiếu (VND/m²)" and item.evidence.display == "5–6 triệu/m²"
+    assert item.group == "Đơn giá tham chiếu — Nhà phố, xây thô, TP. Hồ Chí Minh"
+    assert [b.label for b in block.badges] == ["Đơn giá tham khảo"]
+    # Không có đơn giá và lượt không có block dữ liệu nào -> KHÔNG phát source_badges chỉ để chứa "Chưa có dữ liệu"
+    # (block thừa đổi bố cục: câu hỏi tách khỏi nút chọn nhanh, mất thẻ câu hỏi ở giao diện mở rộng).
+    na_rate = tools.ToolOutcome("get_reference_rates", {}, {"rate": EvidenceValue.unavailable(), "rate_data": None})
+    qr = blocks.QuickRepliesBlock(options=list(blocks.NEXT_ACTION_REPLIES))
+    out = blocks.build_ui_blocks([na_rate], quick_replies=qr)
+    assert [b.type for b in out] == ["quick_replies"]
+    # Có chip nguồn (giá trị khác có nguồn) -> vẫn liệt kê "Chưa có dữ liệu" ở mục thu gọn.
+    prof_ev = EvidenceValue(value=1, display="1", status="on_dezon",
+                            source=SourceRef(label="Hồ sơ nhà thầu A", url="https://dezon.vn/a"))
+    out = blocks.build_ui_blocks([na_rate, tools.ToolOutcome("get_contractor_projects", {}, {"x": prof_ev})])
+    block = _src_block(out)
+    assert block is not None and [b.label for b in block.badges] == ["Hồ sơ nhà thầu A"]
+    assert block.items[0].evidence.display == "Chưa có dữ liệu" and block.items[0].group == "Đơn giá tham chiếu"
+
+
+def test_source_items_overview_without_contractors_adds_no_block():
+    """Tổng quan 0 nhà thầu: mọi số tổng hợp "Chưa có dữ liệu", không bảng -> không phát source_badges."""
+    from tests.test_validator import make_overview
+
+    ov = make_overview().model_copy(update={
+        "contractors": [], **{k: EvidenceValue.unavailable() for k, _ in blocks._OVERVIEW_ITEMS}})
+    assert all(not i.evidence.has_value
+               for i in blocks.text_only_evidence([tools.ToolOutcome("get_contractor_overview", {}, ov)]))
+    out = blocks.build_ui_blocks([tools.ToolOutcome("get_contractor_overview", {}, ov)])
+    assert _src_block(out) is None
+
+
+def test_source_items_for_overview_aggregates():
+    from tests.test_validator import make_overview
+
+    ov = make_overview()
+    out = blocks.build_ui_blocks([tools.ToolOutcome("get_contractor_overview", {}, ov)])
+    block = _src_block(out)
+    assert block is not None
+    labels = {i.label: i for i in block.items}
+    assert labels["Số nhà thầu phù hợp"].evidence.display == "3 nhà thầu"
+    assert labels["Công trình ghi nhận trên Dezon (tổng các nhà thầu)"].evidence.value == 21
+    assert labels["Nhà thầu có công trình biệt thự thực tế"].evidence.display.startswith("2/3")
+    assert labels["Khoảng đơn giá trọn gói (hoàn thiện cơ bản)"].evidence.display == "Chưa có dữ liệu"
+    assert labels["Công trình biệt thự có trang dự án"].evidence.status == "unavailable"
+    assert {i.group for i in block.items} == {"Tổng quan nhà thầu — Biệt thự tại TP. Hồ Chí Minh"}
+    assert all("tốt nhất" not in i.label for i in block.items)
+    # JSON gửi frontend có trường items; block cũ không có items vẫn đọc được (mặc định rỗng).
+    assert block.model_dump(mode="json")["items"][0]["evidence"]["display"] == "3 nhà thầu"
+    from app.schemas.ui_blocks import SourceBadgesBlock
+    assert SourceBadgesBlock.model_validate({"type": "source_badges", "badges": []}).items == []
+
+
+def test_source_items_empty_when_every_value_has_a_block():
+    src = SourceRef(label="Hồ sơ nhà thầu A", url="https://dezon.vn/a", updated_at="2026-10-31")
+    ev = EvidenceValue(value=1, display="1", status="on_dezon", source=src)
+    assert blocks.text_only_evidence([tools.ToolOutcome("get_contractor_profile", {}, {"x": ev})]) == []
+    assert blocks.text_only_evidence([tools.ToolOutcome("get_reference_rates", {}, None, is_error=True)]) == []
+    block = blocks.source_badges([{"x": ev}])
+    assert block is not None and block.items == []
+
+
 def test_execute_unknown_tool_and_invalid_input():
     ctx = ToolContext(db=None, chat_session_id=None, slots=Slots(), state=SessionState())
     out = execute_tool(ctx, "khong_co", {})

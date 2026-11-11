@@ -6,6 +6,7 @@ import { ContactStaffButton } from '../common/ContactStaffButton';
 import { EvidenceCell } from '../common/EvidenceCell';
 import { ExternalLink } from '../common/ExternalLink';
 import { GalleryTiles } from '../common/Lightbox';
+import { groupsFromImages, ShowAllPhotosButton } from '../common/ProjectGallery';
 import { SafeImage } from '../common/SafeImage';
 
 export interface ContractorCardProps {
@@ -61,14 +62,26 @@ export function ContractorCardView({
 
   return (
     <article className={`dz-ccard${selected ? ' dz-ccard--selected' : ''}`} aria-labelledby={headingId}>
-      <GalleryTiles
-        images={covers}
-        max={3}
-        contractorName={c.name}
-        fallbackUrl={c.profile_url}
-        className="dz-ccard__covers"
-        fallbackAlt={() => `Ảnh dự án của ${c.name}`}
-      />
+      {covers.length > 0 && (
+        <div className="dz-ccard__media">
+          {/* 3 ô = 3 công trình khác nhau; slideshow chạy hết ảnh công trình này rồi sang công trình sau. */}
+          <GalleryTiles
+            images={covers}
+            max={3}
+            contractorName={c.name}
+            fallbackUrl={c.profile_url}
+            className="dz-ccard__covers"
+            fallbackAlt={() => `Ảnh dự án của ${c.name}`}
+            order="by_project"
+          />
+          {covers.length > 3 && (
+            <ShowAllPhotosButton
+              request={{ groups: groupsFromImages(covers), contractorName: c.name, fallbackUrl: c.profile_url }}
+              className="dz-ccard__allphotos"
+            />
+          )}
+        </div>
+      )}
       <div className="dz-ccard__body">
         <header className="dz-ccard__head">
           {c.avatar_url ? (

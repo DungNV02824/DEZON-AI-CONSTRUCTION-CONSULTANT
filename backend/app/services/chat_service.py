@@ -240,6 +240,12 @@ def get_contact_rate_limiter() -> RateLimiter:
 
 
 @lru_cache
+def get_pdf_rate_limiter() -> RateLimiter:
+    """Rate limit riêng cho GET /api/estimates/{id}/pdf (công khai, dựng PDF tốn CPU trên máy chủ dùng chung)."""
+    return _make_rate_limiter(get_settings().pdf_rate_limit_per_min, "dezon:rl:pdf", "xuất PDF")
+
+
+@lru_cache
 def default_provider() -> LLMProvider:
     from app.ai.providers import get_provider
 

@@ -11,8 +11,8 @@ from app.ai.state import ContractorRef
 from app.ai.tools import ToolOutcome
 from app.evidence import EvidenceValue, SourceRef, VerificationStatus, make_evidence
 from app.formatting import vi_number
-from app.schemas.common import BUILDING_TYPE_VI
-from app.schemas.estimate import BudgetAdjustmentResult, EstimateResult
+from app.schemas.common import BUILDING_TYPE_VI, WORK_SCOPE_VI
+from app.schemas.estimate import BudgetAdjustmentResult, EstimateResult, RateData
 from app.schemas.matching import (
     ComparedContractor,
     ComparisonMatrix,
@@ -27,6 +27,7 @@ from app.schemas.ui_blocks import (
     ContractorDetailBlock,
     ContractorListBlock,
     EstimateTableBlock,
+    EvidenceItem,
     QuestionStepBlock,
     QuickRepliesBlock,
     QuickReply,
@@ -124,6 +125,66 @@ def overview_table(ov: ContractorOverview) -> ComparisonTableBlock | None:
         rows=rows))
 
 
+# Số tổng hợp của get_contractor_overview không có ô nào trên bảng tổng quan (bảng chỉ dựng ô theo từng nhà thầu)
+# -> đưa vào SourceBadgesBlock.items để hộp thoại "Nguồn dữ liệu" liệt kê đủ. "{bt}" = loại công trình (chữ thường).
+_OVERVIEW_ITEMS = (("contractor_count", "Số nhà thầu phù hợp"),
+                   ("contractors_with_projects", "Nhà thầu có công trình {bt} thực tế"),
+                   ("projects_of_type_count", "Công trình {bt} có trang dự án"),
+                   ("total_dezon_projects", "Công trình ghi nhận trên Dezon (tổng các nhà thầu)"),
+                   ("rough_price_range", "Khoảng đơn giá xây thô"),
+                   ("finish_price_range", "Khoảng đơn giá trọn gói (hoàn thiện cơ bản)"),
+                   ("with_warranty_info", "Nhà thầu có thông tin bảo hành"),
+                   ("verified_profiles", "Hồ sơ đã xác minh"))
+REFERENCE_RATE_LABEL = "Đơn giá tham chiếu"
+
+
+def _as_evidence(v: Any) -> EvidenceValue:
+    if isinstance(v, EvidenceValue):
+        return v
+    if isinstance(v, dict):
+        try:
+            return EvidenceValue.model_validate(v)
+        except ValueError:
+            pass
+    return EvidenceValue.unavailable()
+
+
+def _rate_group(rate: Any) -> str:
+    """Ngữ cảnh của đơn giá tham chiếu, vd "Đơn giá tham chiếu — Nhà phố, xây thô, TP. Hồ Chí Minh"."""
+    if isinstance(rate, dict):
+        try:
+            rate = RateData.model_validate(rate)
+        except ValueError:
+            return REFERENCE_RATE_LABEL
+    if not isinstance(rate, RateData):
+        return REFERENCE_RATE_LABEL
+    bt = BUILDING_TYPE_VI.get(str(rate.building_type), str(rate.building_type))
+    ws = WORK_SCOPE_VI.get(str(rate.work_scope), str(rate.work_scope)).lower()
+    where = "toàn quốc" if rate.province == "*" else rate.province
+    return f"{REFERENCE_RATE_LABEL} — {bt}, {ws}, {where}"
+
+
+def text_only_evidence(outcomes: Sequence[ToolOutcome]) -> list[EvidenceItem]:
+    """EvidenceValue đã dùng trong lượt nhưng không có block nào hiển thị (V2 — Nguồn dữ liệu).
+
+    Hàm thuần (không DB/LLM). Giữ cả giá trị "Chưa có dữ liệu" để hộp thoại liệt kê ở mục thu gọn cuối.
+    """
+    items: list[EvidenceItem] = []
+    for o in _ok(outcomes, "get_reference_rates"):
+        res = o.result if isinstance(o.result, dict) else {}
+        items.append(EvidenceItem(group=_rate_group(res.get("rate_data")), label=f"{REFERENCE_RATE_LABEL} (VND/m²)",
+                                  evidence=_as_evidence(res.get("rate"))))
+    if ov := _ok(outcomes, "get_contractor_overview"):
+        res = ov[-1].result
+        if isinstance(res, ContractorOverview):
+            bt_vi = BUILDING_TYPE_VI.get(str(res.building_type), str(res.building_type))
+            group = f"Tổng quan nhà thầu — {bt_vi} tại {res.province}"
+            items += [EvidenceItem(group=group, label=label.format(bt=bt_vi.lower()),
+                                   evidence=_as_evidence(getattr(res, key, None)))
+                      for key, label in _OVERVIEW_ITEMS]
+    return items
+
+
 def quote_form(contractors: Sequence[ContractorRef], estimate_session_id: str | UUID | None
                ) -> QuoteRequestFormBlock | None:
     if not contractors:
@@ -158,7 +219,7 @@ def build_ui_blocks(outcomes: Sequence[ToolOutcome], *, estimate_session_id: str
     if cmp_ := _ok(outcomes, "compare_contractors"):
         res = cmp_[-1].result
         if isinstance(res, ComparisonMatrix):
-            blocks.append(ComparisonTableBlock(data=res))
+            blocks.append(ComparisonTableBlock(data=res, estimate_session_id=est_id))
     elif ov := _ok(outcomes, "get_contractor_overview"):
         res = ov[-1].result
         if isinstance(res, ContractorOverview) and (table := overview_table(res)) is not None:
@@ -175,6 +236,14 @@ def build_ui_blocks(outcomes: Sequence[ToolOutcome], *, estimate_session_id: str
         blocks.append(quote_request)
     badges = source_badges([o.result for o in outcomes if not o.is_error and o.result is not None
                             and o.name != "search_knowledge"])
+    # Phát source_badges khi có chip HOẶC có giá trị không nằm trong block nào (items). Frontend vẫn ẩn chip; block
+    # chỉ còn phục vụ hộp thoại "Nguồn dữ liệu (N)" cuối tin nhắn (V2).
+    # Không tạo block MỚI chỉ để chứa giá trị "Chưa có dữ liệu" khi lượt không có block dữ liệu nào: hộp thoại không
+    # có nhóm nguồn nên không hiện link, mà block thừa lại đổi bố cục tin nhắn (tách câu hỏi khỏi nút chọn nhanh,
+    # mất thẻ câu hỏi của giao diện mở rộng).
+    items = text_only_evidence(outcomes)
+    if items and (badges is not None or blocks or any(i.evidence.has_value for i in items)):
+        badges = (badges or SourceBadgesBlock(badges=[])).model_copy(update={"items": items})
     if badges is not None:
         blocks.append(badges)
     if summary is not None:

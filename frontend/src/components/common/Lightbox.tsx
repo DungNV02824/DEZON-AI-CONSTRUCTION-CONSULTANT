@@ -1,7 +1,8 @@
 /**
  * Xem ảnh toàn màn hình (lightbox / slide ảnh): ảnh lớn ở giữa, nút trước/sau, bộ đếm "i / n",
- * chú thích tên công trình (· nhà thầu) + link sang trang công trình trên dezon.vn, nút Đóng.
- * Bàn phím ←/→/Esc, vuốt trái/phải trên di động, bấm nền để đóng; focus trả về ô ảnh đã bấm.
+ * chú thích ("Ảnh k/n" trong công trình ·) tên công trình (· nhà thầu) + link sang trang công trình trên dezon.vn,
+ * nút Đóng, lớp "Đang tải ảnh…" khi ảnh gốc chưa về.
+ * Bàn phím ←/→/Home/End/Esc, vuốt trái/phải trên di động, bấm nền để đóng; focus trả về ô ảnh đã bấm.
  *
  * Cách dùng:
  *   const gallery = useLightbox();
@@ -24,6 +25,7 @@ import {
   type TouchEvent,
 } from 'react';
 import type { ImageRef } from '../../api/types';
+import { orderByProject, previewIndexes, projectPositions } from '../../utils/gallery';
 import { SafeImage } from './SafeImage';
 
 /** Ngưỡng vuốt ngang (px) để chuyển ảnh. */
@@ -93,7 +95,50 @@ function wrap(i: number, n: number): number {
   return ((i % n) + n) % n;
 }
 
-const FOCUSABLE = 'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
+// `details > summary`: mục thu gọn (vd "Chưa có dữ liệu (k)" của hộp thoại Nguồn dữ liệu) phải tới được bằng Tab.
+const FOCUSABLE = 'button:not([disabled]), a[href], details > summary, [tabindex]:not([tabindex="-1"])';
+
+/** Giữ focus trong hộp thoại aria-modal khi bấm Tab / Shift+Tab (dùng chung cho Lightbox và ProjectGallery). */
+export function trapTab(e: KeyboardEvent<HTMLElement>, container: HTMLElement | null): void {
+  // Phần tử nằm trong <details> đang thu gọn (trừ chính <summary> của nó) không nhận focus -> bỏ khỏi vòng Tab.
+  const collapsed = (el: HTMLElement) => {
+    const d = el.closest('details:not([open])');
+    return !!d && !(el.tagName === 'SUMMARY' && el.parentElement === d);
+  };
+  const items = Array.from(container?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []).filter((el) => !collapsed(el));
+  if (items.length === 0) return;
+  const root = container?.getRootNode() as Document | ShadowRoot | undefined;
+  const active = (root?.activeElement ?? document.activeElement) as HTMLElement | null;
+  const first = items[0]!;
+  const last = items[items.length - 1]!;
+  if (e.shiftKey && (active === first || !items.includes(active as HTMLElement))) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && (active === last || !items.includes(active as HTMLElement))) {
+    e.preventDefault();
+    first.focus();
+  }
+}
+
+/**
+ * Vòng đời hộp thoại toàn màn hình: focus vào `initialFocus` khi mở, khóa cuộn trang chủ; khi đóng khôi phục cuộn
+ * và trả focus về `returnFocus`. Lồng nhau (ProjectGallery -> Lightbox) vẫn đúng vì lớp trên đóng trước.
+ */
+export function useModalLifecycle(
+  initialFocus: { current: HTMLElement | null },
+  returnFocus: HTMLElement | null | undefined,
+): void {
+  useEffect(() => {
+    initialFocus.current?.focus({ preventScroll: true });
+    const html = document.documentElement;
+    const prevOverflow = html.style.overflow;
+    html.style.overflow = 'hidden';
+    return () => {
+      html.style.overflow = prevOverflow;
+      if (returnFocus && returnFocus.isConnected) returnFocus.focus({ preventScroll: true });
+    };
+  }, [initialFocus, returnFocus]);
+}
 
 export interface LightboxProps extends LightboxRequest {
   onClose(): void;
@@ -104,6 +149,9 @@ export interface LightboxProps extends LightboxRequest {
 export function Lightbox({ images, index: startIndex, contractorName, fallbackUrl, onClose, returnFocus }: LightboxProps) {
   const n = images.length;
   const [index, setIndex] = useState(() => wrap(startIndex, Math.max(n, 1)));
+  // Ảnh đang xem đã tải xong (hoặc lỗi) -> ẩn "Đang tải ảnh…"; khóa theo vị trí + URL nên chuyển ảnh là hiện lại.
+  const [settled, setSettled] = useState<string | null>(null);
+  const positions = useMemo(() => projectPositions(images), [images]);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
   const touchRef = useRef<{ x: number; y: number } | null>(null);
@@ -113,16 +161,7 @@ export function Lightbox({ images, index: startIndex, contractorName, fallbackUr
   const go = useCallback((delta: number) => setIndex((i) => wrap(i + delta, Math.max(n, 1))), [n]);
 
   // Focus vào hộp thoại khi mở; trả focus về ô ảnh khi đóng. Khóa cuộn trang chủ trong lúc xem ảnh.
-  useEffect(() => {
-    closeRef.current?.focus({ preventScroll: true });
-    const html = document.documentElement;
-    const prevOverflow = html.style.overflow;
-    html.style.overflow = 'hidden';
-    return () => {
-      html.style.overflow = prevOverflow;
-      if (returnFocus && returnFocus.isConnected) returnFocus.focus({ preventScroll: true });
-    };
-  }, [returnFocus]);
+  useModalLifecycle(closeRef, returnFocus);
 
   // Tải trước ảnh kề bên để chuyển ảnh mượt.
   useEffect(() => {
@@ -142,6 +181,9 @@ export function Lightbox({ images, index: startIndex, contractorName, fallbackUr
   const projectName = imageProjectName(img);
   const link = imageLink(img, projectName, contractorName, fallbackUrl);
   const alt = img.caption?.trim() || `Ảnh ${index + 1}/${n}${projectName ? ` — ${projectName}` : ''}`;
+  const pos = positions[index] ?? null;
+  const imgKey = `${index}-${img.url}`;
+  const loading = settled !== imgKey;
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Escape') {
@@ -156,21 +198,12 @@ export function Lightbox({ images, index: startIndex, contractorName, fallbackUr
       e.preventDefault();
       e.stopPropagation();
       go(-1);
+    } else if ((e.key === 'Home' || e.key === 'End') && n > 1) {
+      e.preventDefault();
+      e.stopPropagation();
+      setIndex(e.key === 'Home' ? 0 : n - 1);
     } else if (e.key === 'Tab') {
-      // Giữ focus trong hộp thoại (aria-modal).
-      const items = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []);
-      if (items.length === 0) return;
-      const root = dialogRef.current?.getRootNode() as Document | ShadowRoot | undefined;
-      const active = (root?.activeElement ?? document.activeElement) as HTMLElement | null;
-      const first = items[0]!;
-      const last = items[items.length - 1]!;
-      if (e.shiftKey && (active === first || !items.includes(active as HTMLElement))) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && (active === last || !items.includes(active as HTMLElement))) {
-        e.preventDefault();
-        first.focus();
-      }
+      trapTab(e, dialogRef.current);
     }
   };
 
@@ -223,10 +256,32 @@ export function Lightbox({ images, index: startIndex, contractorName, fallbackUr
 
       <figure className="dz-lightbox__figure" data-lb-backdrop="">
         <div className="dz-lightbox__stage" data-lb-backdrop="">
-          <SafeImage key={`${index}-${img.url}`} className="dz-lightbox__img" src={img.url} alt={alt} loading="eager" />
+          <SafeImage
+            key={imgKey}
+            className="dz-lightbox__img"
+            src={img.url}
+            alt={alt}
+            loading="eager"
+            onLoad={() => setSettled(imgKey)}
+            onFail={() => setSettled(imgKey)}
+          />
+          {loading && (
+            <span className="dz-lightbox__loading" role="status">
+              <span className="dz-lightbox__spinner" aria-hidden="true" />
+              Đang tải ảnh…
+            </span>
+          )}
         </div>
         {(projectName || contractorName) && (
           <figcaption className="dz-lightbox__caption">
+            {pos && (
+              <>
+                <span className="dz-lightbox__pos">
+                  Ảnh {pos.k}/{pos.n}
+                </span>
+                {projectName && <span aria-hidden="true"> · </span>}
+              </>
+            )}
             {projectName && <span className="dz-lightbox__project">{projectName}</span>}
             {projectName && contractorName && <span aria-hidden="true"> · </span>}
             {contractorName && <span className="dz-lightbox__by">{contractorName}</span>}
@@ -317,38 +372,57 @@ export interface GalleryTilesProps {
   tileClassName?: string;
   /** Alt dự phòng của ảnh thứ i khi thiếu chú thích. */
   fallbackAlt?: (i: number) => string;
+  /**
+   * "given" (mặc định): ô và slideshow theo đúng thứ tự `images`.
+   * "by_project": slideshow chạy hết ảnh công trình này rồi sang công trình sau; các ô xem trước lấy ảnh đầu
+   * của các công trình khác nhau (thẻ nhà thầu, lưới chính của hồ sơ).
+   */
+  order?: 'given' | 'by_project';
 }
 
-/** Lưới ô ảnh bấm được -> mở lightbox trên TOÀN BỘ `images` tại đúng vị trí. */
+/** Lưới ô ảnh bấm được -> mở lightbox trên TOÀN BỘ `images` tại đúng vị trí. Ô dùng ảnh thu nhỏ (thumb_url). */
 export function GalleryTiles({
-  images,
+  images: input,
   max = 3,
   contractorName,
   fallbackUrl,
   className,
   tileClassName,
   fallbackAlt,
+  order = 'given',
 }: GalleryTilesProps) {
   const gallery = useLightbox();
+  const images = useMemo(() => (order === 'by_project' ? orderByProject(input) : input), [input, order]);
+  const shownIdx = useMemo(
+    () =>
+      order === 'by_project'
+        ? previewIndexes(images, max)
+        : Array.from({ length: Math.max(0, Math.min(max, images.length)) }, (_, i) => i),
+    [images, max, order],
+  );
   const n = images.length;
   if (n === 0) return null;
-  const shown = images.slice(0, max);
-  const more = n - shown.length;
+  const more = n - shownIdx.length;
   return (
     <>
-      <div className={`${className} ${className}--${shown.length}`}>
-        {shown.map((img, i) => {
+      <div className={`${className} ${className}--${Number.isFinite(max) ? shownIdx.length : 'all'}`}>
+        {shownIdx.map((idx, i) => {
+          const img = images[idx]!;
           const name = imageProjectName(img) ?? contractorName ?? '';
-          const isLast = i === shown.length - 1;
+          const isLast = i === shownIdx.length - 1;
           return (
             <button
-              key={`${img.url}-${i}`}
+              key={`${img.url}-${idx}`}
               type="button"
               className={`dz-gtile${tileClassName ? ` ${tileClassName}` : ''}`}
-              aria-label={`Xem ảnh ${i + 1}/${n}${name ? ` — ${name}` : ''}`}
-              onClick={(e) => gallery.open({ images, index: i, contractorName, fallbackUrl }, e.currentTarget)}
+              aria-label={`Xem ảnh ${idx + 1}/${n}${name ? ` — ${name}` : ''}`}
+              onClick={(e) => gallery.open({ images, index: idx, contractorName, fallbackUrl }, e.currentTarget)}
             >
-              <SafeImage src={img.url} alt={img.caption ?? fallbackAlt?.(i) ?? `Ảnh ${i + 1}`} />
+              <SafeImage
+                src={img.thumb_url || img.url}
+                fallbackSrc={img.url}
+                alt={img.caption ?? fallbackAlt?.(idx) ?? `Ảnh ${idx + 1}`}
+              />
               {isLast && more > 0 && (
                 <span className="dz-gtile__more" aria-hidden="true">
                   +{more}

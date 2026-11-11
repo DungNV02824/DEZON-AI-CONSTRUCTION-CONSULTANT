@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import func, select, update
 
 from app.config import get_settings
-from app.db.models import AnalyticsEvent, ChatSession, ContactRequest, Contractor
+from app.db.models import AnalyticsEvent, ChatMessage, ChatSession, ContactRequest, Contractor
 from app.main import app
 from app.services import chat_service
 from app.services.chat_service import MemoryRateLimiter
@@ -163,6 +163,7 @@ def test_project_summary():
 @pytest.mark.parametrize("method,path", [
     ("get", "/api/admin/contact-requests"),
     ("patch", f"/api/admin/contact-requests/{uuid.uuid4()}"),
+    ("get", f"/api/admin/chat-sessions/{uuid.uuid4()}"),
 ])
 def test_admin_requires_token(client, method, path):
     r = getattr(client, method)(path)
@@ -192,13 +193,14 @@ def test_admin_list_items_and_counts(client, db):
     by_id = {i["id"]: i for i in data["items"]}
     ia = by_id[a["id"]]
     assert set(ia) == {"id", "code", "customer_name", "customer_phone", "note", "source", "page_url", "status",
-                       "handled_note", "created_at", "contractor", "project"}
+                       "handled_note", "created_at", "contractor", "project", "chat_session_id"}
+    assert ia["chat_session_id"] == str(chat.id)
     assert ia["code"] == a["code"] and ia["customer_name"] == "Nguyễn Văn A" and ia["customer_phone"] == "0912345678"
     assert ia["contractor"] == {"id": c.id, "name": c.name}
     assert ia["project"] == "Nhà phố · TP. Hồ Chí Minh · 100 m² · 4 tầng · Xây thô"
     assert ia["source"] == "contractor_detail" and ia["note"] == "Cần tư vấn" and ia["status"] == "new"
     ib = by_id[b["id"]]
-    assert ib["contractor"] is None and ib["project"] is None
+    assert ib["contractor"] is None and ib["project"] is None and ib["chat_session_id"] is None
     assert ib["customer_name"] == "<b>Chị Lan</b>"  # lưu nguyên văn; trang admin hiển thị bằng textContent
 
 
@@ -251,6 +253,29 @@ def test_admin_patch_errors(client, db):
     assert r.status_code == 422
 
 
+def test_admin_chat_session_transcript(client, db):
+    sid = client.post("/api/chat/sessions").json()["session_id"]
+    db.add_all([
+        ChatMessage(session_id=uuid.UUID(sid), role="user", content="<script>alert(1)</script> nhà phố 5x20"),
+        ChatMessage(session_id=uuid.UUID(sid), role="tool", content="{}", tool_name="estimate_cost"),
+        ChatMessage(session_id=uuid.UUID(sid), role="assistant", content="Dạ, em ghi nhận nhà phố 5×20 m."),
+    ])
+    db.commit()
+    r = client.get(f"/api/admin/chat-sessions/{sid}", headers=H)
+    assert r.status_code == 200, r.text
+    msgs = r.json()["messages"]
+    # Tin chào + tin khách + trả lời của trợ lý theo đúng thứ tự; tin tool nội bộ bị bỏ.
+    assert [m["role"] for m in msgs] == ["assistant", "user", "assistant"]
+    assert msgs[0]["ui_blocks"] and msgs[0]["ui_blocks"][0]["type"] == "question_step"
+    assert msgs[1]["content"] == "<script>alert(1)</script> nhà phố 5x20"  # nguyên văn; trang admin dùng textContent
+    assert all(m["created_at"] for m in msgs)
+
+    r = client.get(f"/api/admin/chat-sessions/{uuid.uuid4()}", headers=H)
+    assert r.status_code == 404 and "Không tìm thấy phiên chat" in r.json()["detail"]
+    r = client.get("/api/admin/chat-sessions/abc", headers=H)
+    assert r.status_code == 422 and "mã phiên chat" in r.json()["detail"]
+
+
 def test_deleting_contractor_or_session_keeps_request(client, db):
     chat, c, a, _ = _seed_requests(client, db)
     db.delete(chat)
@@ -268,6 +293,7 @@ def test_admin_page_has_contact_tab(client):
     assert "/api/admin/contact-requests" in html and "contactCount" in html
     for label in ("Ô chat", "Thẻ nhà thầu", "Hồ sơ nhà thầu", "Đã liên hệ", "tel:"):
         assert label in html
+    assert "Xem hội thoại" in html and "/api/admin/chat-sessions/" in html and 'id="convDialog"' in html
 
 
 # ------------------------------------------------------------------ sửa theo review

@@ -47,6 +47,29 @@
   .badge.new { background: #fef0c7; color: var(--warn); } .badge.contacted { background: #dbeafe; color: #1e40af; } .badge.done { background: #dcfae6; color: var(--ok); }
   .handle { display: flex; flex-direction: column; gap: 4px; min-width: 200px; } .handle textarea { min-height: 38px; resize: vertical; }
   td.wrap { max-width: 260px; white-space: pre-wrap; word-break: break-word; }
+  .src-actions { margin-top: 4px; }
+  dialog#convDialog { width: min(780px, 94vw); max-height: 86vh; padding: 0; border: 1px solid var(--line); border-radius: 10px; }
+  dialog#convDialog::backdrop { background: rgba(16, 24, 40, .45); }
+  .conv-head { position: sticky; top: 0; z-index: 1; display: flex; gap: 10px; align-items: center; padding: 12px 16px; background: #fff; border-bottom: 1px solid var(--line); }
+  .conv-head .btn { margin-left: auto; }
+  .conv { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; }
+  .msg { max-width: 85%; padding: 8px 12px; border-radius: 10px; white-space: pre-wrap; word-break: break-word; }
+  .msg.user { align-self: flex-end; background: #dbeafe; }
+  .msg.assistant { align-self: flex-start; background: #f2f4f7; }
+  .msg .who { font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+  .msg .blk { margin-top: 6px; padding-left: 8px; border-left: 3px solid #c7d2e4; font-size: 12px; color: #344054; }
+  .badge.sent { background: #dbeafe; color: #1e40af; } .badge.quoted { background: #e0e7ff; color: #3730a3; }
+  .badge.won { background: #dcfae6; color: var(--ok); } .badge.lost { background: #eaecf0; color: var(--muted); }
+  .badge.outside { background: #fef0c7; color: var(--warn); } .badge.inside { background: #dcfae6; color: var(--ok); }
+  #qDetail { margin-top: 16px; padding-top: 8px; border-top: 2px solid var(--line); }
+  #qDetail textarea { min-width: min(320px, 100%); max-width: 100%; min-height: 38px; resize: vertical; }
+  #qDetail input[name=file_url] { max-width: 100%; }
+  #qDetail .row label { max-width: 100%; min-width: 0; }
+  #qfLines input[type=number] { width: 120px; } #qfLines input.lbl { width: 200px; }
+  .chk { flex-direction: row !important; align-items: center; gap: 6px !important; font-size: 13px !important; color: #1d2433 !important; }
+  tr.notable td { background: #fffaeb; }
+  .note-box { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; background: #f8fafc; font-size: 12px; color: #344054; }
+  #qAnalysis ul { margin: 4px 0 8px; padding-left: 20px; }
 </style>
 </head>
 <body>
@@ -62,6 +85,7 @@
 <nav id="tabs">
   <button data-tab="metrics" class="active">Chỉ số</button>
   <button data-tab="contacts">Yêu cầu liên hệ<span class="count" id="contactCount" hidden></span></button>
+  <button data-tab="quotes">Yêu cầu báo giá<span class="count" id="quoteCount" hidden></span></button>
   <button data-tab="violations">Vi phạm guardrail</button>
   <button data-tab="rates">Đơn giá</button>
   <button data-tab="rules">Hệ số khái toán</button>
@@ -92,6 +116,59 @@
     </div>
     <p class="muted">Khách để lại họ tên và số điện thoại qua nút "Liên hệ nhân viên" để được gọi lại. Đổi trạng thái sau khi đã gọi cho khách.</p>
     <div class="scroll"><table id="cTable"><thead><tr><th>Thời gian</th><th>Mã</th><th>Họ tên</th><th>SĐT</th><th>Nhà thầu</th><th>Công trình</th><th>Ghi chú</th><th>Nguồn</th><th>Trạng thái</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section id="tab-quotes">
+    <div class="row">
+      <h2 style="margin:0">Yêu cầu báo giá</h2>
+      <label>Trạng thái<select id="qStatus"><option value="">Tất cả</option><option value="new">Mới</option><option value="sent">Đã gửi nhà thầu</option><option value="quoted">Đã có báo giá</option><option value="won">Đã chốt</option><option value="lost">Không chốt</option></select></label>
+      <label>Mã yêu cầu<input id="qCode" placeholder="vd DZ-7F3A2C" maxlength="20" size="12"></label>
+      <label>Số dòng<select id="qLimit"><option>50</option><option>100</option><option>200</option></select></label>
+      <button class="btn secondary" id="reloadQuotes">Tải</button>
+      <span class="muted" id="qTotal"></span>
+    </div>
+    <p class="muted">Yêu cầu báo giá khách gửi qua chat/form (mỗi nhà thầu một dòng, cùng mã DZ khách nhận). Bấm "Mở" để nhập báo giá nhà thầu gửi về (Zalo, PDF, Excel) và xem phân tích so với khái toán. Chỉ nhân viên xem được trang này; khách không thấy báo giá hay phân tích.</p>
+    <div class="scroll"><table id="qTable"><thead><tr><th>Thời gian</th><th>Mã</th><th>Khách</th><th>Nhà thầu</th><th>Công trình</th><th>Khái toán</th><th>Báo giá</th><th>Trạng thái</th><th></th></tr></thead><tbody></tbody></table></div>
+
+    <div id="qDetail" hidden>
+      <div class="row"><h3 id="qdTitle" style="margin:0"></h3><button class="btn secondary" type="button" id="qdClose">Đóng</button></div>
+      <div id="qdInfo"></div>
+      <h3>Khái toán của khách</h3>
+      <div id="qdEstimate"></div>
+      <h3>Báo giá đã nhập</h3>
+      <div class="scroll"><table id="qdQuotes"><thead><tr><th>#</th><th>Ngày nhận</th><th>Tổng tiền</th><th>Đơn giá/m²</th><th>DT quy đổi</th><th>Trạng thái</th><th>Người nhập</th><th>File gốc</th><th></th></tr></thead><tbody></tbody></table></div>
+
+      <h3 id="qfTitle">Nhập báo giá</h3>
+      <form id="quoteForm">
+        <div class="row">
+          <label>Tổng tiền (VND)<input name="total_amount" type="number" min="1" step="1"></label>
+          <label>Đơn giá/m² (VND)<input name="price_per_m2" type="number" min="1" step="1"></label>
+          <label>Diện tích quy đổi của nhà thầu (m²)<input name="converted_area_m2" type="number" min="0.01" step="0.01"></label>
+          <label>Ngày nhận<input name="received_at" type="date"></label>
+          <label>Người nhập<input name="entered_by" maxlength="200"></label>
+        </div>
+        <div class="row">
+          <label>Phạm vi báo giá (nhà thầu ghi)<textarea name="scope_text" maxlength="4000"></textarea></label>
+          <label>Link file gốc (Drive, Zalo… — không tải file lên)<input name="file_url" type="url" maxlength="1000" size="40" placeholder="https://"></label>
+          <label>Ghi chú nội bộ<textarea name="note" maxlength="2000"></textarea></label>
+        </div>
+        <div class="row">
+          <label class="chk"><input name="verified" type="checkbox"> Nhân viên đã đối chiếu file gốc (trạng thái "Đã xác minh"; bỏ trống = "Dữ liệu tham khảo")</label>
+        </div>
+        <p class="muted">Dòng hạng mục (tùy chọn) điền sẵn theo khái toán — gõ số của nhà thầu vào các ô; dòng để trống sẽ bị bỏ. DT quy đổi bỏ trống = diện tích × hệ số. Báo giá chia theo công tác (điện nước, ốp lát…) thì chỉ cần tổng tiền và đơn giá/m².</p>
+        <div class="scroll"><table id="qfLines"><thead><tr><th>Nhóm</th><th>Diễn giải</th><th>Khái toán (DT × hệ số)</th><th>Diện tích (m²)</th><th>Hệ số</th><th>DT quy đổi (m²)</th><th>Thành tiền (VND)</th><th></th></tr></thead><tbody></tbody></table></div>
+        <div class="row">
+          <button class="btn secondary" type="button" id="qfAddLine">Thêm dòng "Khác"</button>
+          <button class="btn secondary" type="button" id="qfPreview">Xem trước phân tích</button>
+          <button class="btn" type="submit" id="qfSave">Lưu báo giá</button>
+          <button class="btn secondary" type="button" id="qfCancel" hidden>Hủy sửa</button>
+        </div>
+      </form>
+
+      <h3>Phân tích so với khái toán</h3>
+      <p class="note-box">Khái toán là con số sơ bộ, không phải báo giá thi công. Phân tích chỉ đối chiếu báo giá với khoảng khái toán (ngoài khoảng [thấp, cao] = đáng chú ý), không đánh giá hay xếp hạng nhà thầu theo giá. Khi trao đổi dùng câu trung tính, vd "cao hơn khoảng khái toán X%".</p>
+      <div id="qAnalysis" class="muted">Bấm "Xem phân tích" ở một báo giá đã nhập hoặc "Xem trước phân tích" ở form.</div>
+    </div>
   </section>
 
   <section id="tab-violations">
@@ -210,6 +287,10 @@
   </section>
 </main>
 <div id="toast"></div>
+<dialog id="convDialog" aria-labelledby="convTitle">
+  <div class="conv-head"><strong id="convTitle"></strong><span class="muted" id="convMeta"></span><button class="btn secondary" type="button" id="convClose">Đóng</button></div>
+  <div class="conv" id="convBody"></div>
+</dialog>
 
 <script>
 (function () {
@@ -355,6 +436,7 @@
       var src = [CSRC[c.source] || c.source || '—'];
       // Chỉ tạo link cho URL http(s) — địa chỉ trang do trình duyệt khách gửi, không để lọt "javascript:".
       if (c.page_url) src.push(el('div', { class: 'muted' }, [/^https?:\/\//i.test(c.page_url) ? el('a', { href: c.page_url, target: '_blank', rel: 'noopener noreferrer', text: 'Trang khách đang xem' }) : c.page_url]));
+      if (c.chat_session_id) src.push(el('div', { class: 'src-actions' }, [el('button', { class: 'btn secondary', type: 'button', text: 'Xem hội thoại', onclick: function () { openConversation(c); } })]));
       tb.appendChild(el('tr', null, [td(fmtDate(c.created_at)), td(c.code), td(c.customer_name), td(phone),
         td(c.contractor ? c.contractor.name : null), el('td', { class: 'wrap' }, [c.project || '—']), el('td', { class: 'wrap' }, [c.note || '—']),
         el('td', null, src), el('td', null, [el('div', { class: 'handle' }, [el('span', { class: 'badge ' + c.status, text: CST[c.status] || c.status }), sel, note, save])])]));
@@ -362,8 +444,298 @@
   };
   $('reloadContacts').addEventListener('click', function () { loaders.contacts().catch(function () {}); });
   $('cStatus').addEventListener('change', function () { loaders.contacts().catch(function () {}); });
+  // ---------------------------------------------------------------- hội thoại của khách (nút "Xem hội thoại")
+  // Nội dung tin nhắn chỉ gán qua textContent (hàm el) — tin khách gõ không bao giờ được hiểu là HTML.
+  var BLK = { quick_replies: 'Gợi ý trả lời', question_step: 'Câu hỏi', summary_confirm: 'Xác nhận thông tin',
+              estimate_table: 'Bảng khái toán', budget_options: 'Phương án ngân sách', contractor_list: 'Nhà thầu gợi ý',
+              comparison_table: 'Bảng so sánh nhà thầu', contractor_detail: 'Hồ sơ nhà thầu', source_badges: 'Nguồn dữ liệu',
+              quote_request_form: 'Form yêu cầu báo giá', suggestions: 'Gợi ý câu hỏi' };
+  function contractorNames(list) {
+    return (list || []).map(function (x) { var o = (x && (x.contractor || x.card)) || x; return o && o.name; }).filter(Boolean).join(', ');
+  }
+  function blockSummary(b) {
+    var d = b.data || {};
+    switch (b.type) {
+      case 'question_step': return b.question;
+      case 'summary_confirm': return (b.items || []).map(function (i) { return i.label + ': ' + i.value; }).join(' · ');
+      case 'estimate_table': return d.cost && d.cost.display ? 'Chi phí sơ bộ: ' + d.cost.display : null;
+      case 'contractor_list': return contractorNames(d.results);
+      case 'comparison_table': return contractorNames(d.contractors);
+      case 'contractor_detail': return d.card && d.card.name;
+      case 'quote_request_form': return contractorNames(b.contractors);
+      case 'quick_replies': case 'suggestions': return (b.options || []).map(function (o) { return o.label; }).join(' / ');
+    }
+    return null;
+  }
+  async function openConversation(c) {
+    var seq = openConversation.seq = (openConversation.seq || 0) + 1;  // bấm nhanh 2 yêu cầu: chỉ hiện kết quả mới nhất
+    var dlg = $('convDialog'), body = $('convBody');
+    $('convTitle').textContent = 'Hội thoại · ' + c.code + ' · ' + c.customer_name;
+    $('convMeta').textContent = 'Đang tải…';
+    body.innerHTML = '';
+    if (!dlg.open) dlg.showModal();
+    var s;
+    try { s = await api('/api/admin/chat-sessions/' + encodeURIComponent(c.chat_session_id)); } catch (e) {
+      if (seq === openConversation.seq) $('convMeta').textContent = 'Không tải được hội thoại.';
+      return;
+    }
+    if (seq !== openConversation.seq) return;
+    var nUser = s.messages.filter(function (m) { return m.role === 'user'; }).length;
+    $('convMeta').textContent = fmtInt(s.messages.length) + ' tin · khách nhắn ' + fmtInt(nUser) + ' tin';
+    if (!s.messages.length) body.appendChild(el('p', { class: 'muted', text: 'Phiên chat chưa có tin nhắn nào.' }));
+    s.messages.forEach(function (m) {
+      var who = m.role === 'user' ? 'Khách' : 'Trợ lý';
+      var blocks = (m.ui_blocks || []).map(function (b) {
+        var t = blockSummary(b);
+        return el('div', { class: 'blk', text: '[' + (BLK[b.type] || b.type) + ']' + (t ? ' ' + t : '') });
+      });
+      body.appendChild(el('div', { class: 'msg ' + (m.role === 'user' ? 'user' : 'assistant') },
+        [el('div', { class: 'who', text: who + ' · ' + fmtDate(m.created_at) }), m.content || null].concat(blocks)));
+    });
+  }
+  $('convClose').addEventListener('click', function () { $('convDialog').close(); });
+  // Bấm ra nền mờ để đóng — chỉ khi cả lúc nhấn lẫn lúc thả chuột đều nằm ngoài khung (bôi đen tin nhắn rồi thả
+  // chuột lệch ra ngoài không làm đóng hộp thoại).
+  function outsideDialog(dlg, e) {
+    var r = dlg.getBoundingClientRect();
+    return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+  }
+  var convDownOutside = false;
+  $('convDialog').addEventListener('mousedown', function (e) { convDownOutside = e.target === e.currentTarget && outsideDialog(e.currentTarget, e); });
+  $('convDialog').addEventListener('click', function (e) {
+    var close = convDownOutside && e.target === e.currentTarget && outsideDialog(e.currentTarget, e);
+    convDownOutside = false;
+    if (close) e.currentTarget.close();
+  });
+
   function refreshContactCount() {
+    api('/api/admin/quote-requests?status=new&limit=1').then(function (d) { setQuoteCount(d.new_count); }).catch(function () {});
     return api('/api/admin/contact-requests?status=new&limit=1').then(function (d) { setContactCount(d.new_count); }).catch(function () {});
+  }
+
+  // ---------------------------------------------------------------- yêu cầu báo giá & báo giá nhà thầu (V2 — quotes)
+  // Chuỗi do khách/nhân viên nhập (họ tên, ghi chú, phạm vi…) chỉ gán qua textContent (hàm el/td) — không dùng innerHTML.
+  var QST = { new: 'Mới', sent: 'Đã gửi nhà thầu', quoted: 'Đã có báo giá', won: 'Đã chốt', lost: 'Không chốt' };
+  var QGROUP = { mong: 'Móng', tang: 'Tầng (trệt, lầu, lửng)', ham: 'Tầng hầm', mai: 'Mái', san_thuong: 'Sân thượng',
+                 ban_cong: 'Ban công', san: 'Sân', khac: 'Hạng mục khác' };
+  var QPOS = { below: 'Thấp hơn khoảng khái toán', within: 'Trong khoảng khái toán', above: 'Cao hơn khoảng khái toán',
+               not_comparable: 'Chưa so được', missing_in_quote: 'Báo giá chưa có', extra_in_quote: 'Khái toán không có' };
+  var qState = { detail: null, editing: null };
+  function httpLink(url, text) {
+    return url && /^https?:\/\//i.test(url) ? el('a', { href: url, target: '_blank', rel: 'noopener noreferrer', text: text || url }) : (url || '—');
+  }
+  function fmtVnd(n) { return n == null ? '—' : fmtInt(n) + ' đ'; }
+  function evd(ev) { return ev && ev.display ? ev.display : 'Chưa có dữ liệu'; }
+  function posBadge(p) {
+    var cls = (p === 'above' || p === 'below') ? 'outside' : p === 'within' ? 'inside' : 'unavailable';
+    return el('span', { class: 'badge ' + cls, text: QPOS[p] || p });
+  }
+  function setQuoteCount(n) { var c = $('quoteCount'); c.textContent = n > 99 ? '99+' : String(n || 0); c.hidden = !(n > 0); }
+
+  loaders.quotes = async function () {
+    var q = new URLSearchParams({ limit: $('qLimit').value });
+    if ($('qStatus').value) q.set('status', $('qStatus').value);
+    if ($('qCode').value.trim()) q.set('code', $('qCode').value.trim());
+    var data = await api('/api/admin/quote-requests?' + q);
+    setQuoteCount(data.new_count);
+    $('qTotal').textContent = 'Tổng: ' + fmtInt(data.total) + ' · Mới: ' + fmtInt(data.new_count);
+    var tb = $('qTable').tBodies[0]; tb.innerHTML = '';
+    if (!data.items.length) tb.appendChild(el('tr', null, [el('td', { colspan: 9, class: 'muted', text: 'Chưa có yêu cầu báo giá nào' })]));
+    data.items.forEach(function (r) {
+      var who = [r.customer_name || '—'];
+      if (r.customer_phone) who.push(el('div', null, [el('a', { href: 'tel:' + String(r.customer_phone).replace(/[^0-9+]/g, ''), text: r.customer_phone })]));
+      if (r.customer_email) who.push(el('div', { class: 'muted', text: r.customer_email }));
+      var actions = [el('button', { class: 'btn', type: 'button', text: 'Mở', onclick: function () { openQuoteRequest(r.id).catch(function () {}); } })];
+      if (r.chat_session_id) actions.push(el('div', { class: 'src-actions' }, [el('button', { class: 'btn secondary', type: 'button', text: 'Xem hội thoại', onclick: function () { openConversation(r); } })]));
+      tb.appendChild(el('tr', null, [td(fmtDate(r.created_at)), td(r.code), el('td', null, who), td(r.contractor ? r.contractor.name : null),
+        el('td', { class: 'wrap' }, [r.project || '—']), td(r.estimate_session_id ? (r.estimate_cost || 'Chưa có dữ liệu') : 'Không gắn khái toán'),
+        td(fmtInt(r.quote_count)), el('td', null, [el('span', { class: 'badge ' + r.status, text: QST[r.status] || r.status })]), el('td', null, actions)]));
+    });
+  };
+  $('reloadQuotes').addEventListener('click', function () { loaders.quotes().catch(function () {}); });
+  $('qStatus').addEventListener('change', function () { loaders.quotes().catch(function () {}); });
+  $('qCode').addEventListener('keydown', function (e) { if (e.key === 'Enter') loaders.quotes().catch(function () {}); });
+  $('qdClose').addEventListener('click', function () { $('qDetail').hidden = true; qState.detail = null; });
+
+  async function openQuoteRequest(id) {
+    var d = await api('/api/admin/quote-requests/' + encodeURIComponent(id));
+    qState.detail = d;
+    var r = d.request;
+    $('qDetail').hidden = false;
+    $('qdTitle').textContent = 'Yêu cầu ' + r.code + ' · ' + (r.contractor ? r.contractor.name : 'Nhà thầu') + ' · ' + (QST[r.status] || r.status);
+    var info = $('qdInfo'); info.innerHTML = '';
+    info.appendChild(el('p', null, ['Khách: ' + (r.customer_name || '—') + ' · ' + (r.customer_phone || '—') + (r.customer_email ? ' · ' + r.customer_email : '') + ' · Gửi lúc ' + fmtDate(r.created_at)]));
+    if (r.project) info.appendChild(el('p', { class: 'muted', text: 'Công trình: ' + r.project }));
+    if (r.note) info.appendChild(el('p', { class: 'muted', style: 'white-space:pre-wrap', text: 'Ghi chú gửi nhà thầu: ' + r.note }));
+    renderEstimate(d.estimate);
+    renderQuotes(d.quotes);
+    resetQuoteForm();
+    $('qAnalysis').className = 'muted'; $('qAnalysis').textContent = 'Bấm "Xem phân tích" ở một báo giá đã nhập hoặc "Xem trước phân tích" ở form.';
+    $('qDetail').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function renderEstimate(e) {
+    var box = $('qdEstimate'); box.innerHTML = '';
+    if (!e) { box.appendChild(el('p', { class: 'muted', text: 'Yêu cầu này không gắn khái toán nên chỉ lưu được báo giá, chưa phân tích được.' })); return; }
+    box.appendChild(el('p', null, ['Chi phí sơ bộ: ', el('strong', { text: evd(e.cost) }), ' ', badge(e.cost.status), ' · Đơn giá: ' + evd(e.rate) + ' · Diện tích sàn quy đổi: ' + evd(e.converted_area)]));
+    if (e.project) box.appendChild(el('p', { class: 'muted', text: e.project }));
+    var t = el('table', null, [el('thead', null, [el('tr', null, ['Hạng mục', 'Nhóm', 'Diện tích', 'Hệ số', 'DT quy đổi'].map(function (h) { return el('th', { text: h }); }))])]);
+    var tb = el('tbody'); t.appendChild(tb);
+    (e.items || []).forEach(function (it) {
+      tb.appendChild(el('tr', null, [td(it.label_vi), td(QGROUP[it.group_name] || it.group_name), td(fmtInt(it.area_m2) + ' m²'), td(String(it.coefficient).replace('.', ',')), td(fmtInt(it.converted_m2) + ' m²')]));
+    });
+    box.appendChild(el('div', { class: 'scroll' }, [t]));
+    if ((e.warnings || []).length) box.appendChild(el('ul', { class: 'muted' }, e.warnings.map(function (w) { return el('li', { text: w }); })));
+  }
+
+  function renderQuotes(list) {
+    var tb = $('qdQuotes').tBodies[0]; tb.innerHTML = '';
+    if (!list.length) tb.appendChild(el('tr', null, [el('td', { colspan: 9, class: 'muted', text: 'Chưa nhập báo giá nào cho yêu cầu này' })]));
+    list.forEach(function (q) {
+      var act = el('div', { class: 'handle' }, [
+        el('button', { class: 'btn', type: 'button', text: 'Xem phân tích', onclick: function () { showAnalysis(api('/api/admin/contractor-quotes/' + q.id + '/analysis')); } }),
+        el('button', { class: 'btn secondary', type: 'button', text: 'Sửa', onclick: function () { editQuote(q); } }),
+        el('button', { class: 'btn danger', type: 'button', text: 'Xóa', onclick: async function () {
+          if (!confirm('Xóa báo giá #' + q.id + '?')) return;
+          await api('/api/admin/contractor-quotes/' + q.id, { method: 'DELETE' });
+          toast('Đã xóa báo giá #' + q.id + '.', true);
+          openQuoteRequest(qState.detail.request.id).catch(function () {}); loaders.quotes().catch(function () {});
+        } })
+      ]);
+      tb.appendChild(el('tr', null, [td(q.id), td(q.received_date), td(fmtVnd(q.total_amount)), td(fmtVnd(q.price_per_m2)),
+        td(q.converted_area_m2 == null ? null : fmtInt(q.converted_area_m2) + ' m²'), el('td', null, [badge(q.status)]), td(q.entered_by),
+        el('td', null, [httpLink(q.file_url, 'Mở file')]), el('td', null, [act])]));
+    });
+  }
+
+  function numInput(name, value, placeholder, step) {
+    var i = el('input', { type: 'number', min: '0', step: step || 'any', 'data-k': name });
+    if (value != null) i.value = value;
+    if (placeholder != null) i.placeholder = placeholder;
+    return i;
+  }
+  function addLineRow(line, tmpl) {
+    line = line || {}; tmpl = tmpl || null;
+    var group;
+    if (tmpl) { group = el('span', { 'data-k': 'group', 'data-v': tmpl.group, text: QGROUP[tmpl.group] || tmpl.group }); }
+    else {
+      group = el('select', { 'data-k': 'group' }, Object.keys(QGROUP).map(function (k) { return el('option', { value: k, text: QGROUP[k] }); }));
+      group.value = line.group || 'khac';
+    }
+    var label = el('input', { class: 'lbl', maxlength: '200', 'data-k': 'label' }); label.value = line.label || (tmpl ? tmpl.label : '');
+    var hint = tmpl ? fmtInt(tmpl.area_m2) + ' m² × ' + String(tmpl.coefficient).replace('.', ',') : '—';
+    var tr = el('tr', { 'data-rule': (tmpl && tmpl.rule_code) || line.rule_code || '' }, [el('td', null, [group]), el('td', null, [label]), td(hint),
+      el('td', null, [numInput('area_m2', line.area_m2, tmpl ? tmpl.area_m2 : null)]), el('td', null, [numInput('coefficient', line.coefficient, tmpl ? tmpl.coefficient : null)]),
+      el('td', null, [numInput('converted_m2', line.converted_m2)]), el('td', null, [numInput('amount_vnd', line.amount_vnd, null, '1')]),
+      el('td', null, [tmpl ? null : el('button', { class: 'btn danger', type: 'button', text: 'Bỏ', onclick: function () { tr.remove(); } })])]);
+    $('qfLines').tBodies[0].appendChild(tr);
+  }
+  function resetQuoteForm(q) {
+    var form = $('quoteForm'); form.reset(); var f = form.elements;
+    qState.editing = q ? q.id : null;
+    $('qfTitle').textContent = q ? 'Sửa báo giá #' + q.id : 'Nhập báo giá';
+    $('qfSave').textContent = q ? 'Lưu thay đổi' : 'Lưu báo giá';
+    $('qfCancel').hidden = !q;
+    var tb = $('qfLines').tBodies[0]; tb.innerHTML = '';
+    var lines = (q && q.lines) ? q.lines.slice() : [];
+    ((qState.detail && qState.detail.line_template) || []).forEach(function (t) {
+      var idx = lines.findIndex(function (l) { return t.rule_code && l.rule_code === t.rule_code && (l.label || '') === (t.label || ''); });
+      if (idx < 0) idx = lines.findIndex(function (l) { return t.rule_code && l.rule_code === t.rule_code; });
+      addLineRow(idx >= 0 ? lines.splice(idx, 1)[0] : null, t);
+    });
+    lines.forEach(function (l) { addLineRow(l, null); });
+    if (q) {
+      ['total_amount', 'price_per_m2', 'converted_area_m2', 'scope_text', 'file_url', 'entered_by', 'note'].forEach(function (k) { f[k].value = q[k] == null ? '' : q[k]; });
+      f.received_at.value = q.received_date || '';
+      f.verified.checked = !!q.verified;
+    }
+  }
+  function editQuote(q) { resetQuoteForm(q); $('quoteForm').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  $('qfCancel').addEventListener('click', function () { resetQuoteForm(); });
+  $('qfAddLine').addEventListener('click', function () { addLineRow({ group: 'khac' }, null); });
+
+  function num(v) { v = String(v == null ? '' : v).trim(); return v === '' ? null : Number(v); }
+  function quoteBody() {
+    var f = $('quoteForm').elements;
+    var body = { total_amount: num(f.total_amount.value), price_per_m2: num(f.price_per_m2.value), converted_area_m2: num(f.converted_area_m2.value),
+                 received_at: f.received_at.value || null, entered_by: f.entered_by.value.trim() || null, scope_text: f.scope_text.value.trim() || null,
+                 file_url: f.file_url.value.trim() || null, note: f.note.value.trim() || null, verified: f.verified.checked, lines: [] };
+    Array.prototype.forEach.call($('qfLines').tBodies[0].rows, function (tr) {
+      var line = { rule_code: tr.getAttribute('data-rule') || null };
+      tr.querySelectorAll('[data-k]').forEach(function (x) {
+        var k = x.getAttribute('data-k');
+        if (k === 'group') line.group = x.tagName === 'SELECT' ? x.value : x.getAttribute('data-v');
+        else if (k === 'label') line.label = x.value.trim();
+        else line[k] = num(x.value);
+      });
+      if (['area_m2', 'coefficient', 'converted_m2', 'amount_vnd'].some(function (k) { return line[k] != null; })) body.lines.push(line);
+    });
+    return body;
+  }
+  $('quoteForm').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    if (!qState.detail) return;
+    var btn = $('qfSave'); btn.disabled = true;
+    try {
+      var body = quoteBody(), saved;
+      if (qState.editing) saved = await api('/api/admin/contractor-quotes/' + qState.editing, { method: 'PUT', json: body });
+      else saved = await api('/api/admin/quote-requests/' + encodeURIComponent(qState.detail.request.id) + '/quotes', { method: 'POST', json: body });
+      toast('Đã lưu báo giá #' + saved.id + '.', true);
+      await openQuoteRequest(qState.detail.request.id);
+      loaders.quotes().catch(function () {});
+      if (qState.detail.estimate) showAnalysis(api('/api/admin/contractor-quotes/' + saved.id + '/analysis'));
+    } catch (e) { /* toast đã báo lỗi */ } finally { btn.disabled = false; }
+  });
+  $('qfPreview').addEventListener('click', function () {
+    if (!qState.detail) return;
+    showAnalysis(api('/api/admin/quote-requests/' + encodeURIComponent(qState.detail.request.id) + '/analysis-preview', { method: 'POST', json: quoteBody() }), true);
+  });
+
+  async function showAnalysis(promise, preview) {
+    var box = $('qAnalysis');
+    var seq = showAnalysis.seq = (showAnalysis.seq || 0) + 1;
+    box.className = 'muted'; box.textContent = 'Đang phân tích…';
+    var a;
+    try { a = await promise; } catch (e) { if (seq === showAnalysis.seq) box.textContent = 'Chưa phân tích được: ' + e.message; return; }
+    if (seq !== showAnalysis.seq) return;
+    box.className = ''; box.innerHTML = '';
+    var src = a.quote_source || {};
+    box.appendChild(el('p', null, [preview ? el('strong', { text: 'Xem trước (chưa lưu) · ' }) : null, badge(a.quote_status), ' ', src.url ? httpLink(src.url, src.label) : (src.label || '')]));
+    box.appendChild(el('p', null, [el('strong', { text: a.notable ? 'Có chỉ số nằm ngoài khoảng khái toán (đáng chú ý).' : 'Không có chỉ số nào nằm ngoài khoảng khái toán (hoặc chưa so được).' })]));
+    var head = ['Chỉ số', 'Khái toán', 'Báo giá', 'Lệch so với điểm giữa', 'Ngoài khoảng', 'Vị trí', 'Nhận xét'];
+    var t = el('table', null, [el('thead', null, [el('tr', null, head.map(function (h) { return el('th', { text: h }); }))])]);
+    var tb = el('tbody'); t.appendChild(tb);
+    [a.total, a.price_per_m2, a.area].forEach(function (c) {
+      tb.appendChild(el('tr', { class: c.notable ? 'notable' : '' }, [td(c.label_vi), td(evd(c.estimate)), td(evd(c.quote)), td(evd(c.gap_pct)),
+        td(c.outside_pct && c.outside_pct.value != null ? c.outside_pct.display : '—'), el('td', null, [posBadge(c.position)]), el('td', { class: 'wrap' }, [c.note_vi])]));
+    });
+    box.appendChild(el('div', { class: 'scroll' }, [t]));
+    if (a.breakdown) {
+      var b = a.breakdown;
+      box.appendChild(el('h3', { text: 'Tách chênh lệch tổng tiền (so với điểm giữa khoảng khái toán)' }));
+      box.appendChild(el('ul', null, [
+        el('li', { text: 'Tổng chênh: ' + evd(b.total_gap) }),
+        el('li', { text: 'Do diện tích quy đổi khác: ' + evd(b.area_effect) }),
+        el('li', { text: 'Do đơn giá/m² khác: ' + evd(b.price_effect) }),
+        el('li', { text: 'Phần còn lại (phạm vi, hạng mục, làm tròn): ' + evd(b.other_effect) })
+      ]));
+      box.appendChild(el('p', { class: 'muted', text: b.note_vi }));
+    }
+    box.appendChild(el('h3', { text: 'Theo nhóm hạng mục' + (a.lines_compared ? '' : ' (báo giá chưa nhập dòng hạng mục)') }));
+    var lh = ['Hạng mục', 'DT quy đổi khái toán', 'DT quy đổi báo giá', 'Chi phí khái toán', 'Thành tiền báo giá', 'Lệch', 'Vị trí', 'Ghi chú'];
+    var lt = el('table', null, [el('thead', null, [el('tr', null, lh.map(function (h) { return el('th', { text: h }); }))])]);
+    var ltb = el('tbody'); lt.appendChild(ltb);
+    (a.lines || []).forEach(function (ln) {
+      ltb.appendChild(el('tr', { class: ln.notable ? 'notable' : '' }, [td(ln.label_vi), td(evd(ln.estimate_area)), td(evd(ln.quote_area)), td(evd(ln.estimate_cost)),
+        td(evd(ln.quote_amount)), td(ln.gap_pct && ln.gap_pct.value != null ? ln.gap_pct.display : '—'), el('td', null, [posBadge(ln.position)]),
+        el('td', { class: 'wrap' }, [(ln.notes || []).join(' ')])]));
+    });
+    box.appendChild(el('div', { class: 'scroll' }, [lt]));
+    if ((a.summary || []).length) { box.appendChild(el('h3', { text: 'Tóm tắt' })); box.appendChild(el('ul', null, a.summary.map(function (s) { return el('li', { text: s }); }))); }
+    if (a.scope_text) box.appendChild(el('p', { class: 'muted', style: 'white-space:pre-wrap', text: 'Phạm vi nhà thầu ghi: ' + a.scope_text }));
+    if ((a.exclusions || []).length) { box.appendChild(el('p', { class: 'muted', text: 'Khái toán chưa bao gồm:' })); box.appendChild(el('ul', { class: 'muted' }, a.exclusions.map(function (s) { return el('li', { text: s }); }))); }
+    if ((a.warnings || []).length) { box.appendChild(el('p', { class: 'muted', text: 'Lưu ý:' })); box.appendChild(el('ul', { class: 'muted' }, a.warnings.map(function (s) { return el('li', { text: s }); }))); }
+    box.appendChild(el('p', { class: 'note-box', text: a.disclaimer }));
   }
 
   // ---------------------------------------------------------------- violations

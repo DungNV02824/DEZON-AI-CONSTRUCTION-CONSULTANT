@@ -213,6 +213,8 @@ export interface ImageRef {
   project_name?: string | null;
   /** Trang công trình trên dezon.vn (link trong lightbox; thiếu -> hồ sơ nhà thầu, rồi URL ảnh gốc). */
   project_url?: string | null;
+  /** Ảnh thu nhỏ trên dezon.vn cho ô ảnh (thiếu -> dùng url; lỗi tải -> lùi về url). Lightbox luôn dùng url. */
+  thumb_url?: string | null;
 }
 
 /** Khóa chuẩn trong ContractorCard.evidence. */
@@ -280,6 +282,8 @@ export interface ProjectSummary {
   contractor_names?: string[];
   images?: ImageRef[];
   source?: SourceRef | null;
+  /** Số ảnh thực có của công trình (images tối đa 20); thiếu/0 -> dùng images.length. */
+  total_images?: number;
 }
 
 /** Khóa chuẩn trong ContractorProfile.info (mục 8.3). */
@@ -484,6 +488,8 @@ export interface ContractorListBlock {
 export interface ComparisonTableBlock {
   type: 'comparison_table';
   data: ComparisonMatrix;
+  /** V2 — PDF: phiên khái toán gắn với bảng (nút "Tải PDF (khái toán + so sánh)"). Không có -> ẩn nút. */
+  estimate_session_id?: UUID | null;
 }
 
 export interface ContractorDetailBlock {
@@ -498,9 +504,20 @@ export interface SourceBadge {
   source: SourceRef;
 }
 
+/** Giá trị đã dùng trong lượt nhưng không có block nào hiển thị (vd get_reference_rates, số tổng hợp tổng quan). */
+export interface EvidenceItem {
+  /** Ngữ cảnh, vd "Tổng quan nhà thầu — Biệt thự tại TP. Hồ Chí Minh". */
+  group?: string | null;
+  /** Tên thông tin, vd "Số nhà thầu phù hợp". */
+  label: string;
+  evidence: EvidenceValue;
+}
+
 export interface SourceBadgesBlock {
   type: 'source_badges';
   badges: SourceBadge[];
+  /** V2 — Nguồn dữ liệu. Tùy chọn: block cũ đã lưu không có trường này. */
+  items?: EvidenceItem[];
 }
 
 export interface QuoteFormContractor {

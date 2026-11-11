@@ -3,6 +3,7 @@ import type { UIBlock } from '../api/types';
 import type { UIMessage } from '../state/useChat';
 import { BlockRenderer } from './blocks/BlockRenderer';
 import { layoutMessage, type MessagePart } from '../utils/messageLayout';
+import { AnswerSourcesLink } from './common/AnswerSources';
 import { BlockBoundary } from './common/BlockBoundary';
 
 function TypingDots() {
@@ -128,6 +129,8 @@ export function MessageList({
                     </div>
                   ),
                 )}
+                {/* V2: link "Nguồn dữ liệu (N)" cuối câu trả lời có số liệu (gồm cả tin nhắn cục bộ hồ sơ/so sánh). */}
+                {!m.pending && !m.error && m.blocks.length > 0 && <AnswerSourcesLink blocks={m.blocks} />}
                 {m.error && (
                   <div className="dz-bubble dz-bubble--error" role="alert">
                     {m.error}

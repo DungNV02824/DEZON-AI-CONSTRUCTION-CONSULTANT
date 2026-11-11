@@ -28,6 +28,8 @@ export interface WidgetActions {
   estimateSessionId: string | null;
   /** Mã phiên chat hiện tại — gửi kèm yêu cầu báo giá để backend ghi phong cách / mức đầu tư khách đã chọn. */
   chatSessionId: string | null;
+  /** Link tải PDF khái toán (+ so sánh khi có `contractorIds`). null = không xuất được (mock) -> ẩn nút. */
+  pdfUrl(estimateSessionId: string, contractorIds?: number[]): string | null;
 }
 
 const noop = () => undefined;
@@ -48,6 +50,7 @@ export const defaultActions: WidgetActions = {
   quoteSubmitted: noop,
   estimateSessionId: null,
   chatSessionId: null,
+  pdfUrl: () => null,
 };
 
 export const WidgetContext = createContext<WidgetActions>(defaultActions);

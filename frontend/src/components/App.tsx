@@ -8,6 +8,8 @@ import { MessageList } from './MessageList';
 import { PlanningLayout } from './PlanningLayout';
 import { ComposerFootnote } from './common/ContactStaffPopover';
 import { LightboxProvider } from './common/Lightbox';
+import { AnswerSourcesProvider } from './common/AnswerSources';
+import { ProjectGalleryProvider } from './common/ProjectGallery';
 import { SourcePopoverProvider } from './common/SourcePopover';
 
 const OPEN_KEY = 'dezon_ai_open';
@@ -105,7 +107,7 @@ export function App({ client, initiallyOpen = false, registerControls, mode = 'w
           const matrix = await client.compare(ids, estId ?? estimateSessionId);
           return {
             content: 'Dạ, đây là bảng so sánh các nhà thầu anh/chị đã chọn. Ô nào chưa có dữ liệu em ghi rõ "Chưa có dữ liệu".',
-            blocks: [{ type: 'comparison_table', data: matrix }],
+            blocks: [{ type: 'comparison_table', data: matrix, estimate_session_id: estId ?? estimateSessionId }],
           };
         }, 'Xin lỗi, em chưa lập được bảng so sánh. Anh/chị vui lòng thử lại sau.'),
       openQuoteForm: (contractors: QuoteFormContractor[], estId) =>
@@ -132,6 +134,7 @@ export function App({ client, initiallyOpen = false, registerControls, mode = 'w
       quoteSubmitted: markQuoteSubmitted,
       estimateSessionId,
       chatSessionId: sessionId,
+      pdfUrl: (estId, contractorIds) => (client.isMock ? null : client.pdfUrl(estId, contractorIds)),
     }),
     [client, busy, send, runLocal, markQuoteSubmitted, latestMatch, estimateSessionId, sessionId],
   );
@@ -153,7 +156,11 @@ export function App({ client, initiallyOpen = false, registerControls, mode = 'w
         <SourcePopoverProvider>
           <div className="dz-root dz-root--page">
             <LightboxProvider>
-              <PlanningLayout chat={chat} isMock={client.isMock} loginUrl={loginUrl} inputRef={inputRef} />
+              <ProjectGalleryProvider>
+                <AnswerSourcesProvider>
+                  <PlanningLayout chat={chat} isMock={client.isMock} loginUrl={loginUrl} inputRef={inputRef} />
+                </AnswerSourcesProvider>
+              </ProjectGalleryProvider>
             </LightboxProvider>
           </div>
         </SourcePopoverProvider>
@@ -166,6 +173,8 @@ export function App({ client, initiallyOpen = false, registerControls, mode = 'w
       <SourcePopoverProvider>
         <div className="dz-root">
           <LightboxProvider>
+          <ProjectGalleryProvider>
+          <AnswerSourcesProvider>
           {open && expanded && (
             <div
               className="dz-root--page dz-overlay"
@@ -290,6 +299,8 @@ export function App({ client, initiallyOpen = false, registerControls, mode = 'w
             {!open && <span className="dz-launcher__label">Tư vấn AI</span>}
           </button>
           )}
+          </AnswerSourcesProvider>
+          </ProjectGalleryProvider>
           </LightboxProvider>
         </div>
       </SourcePopoverProvider>

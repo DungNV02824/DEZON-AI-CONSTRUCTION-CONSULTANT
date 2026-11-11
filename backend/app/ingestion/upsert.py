@@ -34,6 +34,7 @@ from app.db.models import (
     ProjectImage,
 )
 from app.evidence import SOURCE_PRIORITY, SourceType, default_status_for
+from app.images import derive_thumb_url
 
 log = logging.getLogger(__name__)
 
@@ -365,17 +366,19 @@ def find_project(db: Session, *, external_id: str | None = None, slug: str | Non
 
 
 def sync_project_images(db: Session, project: Project, images: list[dict[str, Any]]) -> bool:
-    """Thay toàn bộ ảnh của dự án khi danh sách URL thay đổi."""
-    wanted = [(img["url"], img.get("caption"), int(img.get("sort_order", i)))
+    """Thay toàn bộ ảnh của dự án khi danh sách URL (hoặc chú thích, thứ tự, ảnh thu nhỏ) thay đổi.
+    Ảnh thu nhỏ: `thumb_url` của nguồn (crawler: data-thumb), thiếu -> suy từ ảnh gốc (derive_thumb_url)."""
+    wanted = [(img["url"], img.get("caption"), int(img.get("sort_order", i)),
+               img.get("thumb_url") or derive_thumb_url(img["url"]))
               for i, img in enumerate(images) if img.get("url")]
-    current = [(i.url, i.caption, i.sort_order) for i in project.images]
+    current = [(i.url, i.caption, i.sort_order, i.thumb_url) for i in project.images]
     if current == wanted:
         return False
     for img in list(project.images):
         project.images.remove(img)
     db.flush()
-    for url, caption, order in wanted:
-        project.images.append(ProjectImage(url=url, caption=caption, sort_order=order))
+    for url, caption, order, thumb in wanted:
+        project.images.append(ProjectImage(url=url, caption=caption, sort_order=order, thumb_url=thumb))
     db.flush()
     return True
 

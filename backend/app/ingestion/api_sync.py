@@ -126,7 +126,8 @@ def map_project(obj: dict[str, Any], site_url: str) -> dict[str, Any]:
         "end_date": obj.get("end_date"), "status": obj.get("status"), "description": obj.get("description"),
         "project_url": obj.get("url") or f"{site_url.rstrip('/')}/du-an/{slug}/",
         "images": [{"url": u if isinstance(u, str) else u.get("url"),
-                    "caption": None if isinstance(u, str) else u.get("caption"), "sort_order": i}
+                    "caption": None if isinstance(u, str) else u.get("caption"), "sort_order": i,
+                    "thumb_url": None if isinstance(u, str) else u.get("thumb_url")}
                    for i, u in enumerate(obj.get("images") or [])],
         "contractors": [{"slug": c.get("slug"), "external_id": str(c.get("id")) if c.get("id") else None,
                          "name": c.get("name"), "role": c.get("role") or "thi_cong",

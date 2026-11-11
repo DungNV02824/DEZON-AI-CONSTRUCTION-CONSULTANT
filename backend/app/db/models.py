@@ -141,6 +141,8 @@ class ProjectImage(Base):
     url: Mapped[str] = mapped_column(Text)
     caption: Mapped[str | None] = mapped_column(Text)
     sort_order: Mapped[int] = mapped_column(Integer, server_default="0")
+    # Ảnh thu nhỏ trên dezon.vn (data-thumb); NULL -> service suy từ url (app/images.py) — migration 0004.
+    thumb_url: Mapped[str | None] = mapped_column(Text)
 
     project: Mapped[Project] = relationship(back_populates="images")
 
@@ -263,6 +265,12 @@ class ContractorQuote(Base):
     scope_text: Mapped[str | None] = mapped_column(Text)
     file_url: Mapped[str | None] = mapped_column(Text)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # migration 0005 (V2 — quotes): nhân viên nhập báo giá ở trang admin.
+    converted_area_m2: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
+    lines: Mapped[list] = mapped_column(JSONB, server_default="[]", default=list)
+    verified: Mapped[bool] = mapped_column(Boolean, server_default="false", default=False)
+    entered_by: Mapped[str | None] = mapped_column(Text)
+    note: Mapped[str | None] = mapped_column(Text)
 
 
 class MatchingWeights(Base):

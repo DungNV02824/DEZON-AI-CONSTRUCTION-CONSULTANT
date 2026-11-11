@@ -1100,3 +1100,265 @@ Test hồi quy chính: `tests/test_chat_fixes.py` (luồng thật qua orchestrat
   toán đính kèm (khoảng chi phí + diện tích sàn quy đổi), ghi chú gửi nhà thầu (gồm phong cách / mức đầu tư), kênh gửi.
 - Nội dung khách nhập luôn là `plain_text` (không lark_md) để không chèn được link / `<at id=all>`. Test đặt
   `LARK_WEBHOOK_URL=""` trong conftest nên không bao giờ gửi tin thật.
+
+## V2 — gallery
+
+Quyết định của chủ sản phẩm: lưới "Xem tất cả ảnh" ngay trong widget, slideshow theo từng công trình, dùng ảnh thu nhỏ
+của dezon.vn cho ô ảnh, lightbox thêm Home/End và trạng thái đang tải. Các giả định em tự chốt:
+
+- **Không có endpoint mới.** Hộp thoại "Xem tất cả ảnh" (`ProjectGallery.tsx`) dùng `ContractorProfile.projects` ở hồ
+  sơ mở rộng (có tên, link, dòng meta của từng công trình) và nhóm `cover_images` theo `project_slug` ngay ở frontend
+  ở thẻ nhà thầu (thứ tự công trình theo lần xuất hiện đầu tiên, tức thứ tự id như backend). Nút chỉ hiện khi có
+  nhiều hơn 3 ảnh (ít hơn thì 3 ô đã đủ). Trên thẻ, nút là chip "Xem tất cả N ảnh" ở góc dưới bên trái khung ảnh,
+  không đè lên lớp "+N" ở ô cuối. Trong hồ sơ, nút là "Xem tất cả N ảnh theo công trình", nằm dưới lưới chính.
+- **Thứ tự slideshow sắp ở frontend, backend giữ nguyên.** Backend vẫn xoay vòng `cover_images` giữa các công trình,
+  để khi bị cắt ở 80 ảnh thì công trình nào cũng còn ảnh. `GalleryTiles order="by_project"` sắp lại thành hết ảnh
+  công trình A rồi sang B. 3 ô xem trước lấy ảnh đầu của 3 công trình khác nhau; nếu không đủ 3 công trình thì lấy
+  thêm ảnh kế tiếp. Nhãn ô "Xem ảnh i/n" dùng vị trí trong slideshow mới. Lưới chính của hồ sơ mở rộng dùng cùng
+  cách hiển thị, nên 3 ô ở đó cũng thuộc 3 công trình khác nhau (trước đây là 3 ảnh đầu của công trình đầu tiên).
+- **"Ảnh k/n · <tên công trình>"** đặt ở chú thích lightbox, trước tên công trình. Dòng này chỉ hiện khi danh sách
+  có từ 2 công trình trở lên (mở từ thẻ hoặc từ lưới chính). Khi lightbox chỉ chạy ảnh của một công trình, bộ đếm
+  "i / n" đã cho biết vị trí nên không lặp lại. k/n là số đếm ảnh thực có, không phải số liệu tư vấn, nên không
+  dùng EvidenceValue.
+- **Ảnh thu nhỏ.** Cột mới `project_images.thumb_url` (migration `0004_project_image_thumbs.py`, cho phép NULL,
+  không backfill). Crawler đọc `data-thumb` của `a.dznt-shot`. Dữ liệu cũ (snapshot) chưa có cột này thì service
+  suy ra lúc đọc bằng `app/images.py derive_thumb_url`; `sync_project_images` cũng suy ra và lưu khi nguồn thiếu
+  `data-thumb`. Hệ quả: lần đồng bộ đầu tiên sau migration sẽ ghi lại ảnh của các công trình thêm `thumb_url`, và
+  outcome báo `updated` một lần. Mẫu suy ra được giữ chặt:
+  `https?://(www.)?dezon.vn/wp-content/uploads/dz-data/nt/<slug>/o/<file>.<jpg|jpeg|png|webp>`, bỏ đoạn `/o/`, không
+  nhận query string hay thư mục con. Mẫu này dựa trên fixture trang công trình và `avatar_url`/`works[].thumb_url`
+  trong snapshot (tất cả đều là bản không có `/o/`). Nếu dezon.vn đổi cấu trúc thư mục, ảnh thu nhỏ sẽ trả 404;
+  khi đó `SafeImage.fallbackSrc` thử lại bằng ảnh gốc, và chỉ khi ảnh gốc cũng lỗi mới hiện "Không tải được ảnh".
+  Lightbox và phần tải trước ảnh kề bên luôn dùng ảnh gốc.
+- **`ProjectSummary.total_images`** (mặc định 0). Nếu lớn hơn số ảnh đã gửi (tối đa 20/công trình), dải ảnh của
+  công trình và hộp thoại sẽ có link "Xem thêm N ảnh trên trang công trình ↗". Dữ liệu hiện tại có tối đa 8
+  ảnh/công trình nên link này chưa hiện.
+- **Lồng hộp thoại.** `ProjectGalleryProvider` nằm trong `LightboxProvider` (App.tsx), nên lightbox render sau hộp
+  thoại trong DOM. Cả hai dùng z-index 2147483002, vì vậy lightbox luôn nằm trên. Esc chỉ đóng lớp trên cùng, vì
+  cả hai đều gọi stopPropagation. Khóa cuộn và trả focus dùng chung `useModalLifecycle` và `trapTab` trong
+  `Lightbox.tsx`. Lớp trên đóng trước nên `overflow` được khôi phục đúng thứ tự.
+- **Trạng thái đang tải.** Lightbox hiện "Đang tải ảnh…" (role=status) cho tới khi ảnh gốc `onLoad`, hoặc lỗi.
+  Lớp này chỉ hiện sau 0,25s, để ảnh đã có trong bộ nhớ đệm không bị nhấp nháy.
+- **Bỏ qua dải ảnh thu nhỏ trong lightbox** (owner để tùy chọn). Hộp thoại "Xem tất cả ảnh" đã có chức năng nhảy
+  nhanh tới ảnh bất kỳ, còn dải ảnh sẽ chiếm chỗ của ảnh chính trên màn hình 360px.
+- **Nhãn giữ "trên Dezon"** ("Mở trang công trình … trên Dezon", "Xem toàn bộ N ảnh trên Dezon", "Công trình thực tế
+  trên Dezon"), vì link thật sự trỏ về dezon.vn.
+- **Dòng đếm trong hộp thoại ghi "N ảnh từ M công trình có ảnh"**, không dùng "công trình ghi nhận trên Dezon". M chỉ
+  là số nhóm ảnh có trong payload (thẻ: nhóm `cover_images` theo `project_slug`, có thể bị cắt ở 80 ảnh; hồ sơ: các
+  công trình có ít nhất một ảnh), không phải `dezon_project_count` có bằng chứng. Nếu một công trình không có ảnh thì
+  M nhỏ hơn số công trình ghi nhận ở EvidenceCell, nên không được dùng cùng nhãn. Dòng này là số đếm ảnh hiển thị,
+  không phải số liệu tư vấn, nên không dùng EvidenceValue (giống "Ảnh k/n").
+
+## V2 — sources (link "Nguồn dữ liệu (N)" cuối câu trả lời)
+
+- **Gom ở client, backend chỉ bù phần không có block.** Không có endpoint hay migration mới. Frontend
+  (`utils/answerSources.ts`, hàm thuần) duyệt các block của tin nhắn: `estimate_table` (Đơn giá tham chiếu, Chi phí sơ
+  bộ), `budget_options` (Ngân sách của anh/chị, Chi phí khái toán hiện tại, chi phí từng phương án), `contractor_list`
+  (mọi khóa `card.evidence` + Chi phí ước tính theo đơn giá nhà thầu), `comparison_table` (hàng × nhà thầu, gồm bảng
+  tổng quan), `contractor_detail` (Giới thiệu, `info`, các khóa `card.evidence` không trùng `info`) và
+  `source_badges.items`. Tin nhắn cục bộ (hồ sơ/so sánh qua REST) cũng có link vì mang block đầy đủ.
+- **`SourceBadgesBlock.items`** (chỉ THÊM, mặc định `[]`) mang evidence không có block:
+  `get_reference_rates` và 8 số tổng hợp của `get_contractor_overview` (`app/ai/blocks.py text_only_evidence`). Chỉ số
+  tổng hợp được đưa vào; các nhà thầu thứ 6 trở đi của tổng quan (bảng chỉ hiện 5) không được liệt kê riêng — nếu LLM
+  nhắc tới họ thì giá trị đó chưa có trong hộp thoại (để pha sau cùng ánh xạ claim→evidence của validator).
+  `source_badges` giờ được phát cả khi chỉ có `items` (khi đó `badges = []`); frontend vẫn ẩn chip như trước.
+- **Không làm ánh xạ claim→evidence của validator** (theo chủ sản phẩm, để pha sau). Hệ quả: lượt LLM chỉ nhắc lại số
+  của lượt trước (không gọi tool, không có block) sẽ không có link "Nguồn dữ liệu".
+- **N = số nguồn (nhóm), không phải số giá trị.** Link chỉ hiện khi có ít nhất một giá trị có số liệu (≥ 1 nhóm);
+  tin nhắn mà mọi giá trị đều "Chưa có dữ liệu" không có link (ô trên bảng đã ghi "Chưa có dữ liệu"). Ẩn khi đang nhận
+  stream và khi tin nhắn lỗi.
+- **Khóa nhóm = (label, url, updated_at, status)**: giống cách khử trùng lặp nguồn của backend `source_badges`
+  (label, url, ngày) cộng thêm status, vì mỗi nhóm hiển thị một trạng thái (dùng lại `SourceDetails`: trạng thái, ý
+  nghĩa, link nguồn mở tab mới `rel="noopener noreferrer"`, ngày cập nhật, cảnh báo dữ liệu cũ). Nhóm bị đánh dấu cũ
+  khi có ít nhất một giá trị `is_stale`; dòng đó có thêm dấu ⚠. Giá trị có số liệu nhưng không có nguồn vào nhóm
+  "Chưa ghi nhận nguồn chi tiết".
+- **Khác backend ở 2 điểm (có chủ ý):** (1) hộp thoại liệt kê cả giá trị có nguồn "Ngân sách do anh/chị cung cấp"
+  (đúng là giá trị đã dùng; nhãn nguồn nói rõ là của khách), còn chip `badges` bỏ nguồn này; (2) không giới hạn 8 nguồn
+  và không bỏ nguồn thiếu url/ngày (vd đơn giá tham khảo chỉ có ngày) — nhãn nguồn hiện nguyên văn, không có link.
+- **Không liệt kê hệ số khái toán và link trang dự án.** Hệ số (`rules_status`, `rules_version`) và
+  `ProjectSummary.source` không phải EvidenceValue (không có `display`); hộp thoại chỉ liệt kê EvidenceValue. Link
+  trang dự án vẫn có ngay trên hồ sơ/bảng tổng quan.
+- **Khử trùng lặp dòng** theo (nhóm, ngữ cảnh, nhãn, display): cùng giá trị ở thẻ nhà thầu và bảng so sánh chỉ hiện
+  một lần. Ngữ cảnh = tên nhà thầu / "Khái toán" / "Phương án ngân sách" / `item.group`.
+- **Phạm vi Hoàn thiện/Nội thất:** như thẻ nhà thầu, bỏ "Chi phí ước tính theo đơn giá nhà thầu" khỏi hộp thoại (thẻ
+  hiện "Chưa có dữ liệu" thay cho giá trị này).
+- **Giao diện:** hộp thoại `role="dialog" aria-modal` định vị `fixed` phủ khung nhìn (z-index 2147483002 như
+  lightbox), hộp tối đa 560px (640px ở giao diện mở rộng), màn hình < 480px thành tấm trượt từ dưới lên full chiều
+  ngang (chạy được ở 360px). Esc (stopPropagation để khung chat không đóng theo), nút × và bấm nền đều đóng; focus trả
+  về link; dùng lại `useModalLifecycle`/`trapTab`. Mục "Chưa có dữ liệu (k)" là `<details>` thu gọn ở cuối. Câu dẫn
+  xưng "em", gọi "anh/chị". Nhãn trạng thái và nguồn giữ chữ "Dezon" vì dữ liệu thật lấy từ dezon.vn.
+- **Rủi ro còn lại:** nhãn nguồn lấy nguyên văn từ bảng `data_sources`. Nếu production còn nhãn seed (vd "Đơn giá tham
+  khảo (seed dev — chờ Dezon cung cấp bảng giá)"), hộp thoại sẽ hiện nguyên chuỗi đó cho khách — cần đổi nhãn trong
+  `data_sources` trước khi phát hành. Không kiểm tra được từ repo.
+- **Sửa sau review (sources):**
+  - Không phát `source_badges` chỉ để chứa giá trị "Chưa có dữ liệu" khi lượt không có chip nguồn và không có block
+    dữ liệu nào (`build_ui_blocks`: gắn `items` khi có `badges`, có block khác, hoặc có ít nhất một mục có giá trị).
+    Lý do: block thừa không làm hiện link (0 nhóm) nhưng đổi bố cục tin nhắn — `layoutMessage` tách câu hỏi cuối khỏi
+    `quick_replies`, giao diện mở rộng mất thẻ câu hỏi. Có block dữ liệu thì bố cục đã như vậy nên vẫn gửi mục
+    unavailable để hộp thoại liệt kê ở "Chưa có dữ liệu (k)".
+  - Hộp thoại render ở cấp `.dz-root` qua `AnswerSourcesProvider` (đặt trong `ProjectGalleryProvider` của App, như
+    Lightbox/ProjectGallery): ra ngoài `.dz-panel` (stacking context riêng → nút launcher từng đè lên hộp thoại ở
+    màn hình ≥ 640px) và ngoài log `aria-live` (trình đọc màn hình không đọc lại cả bảng nguồn). Khi link nằm trong
+    giao diện mở rộng (`.dz-root--page`, kể cả lớp phủ của widget), hộp thoại thêm lớp `dz-root--page` để giữ tông
+    giao diện đó. Không có provider (test, block độc lập) → render tại chỗ như cũ.
+  - Hộp `role="dialog"` có `tabIndex={-1}` (bấm vào chữ không làm focus rơi về `body`, Esc/bẫy Tab vẫn chạy).
+  - `trapTab` (dùng chung với Lightbox/ProjectGallery) tính cả `details > summary` là phần tử nhận focus và bỏ qua
+    phần tử nằm trong `<details>` đang thu gọn — mục "Chưa có dữ liệu (k)" tới được bằng bàn phím.
+
+## V2 — pdf (xuất PDF bảng khái toán + so sánh nhà thầu)
+
+- **PDF dựng phía máy chủ bằng ReportLab** (`reportlab>=4.2` trong `backend/pyproject.toml`, Dockerfile không đổi —
+  wheel thuần Python, kéo theo Pillow). Không dùng `window.print`/print stylesheet (widget nằm trong Shadow DOM của
+  trang chủ; in sẽ in cả trang host, WebView Zalo/Facebook không có `window.print`) và không dùng jsPDF/html2canvas
+  (tăng bundle IIFE vài trăm KB vì phải nhúng font, chữ bị raster). Không dùng WeasyPrint (cần Pango/HarfBuzz qua apt).
+- **Font**: Be Vietnam Pro Regular + Bold bản tĩnh (OFL 1.1) tải từ `google/fonts/ofl/bevietnampro` (raw.githubusercontent),
+  kèm `OFL.txt`, lưu ở `backend/app/static/fonts/`. Đã kiểm tra là TTF hợp lệ (ReportLab nạp được) và test
+  `test_font_covers_every_character` xác nhận cmap có đủ mọi ký tự trong file + toàn bộ chữ có dấu tiếng Việt, `•`,
+  `×`, `²`. Chỉ số dưới A<sub>i</sub>, k<sub>i</sub> dùng thẻ `<sub>` của ReportLab (font không có glyph `ᵢ`).
+  `.gitattributes` thêm `*.ttf binary`.
+- **Chuỗi vào Paragraph** luôn qua `markup()` = chuẩn hóa NFC + bỏ ký tự điều khiển + escape `& < >` (tên nhà thầu
+  crawl có thể chứa `&`/`<`, hoặc ở dạng NFD). Link (tên nhà thầu → `profile_url`, nguồn → `url`) chỉ tạo khi URL bắt
+  đầu bằng `http(s)://`, thuộc tính `href` được escape cả dấu `"`. Chuỗi vẽ thẳng lên canvas (đầu/chân trang) cũng NFC.
+- **Thương hiệu** (quyết định chủ sản phẩm): đầu trang là dải navy `#001c33` (logo `vuathau-logo.png` chữ trắng nên
+  cần nền tối — cùng màu thanh bên giao diện mở rộng), "Vua thầu khái toán" và link pro.vuathau.com.vn (vàng
+  `#ffb51c`). Logo chép sang `backend/app/static/brand/`. Ghi chú nguồn dữ liệu giữ "Dezon"/dezon.vn ("Công trình
+  ghi nhận trên Dezon", nhãn trạng thái, nhãn nguồn, "hồ sơ nhà thầu trên Dezon (dezon.vn)"). Hằng số thương hiệu
+  nằm trong `app/export/estimate_pdf.py` (`BRAND_NAME`, `SITE_URL`), không đưa vào cấu hình.
+- **Ẩn danh**: file không có tên/SĐT khách, chỉ có mã khái toán = 8 ký tự hex đầu của `estimate_session_id` (in hoa).
+  Endpoint là GET theo UUID khó đoán — mức lộ dữ liệu như `GET /api/estimates/{id}` sẵn có.
+- **Ngày xuất** "Ngày xuất dd/mm/yyyy HH:mm" theo giờ Việt Nam = UTC+7 cố định (`VN_TZ`, Việt Nam không có giờ mùa
+  hè) để không phụ thuộc tzdata của image.
+- **Số liệu**: phần khái toán là snapshot đã hiển thị (`estimate_service.get_estimate`, cờ dữ liệu cũ xét theo ngày
+  xuất). Bảng so sánh được tính lại lúc xuất bằng `compare_contractors(..., estimate_session_id=id)` (không thêm
+  migration lưu snapshot so sánh) và ghi "Dữ liệu tại thời điểm xuất dd/mm/yyyy HH:mm…". Mọi giá trị là
+  `EvidenceValue.display` hoặc kết quả `app/formatting.py`/`vi_number` trên đầu vào; thiếu → "Chưa có dữ liệu";
+  không có văn bản LLM. Ô có dữ liệu cũ gắn " (*)" kèm chú thích; mục "Nguồn dữ liệu" khử trùng lặp theo (nhãn, url,
+  ngày cập nhật). Ghi chú miễn trừ: `EstimateResult.disclaimer`, rỗng thì `explain.build_disclaimer`. Thêm
+  `PROJECT_COUNT_NOTE` dưới bảng so sánh và câu "Mức phù hợp tính theo tiêu chí của anh/chị, không phải xếp hạng chất
+  lượng nhà thầu".
+- **Bố cục**: A4 dọc; khi bảng so sánh có hơn 3 nhà thầu, bảng sang trang A4 ngang (`NextPageTemplate`). Bảng hệ số
+  luôn mở (trên widget mặc định thu gọn). Chân trang mỗi trang: "Vua thầu khái toán · pro.vuathau.com.vn — Khái toán
+  sơ bộ, không phải báo giá thi công." + "Trang x/y". Không có QR code (quyết định chủ sản phẩm). Thông tin công trình
+  giống bảng trên widget (loại, khu vực, diện tích đất, diện tích xây dựng nếu khách nhập, số tầng, phạm vi); mái/móng/
+  hầm thể hiện qua bảng hệ số và giả định.
+- **`invariant=1`**: cùng nội dung → cùng byte (test so sánh 2 lần render).
+- **Vị trí mã**: `app/schemas/export.py` (mô hình nội dung, mới), `app/export/estimate_pdf.py` (`build_report` thuần +
+  `render_pdf`; không nằm trong `app/engines` vì đọc file font/logo), `app/services/export_service.py` (DB).
+- **Endpoint chỉ gắn với khái toán**: `GET /api/estimates/{id}/pdf?contractor_ids=…` (0 hoặc 2–5 id). Không có PDF
+  so sánh độc lập (bảng tổng quan, so sánh trước khi có khái toán) — nút bị ẩn ở các bảng đó.
+- **Tên file** ASCII `khai-toan-vuathau-<yyyymmdd>-<8 hex>[-so-sanh].pdf`; `Content-Disposition: attachment`
+  (nút "Tải PDF"), `Cache-Control: no-store`.
+- **Giới hạn tần suất** (tự quyết, rủi ro CPU trên máy chủ dùng chung): `PDF_RATE_LIMIT_PER_MIN` mặc định 20 lượt/phút
+  mỗi IP, dùng lại `RedisRateLimiter`/`MemoryRateLimiter` (`chat_service.get_pdf_rate_limiter`, khóa `dezon:rl:pdf`),
+  vượt → 429 kèm `Retry-After`. Kiểm tra id nhà thầu trước khi tính lượt (request sai 422 không tốn lượt).
+- **Schema** (chỉ thêm): `ComparisonTableBlock.estimate_session_id: UUID | None = None`, điền ở `build_ui_blocks` từ
+  `estimate_session_id` của lượt chat. Frontend: `ApiClient.pdfUrl` (HTTP → link, mock → `null`),
+  `WidgetActions.pdfUrl` (mặc định `null`), `ComparisonTable` nhận thêm prop `estimateId` (bảng mở trong danh sách nhà
+  thầu dùng `criteria.estimate_session_id`), bảng do nút "So sánh" (App `compare`) tạo cũng mang `estimate_session_id`.
+  Tin nhắn cũ trong localStorage không có trường → nút bảng so sánh đơn giản là ẩn.
+- **Chưa làm / rủi ro còn lại**: chưa QA trên thiết bị thật (iOS Safari, Android Chrome, trình duyệt trong app Zalo —
+  WebView có thể bỏ qua `download`/chặn tải; `target=_blank` giúp mở bằng trình duyệt). Production cần build lại image
+  backend để cài `reportlab`. Nhãn nguồn hiện nguyên văn từ `data_sources` (nếu còn nhãn seed sẽ in ra PDF).
+- **Sửa sau review — lỗi khi khách bấm "Tải PDF"** (tự quyết): link là điều hướng trình duyệt nên JSON `{detail}`
+  không đọc được. Route PDF dùng `PdfDownloadRoute` (con của `VietnameseRoute`): khi `Accept` có `text/html` (trình duyệt
+  mở link), mọi lỗi — 404/422/429/500/503, lỗi validation và lỗi không lường trước — thành trang HTML tiếng Việt
+  (`Content-Disposition: inline`, `no-store`, CSP `default-src 'none'`, thông báo được escape) cùng mã trạng thái, có
+  "Thử lại" (chỉ 429/500/503) và "Về Vua thầu khái toán"; client API vẫn nhận JSON như cũ (test giữ nguyên). Chọn cách
+  này thay vì frontend `fetch`/HEAD trước vì kiểm tra trước sẽ dựng PDF hai lần và tốn hai lượt rate limit. Bỏ thuộc
+  tính `download` trên thẻ `<a>`: tên file đã do `Content-Disposition: attachment` quyết định, còn `download` khiến
+  Chrome báo tải thất bại/lưu trang lỗi thành file thay vì hiện trang lỗi.
+- **Sửa sau review — ô so sánh quá dài** (tự quyết): một dòng bảng ReportLab không tách qua trang nên `warranty_text`
+  thô ~1.000+ ký tự làm `LayoutError` → 500. `build_report` rút gọn mỗi ô so sánh còn ≤ 300 ký tự (`MAX_CELL_CHARS`,
+  cắt ở ranh giới từ, thêm "…") và tên nhà thầu ≤ 120 ký tự (`MAX_NAME_CHARS`); khi có ô bị rút gọn thêm chú thích
+  "nội dung đầy đủ xem trên hồ sơ nhà thầu tại Dezon (dezon.vn)". Widget vẫn hiện đầy đủ. Lưới an toàn:
+  `export_service` bắt `LayoutError` → `PdfRenderError` → 500 với thông báo tiếng Việt (ghi log).
+
+## V2 — quotes (phân tích báo giá nhà thầu so với khái toán, chỉ cho nhân viên)
+
+- **Phạm vi** (quyết định chủ sản phẩm): chỉ nhân viên. Nhân viên nhập báo giá ở tab "Yêu cầu báo giá" của `/admin`
+  và xem phân tích ở đó. Không có endpoint công khai, trang, nút widget, block UI hay tool chat cho khách ở vòng này
+  (không có `shared_with_customer`, không có `phan-tich-bao-gia.html`, không đổi `quoteCodes`). Frontend React không
+  đổi; giao diện nằm trong `backend/app/static/admin.html` (mọi chuỗi gán bằng `textContent`, link chỉ tạo cho
+  `http(s)://`).
+- **Migration `0005_contractor_quote_lines.py`** (chỉ thêm cột): `converted_area_m2 NUMERIC(10,2)`,
+  `lines JSONB NOT NULL DEFAULT '[]'`, `verified BOOLEAN NOT NULL DEFAULT false`, `entered_by TEXT`, `note TEXT`, index
+  `ix_contractor_quotes_quote_request (quote_request_id)`. Dòng hạng mục lưu JSONB và kiểm tra bằng pydantic `QuoteLine`
+  thay vì bảng con (thay đổi nhỏ nhất); dòng JSON hỏng khi đọc bị bỏ qua. Không thêm `updated_at`.
+- **Không tải file**: chỉ lưu link file gốc (Drive/Zalo…), phải là `http(s)://`. Đọc BOQ/Excel/PDF tự động thuộc V3.
+- **Trạng thái nguồn**: tích "Nhân viên đã đối chiếu file gốc" → `verified` ("Đã xác minh"), không tích →
+  `reference` ("Dữ liệu tham khảo"). Kết luận chênh lệch dùng trạng thái yếu nhất (khái toán, báo giá), nên với đơn giá
+  tham khảo thì kết luận vẫn là "Dữ liệu tham khảo".
+- **"Đáng chú ý"** (quyết định chủ sản phẩm) = nằm ngoài khoảng [min, max] của khái toán, không có biên dung sai. Tự
+  quyết cách hiện %: luôn hiện `gap_pct` = (báo giá − điểm giữa)/điểm giữa (cùng công thức với chỉ số "sai số trung
+  vị" — `relative_gap` trong engine, `metrics_service` dùng lại), và khi ngoài khoảng thì thêm `outside_pct` = phần vượt
+  so với cận gần nhất. Câu: "Cao hơn khoảng khái toán X% (so với mức cao của khoảng); lệch +Y% so với điểm giữa khoảng
+  khái toán." Với diện tích quy đổi (một giá trị, không phải khoảng) mọi khác biệt sau làm tròn 0,01 m² đều tính là
+  ngoài khoảng.
+- **Câu chữ**: trung tính, không "đắt/rẻ/tốt nhất", không xếp hạng nhà thầu theo giá; nhiều báo giá của cùng yêu cầu
+  liệt kê theo ngày nhận. Disclaimer cố định (`DISCLAIMER` trong `app/engines/quote_analysis.py`) và ghi chú tĩnh trên
+  trang admin: khái toán là con số sơ bộ, không phải báo giá thi công. Chuỗi phân tích là giọng trung tính cho nhân viên
+  (không xưng "em"), vì không hiển thị cho khách.
+- **Suy ra số thiếu** (tự quyết, luôn kèm cảnh báo): đơn giá/m² = tổng tiền / diện tích quy đổi của nhà thầu; diện tích
+  quy đổi = Σ dòng hạng mục, hoặc tổng tiền / đơn giá. Không suy tổng tiền từ đơn giá × diện tích. Bắt buộc nhập ít nhất
+  tổng tiền hoặc đơn giá/m². Σ dòng hạng mục chỉ được dùng khi các dòng phủ đủ mọi hạng mục của khái toán (mọi nhóm có
+  dòng, không nhóm nào thiếu hạng mục theo cách ghép dưới đây) và mọi dòng thuộc nhóm của khái toán có diện tích quy đổi
+  (sửa sau review: nhân viên chỉ ghi dòng khác hệ số, vd Móng + Mái, từng cho diện tích 120 m² và đơn giá suy ra
+  "cao hơn 299%"). Không đủ → diện tích/đơn giá "Chưa so được" + cảnh báo `LINES_AREA_INCOMPLETE_WARNING`, vẫn có thể
+  suy diện tích = tổng tiền / đơn giá khi nhà thầu ghi đơn giá.
+- **Tách chênh lệch**: ΔC = (A_q − A_e)·P_mid + A_q·(P_q − P_mid) + phần còn lại (phạm vi, hạng mục, làm tròn, tổng tiền
+  không khớp đơn giá × diện tích); nêu thành phần lớn nhất. Chỉ tính khi đủ tổng tiền, chi phí khái toán, đơn giá và
+  diện tích của báo giá.
+- **So theo hạng mục**: gộp theo `group_name` của hệ số khái toán (móng, tầng, hầm, mái, sân thượng, ban công, sân) +
+  nhóm "khác". Chi phí nhóm = Σ A_i×k_i × [P_min, P_max], làm tròn triệu (tổng các nhóm có thể lệch tổng khái toán vài
+  triệu do làm tròn). Dòng có thành tiền → so tiền; chỉ có diện tích/hệ số → so diện tích quy đổi; hệ số khác → ghi chú
+  theo `rule_code` (hoặc khi nhóm chỉ có một hạng mục và một dòng). Nhóm khái toán không có dòng → "Báo giá chưa có"
+  (chỉ khi báo giá có ít nhất một dòng). Dòng nhóm không có trong khái toán → "Khái toán không có". Báo giá theo công
+  tác (điện nước, ốp lát…) không ép ánh xạ: nhân viên chỉ nhập tổng tiền + đơn giá/m².
+- **Nhóm chỉ có một phần hạng mục** (tự quyết, sửa sau review): dòng ghép với hạng mục khái toán theo `rule_code` +
+  diễn giải, rồi theo `rule_code` (form điền sẵn mỗi hạng mục một dòng, vd nhóm Tầng có Tầng trệt, Lầu 1–3 cùng mã
+  `floor_standard`). Nếu mọi dòng của nhóm đều ghép được mà còn hạng mục chưa có dòng → so với phần khái toán của các
+  hạng mục đã có dòng (diện tích và chi phí khái toán của dòng nhóm cũng chỉ tính phần đó), ghi chú "Báo giá chỉ có dòng
+  cho 1/4 hạng mục của nhóm…; chưa có dòng: Lầu 1, Lầu 2, Lầu 3.", trường mới `missing_items` và một câu trong tóm tắt.
+  Chọn so phần tương ứng thay vì "Chưa so được" để vẫn đối chiếu được số nhà thầu đã ghi. Dòng không có `rule_code` (hoặc
+  mã không thuộc nhóm) là dòng tự do: không biết dòng gộp những hạng mục nào nên coi như phủ cả nhóm (so với cả nhóm
+  như trước). Dòng thứ hai cùng mã khi các hạng mục cùng mã đã ghép hết → cộng vào hạng mục đầu tiên cùng mã.
+- **Dòng có thể thuộc phần "chưa bao gồm"** (tự quyết, sửa sau review): không khớp chuỗi tự do nữa (vd "Điện nước"
+  từng khớp "Điện nước ngoài nhà…"). Mỗi câu chưa bao gồm của `explain.build_exclusions` gắn một danh sách từ khóa
+  (`_EXCLUSION_KEYWORDS` trong engine: "ép cọc", "khoan cọc", "giấy phép", "thiết kế", "đấu nối", "ốp lát", "sơn",
+  "nội thất", "thang máy"…), khớp nguyên cụm từ trong diễn giải dòng. Câu chữ là gợi ý, không khẳng định: "Khái toán
+  không có hạng mục này; có thể thuộc phần khái toán chưa bao gồm: <câu>." Thêm câu chưa bao gồm mới ở explain.py thì
+  cần thêm từ khóa ở engine (không có từ khóa → chỉ hiện "Khái toán không có hạng mục này.").
+- **Admin trên điện thoại**: bảng khái toán và hai bảng phân tích dựng bằng JS nằm trong khung `.scroll` như các bảng
+  khác; ô ghi chú/phạm vi và link file gốc không rộng hơn khung (`min-width: min(320px, 100%)`, `max-width: 100%`), nên ở
+  360px chỉ bảng cuộn ngang, không cả trang.
+- **Form**: dòng hạng mục điền sẵn nhóm/diễn giải/mã hệ số từ khái toán; số của khái toán chỉ hiện làm gợi ý
+  (placeholder), không điền vào ô — dòng không có số nào của nhà thầu bị bỏ ở server, nên không vô tình "chép" số khái
+  toán thành số báo giá. Có "Xem trước phân tích" (`POST …/analysis-preview`, không lưu).
+- **Trạng thái yêu cầu** (tự quyết): tạo báo giá chuyển `new`/`sent` → `quoted`; `won`/`lost` giữ nguyên (không ghi
+  đè kết quả đã chốt). Xóa báo giá cuối cùng của yêu cầu đang `quoted` → về `new` (hiện không có code nào đặt `sent`).
+  Chưa có thao tác đổi trạng thái `won/lost` trên admin (ngoài phạm vi vòng này).
+- **Mã DZ trong admin**: bảng `quote_requests` không lưu mã khách nhận ("DZ-" + 6 hex đầu của id yêu cầu đầu tiên trong
+  lượt gửi). Không thêm cột: service tìm các yêu cầu cùng lượt (cùng `created_at` — cùng transaction —, SĐT, khái toán)
+  và đối chiếu sự kiện `quote_request_created` (`props.code`, `contractor_ids`); không đối chiếu được → mã theo id của
+  chính dòng đó. Lọc `?code=` nhận `DZ-XXXXXX` hoặc 6 hex.
+- **Khái toán dùng để so**: snapshot đã hiển thị cho khách (`estimate_service.get_estimate`); bản ghi cũ không có
+  snapshot được tính lại với hệ số hiện hành và phân tích có cảnh báo. Yêu cầu không gắn khái toán → vẫn lưu được báo
+  giá, phân tích trả 409.
+- **Analytics**: `contractor_quote_recorded` `{quote_request_id, contractor_quote_id, verified, lines}`. Chỉ số "Độ
+  chính xác khái toán" (metrics) tự có dữ liệu khi nhân viên nhập báo giá.
+- **Chưa làm**: kênh cho khách xem phân tích, thông báo Lark "Đã nhận báo giá", đổi trạng thái `won/lost`, tải/đọc file
+  báo giá, phân quyền theo nhân viên (vẫn một `ADMIN_TOKEN` chung; trang admin giờ hiện thêm SĐT và số tiền báo giá).
+
+## V2 — kiểm tra cuối (đối chiếu đặc tả mục 15 với quyết định chủ sản phẩm)
+
+- **Gallery ảnh dự án đầy đủ, lightbox** → đã làm (xem "V2 — gallery"). Lệch đặc tả có chủ đích: không có trang/endpoint
+  gallery riêng, lưới "Xem tất cả ảnh" nằm trong widget; bỏ dải ảnh thu nhỏ trong lightbox (owner cho phép).
+- **Trang "Nguồn dữ liệu" cho mỗi câu trả lời** → làm thành hộp thoại trong widget (owner: không làm trang công khai riêng).
+  Chưa có ánh xạ claim→evidence của validator (owner để pha sau), nên số LLM tự nhắc lại mà không nằm trong block hay
+  `items` sẽ không có trong hộp thoại.
+- **Phân tích báo giá** → chỉ cho nhân viên ở trang admin (owner); khách chưa xem được phân tích.
+- **Xuất PDF ... "có logo Dezon"** → đặc tả cũ; theo owner, PDF mang thương hiệu "Vua thầu khái toán" + logo
+  `vuathau-logo.png` + pro.vuathau.com.vn, còn câu chữ về nguồn dữ liệu giữ "Dezon"/dezon.vn (dữ liệu thật lấy từ đó).
+- **Migration**: chuỗi `0003 → 0004 → 0005` (một head). Đã chạy thử `alembic upgrade 0003` rồi `upgrade head`,
+  `downgrade 0003` rồi `upgrade head` trên DB tạm, và chạy lại `DDL` của 0004/0005 lần hai: không lỗi (mọi lệnh có
+  `IF NOT EXISTS`, cột mới cho phép NULL hoặc có mặc định nên DB đang chạy không cần backfill).

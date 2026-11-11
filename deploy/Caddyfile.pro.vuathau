@@ -1,0 +1,26 @@
+# Khối site cho https://pro.vuathau.com.vn — NỐI THÊM vào cuối /opt/qspro/infra/deploy/Caddyfile trên máy chủ
+# (Caddy của qspro là cổng vào 80/443 duy nhất), rồi nạp lại không gián đoạn:
+#   docker exec qspro-web-1 caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+# DNS: bản ghi A "pro" -> 222.255.184.134 trên Cloudflare, chế độ DNS only (mây xám) để Caddy tự xin chứng chỉ
+# Let's Encrypt và SSE chat không bị Cloudflare đệm.
+pro.vuathau.com.vn {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+
+	# FastAPI: API + SSE chat, trang quản trị, Swagger. reverse_proxy tự flush ngay với text/event-stream.
+	@backend path /api /api/* /admin /docs /openapi.json
+	handle @backend {
+		reverse_proxy vuathau-ai-backend:8000
+	}
+
+	# Còn lại: nginx của frontend (trang chủ = AI for Planning, /widget-demo, dezon-widget.js, favicon).
+	handle {
+		reverse_proxy vuathau-ai-frontend:80
+	}
+}

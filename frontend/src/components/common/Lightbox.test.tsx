@@ -251,27 +251,47 @@ describe('GalleryTiles + Lightbox', () => {
 });
 
 describe('Lightbox trong thẻ nhà thầu / hồ sơ mở rộng', () => {
-  it('ContractorCard: 3 ô + "+9" trên ô cuối, mở lightbox trên toàn bộ 12 ảnh tại đúng vị trí', () => {
+  it('ContractorCard: 3 ô của 3 công trình khác nhau + "+9"; slideshow chạy hết ảnh công trình này rồi sang công trình sau', () => {
     renderWithWidget(<ContractorCardView item={MATCH_FIXTURE.results[0]!} />);
     const tiles = screen.getAllByRole('button', { name: /^Xem ảnh \d+\/12/ });
     expect(tiles).toHaveLength(3);
     expect(within(tiles[2]!).getByText('+9')).toBeInTheDocument();
-    // cover_images xoay vòng giữa các công trình như backend: 3 ô đầu là ảnh 1 của 3 công trình khác nhau.
+    // cover_images xoay vòng giữa các công trình (backend); frontend sắp lại theo công trình: 4 ảnh FI, 4 GP, 4 IV.
     expect(tiles[0]).toHaveAccessibleName('Xem ảnh 1/12 — France Indochine 22 Hà Nội');
-    expect(tiles[1]).toHaveAccessibleName('Xem ảnh 2/12 — Green Pool Villa Vĩnh Long');
-    expect(tiles[2]).toHaveAccessibleName('Xem ảnh 3/12 — Indochine Villa Quận 7 Sài Gòn');
+    expect(tiles[1]).toHaveAccessibleName('Xem ảnh 5/12 — Green Pool Villa Vĩnh Long');
+    expect(tiles[2]).toHaveAccessibleName('Xem ảnh 9/12 — Indochine Villa Quận 7 Sài Gòn');
+    // Ô dùng ảnh thu nhỏ dezon.vn (không có "/o/").
+    expect(tiles[0]!.querySelector('img')!.getAttribute('src')).toBe(
+      'https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/ApoMbxpbgoLIAaxJt3cl2gFR.jpg',
+    );
     fireEvent.click(tiles[2]!);
-    expect(counter()).toBe('3 / 12');
+    expect(counter()).toBe('9 / 12');
+    // Lightbox dùng ảnh gốc.
+    expect(currentSrc()).toBe('https://dezon.vn/wp-content/uploads/dz-data/nt/kien-phong/o/UmjqbDGOsoPA8Sxm4xmliVZ7.jpg');
     const cap = dialog().querySelector('figcaption')!;
     expect(cap.textContent).toContain('Indochine Villa Quận 7 Sài Gòn');
     expect(cap.textContent).toContain('Kiến Phong');
+    expect(cap.querySelector('.dz-lightbox__pos')!.textContent).toBe('Ảnh 1/4');
     expect(within(cap).getByRole('link')).toHaveAttribute('href', 'https://dezon.vn/nha-thau/kien-phong/indochine-villa-quan-7-sai-gon/');
-    fireEvent.keyDown(dialog(), { key: 'ArrowRight' }); // ảnh 4: vòng 2, công trình đầu tiên
-    expect(counter()).toBe('4 / 12');
+    fireEvent.keyDown(dialog(), { key: 'ArrowRight' }); // ảnh 2 của cùng công trình
+    expect(counter()).toBe('10 / 12');
+    expect(dialog().querySelector('figcaption')!.textContent!.replace(/\s+/g, ' ')).toContain(
+      'Ảnh 2/4 · Indochine Villa Quận 7 Sài Gòn',
+    );
+    fireEvent.keyDown(dialog(), { key: 'Home' });
+    expect(counter()).toBe('1 / 12');
+    expect(dialog().querySelector('.dz-lightbox__pos')!.textContent).toBe('Ảnh 1/4');
     expect(dialog().querySelector('figcaption')!.textContent).toContain('France Indochine 22 Hà Nội');
     fireEvent.keyDown(dialog(), { key: 'ArrowRight' });
+    fireEvent.keyDown(dialog(), { key: 'ArrowRight' });
+    fireEvent.keyDown(dialog(), { key: 'ArrowRight' });
+    fireEvent.keyDown(dialog(), { key: 'ArrowRight' }); // hết 4 ảnh FI -> sang Green Pool
     expect(counter()).toBe('5 / 12');
     expect(dialog().querySelector('figcaption')!.textContent).toContain('Green Pool Villa Vĩnh Long');
+    expect(dialog().querySelector('.dz-lightbox__pos')!.textContent).toBe('Ảnh 1/4');
+    fireEvent.keyDown(dialog(), { key: 'End' });
+    expect(counter()).toBe('12 / 12');
+    expect(dialog().querySelector('.dz-lightbox__pos')!.textContent).toBe('Ảnh 4/4');
   });
 
   it('ContractorDetail payload cũ (ảnh chỉ có project_slug): lưới chính vẫn có tên + link công trình', () => {
@@ -281,25 +301,83 @@ describe('Lightbox trong thẻ nhà thầu / hồ sơ mở rộng', () => {
       images: profile.images.map(({ url, caption, project_slug }) => ({ url, caption, project_slug })),
       projects: profile.projects.map((pr) => ({
         ...pr,
+        total_images: undefined,
         images: (pr.images ?? []).map(({ url, caption, project_slug }) => ({ url, caption, project_slug })),
       })),
     };
     renderWithWidget(<BlockRenderer block={{ type: 'contractor_detail', data: legacy }} active />);
+    // Lưới chính: 3 ô = ảnh đầu của 3 công trình; payload cũ không có thumb_url -> ô dùng ảnh gốc.
     const main = screen.getByText('+9').closest('button')!;
-    expect(main).toHaveAccessibleName('Xem ảnh 3/12 — France Indochine 22 Hà Nội');
+    expect(main).toHaveAccessibleName('Xem ảnh 9/12 — Indochine Villa Quận 7 Sài Gòn');
+    expect(main.querySelector('img')!.getAttribute('src')).toBe(legacy.images[8]!.url);
     fireEvent.click(main);
     const cap = dialog().querySelector('figcaption')!;
-    expect(cap.querySelector('.dz-lightbox__project')!.textContent).toBe('France Indochine 22 Hà Nội');
-    expect(within(cap).getByRole('link')).toHaveAttribute('href', 'https://dezon.vn/nha-thau/kien-phong/france-indochine-22-ha-noi/');
+    expect(cap.querySelector('.dz-lightbox__project')!.textContent).toBe('Indochine Villa Quận 7 Sài Gòn');
+    expect(within(cap).getByRole('link')).toHaveAttribute('href', 'https://dezon.vn/nha-thau/kien-phong/indochine-villa-quan-7-sai-gon/');
+    // Không có total_images -> không hiện link "Xem thêm … ảnh trên trang công trình".
+    expect(screen.queryByText(/Xem thêm \d+ ảnh trên trang công trình/)).toBeNull();
   });
 
   it('ContractorDetail: ô ảnh của từng công trình mở lightbox chỉ với ảnh công trình đó', () => {
     renderWithWidget(<BlockRenderer block={{ type: 'contractor_detail', data: PROFILES['kien-phong']! }} active />);
     fireEvent.click(screen.getByRole('button', { name: 'Xem ảnh 2/4 — Indochine Villa Quận 7 Sài Gòn' }));
     expect(counter()).toBe('2 / 4');
+    // Chỉ một công trình -> bộ đếm đã đủ, không lặp "Ảnh k/n".
+    expect(dialog().querySelector('.dz-lightbox__pos')).toBeNull();
     expect(within(dialog().querySelector('figcaption')!).getByRole('link')).toHaveAttribute(
       'href',
       'https://dezon.vn/nha-thau/kien-phong/indochine-villa-quan-7-sai-gon/',
     );
+  });
+
+  it('ContractorDetail: công trình có nhiều ảnh hơn số ảnh gửi (total_images) -> link xem thêm trên trang công trình', () => {
+    const profile = PROFILES['kien-phong']!;
+    const data = { ...profile, projects: profile.projects.map((pr, i) => (i === 0 ? { ...pr, total_images: 30 } : pr)) };
+    renderWithWidget(<BlockRenderer block={{ type: 'contractor_detail', data }} active />);
+    const more = screen.getByRole('link', { name: /Xem thêm 26 ảnh trên trang công trình/ });
+    expect(more).toHaveAttribute('href', 'https://dezon.vn/nha-thau/kien-phong/france-indochine-22-ha-noi/');
+  });
+});
+
+describe('Lightbox: phím Home/End, đang tải ảnh, ảnh thu nhỏ', () => {
+  it('Home về ảnh đầu, End tới ảnh cuối', () => {
+    renderTiles();
+    fireEvent.click(screen.getByRole('button', { name: 'Xem ảnh 2/5 — Công trình A' }));
+    fireEvent.keyDown(dialog(), { key: 'End' });
+    expect(counter()).toBe('5 / 5');
+    fireEvent.keyDown(dialog(), { key: 'Home' });
+    expect(counter()).toBe('1 / 5');
+  });
+
+  it('hiện "Đang tải ảnh…" tới khi ảnh tải xong; chuyển ảnh thì hiện lại; ảnh lỗi thì ẩn', () => {
+    renderTiles();
+    fireEvent.click(screen.getByRole('button', { name: 'Xem ảnh 1/5 — Công trình A' }));
+    expect(within(dialog()).getByRole('status')).toHaveTextContent('Đang tải ảnh…');
+    fireEvent.load(dialog().querySelector('img.dz-lightbox__img')!);
+    expect(within(dialog()).queryByRole('status')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Ảnh tiếp theo' }));
+    expect(within(dialog()).getByRole('status')).toHaveTextContent('Đang tải ảnh…');
+    fireEvent.error(dialog().querySelector('img.dz-lightbox__img')!);
+    expect(within(dialog()).queryByRole('status')).toBeNull();
+    expect(within(dialog()).getByText('Không tải được ảnh')).toBeInTheDocument();
+  });
+
+  it('ô ảnh: ảnh thu nhỏ lỗi -> lùi về ảnh gốc, lỗi tiếp -> "Không tải được ảnh"', () => {
+    const imgs: ImageRef[] = [{ ...IMAGES[0]!, thumb_url: 'https://dezon.vn/thumb/khong-co.jpg' }];
+    renderTiles(imgs);
+    const tile = screen.getByRole('button', { name: 'Xem ảnh 1/1 — Công trình A' });
+    expect(tile.querySelector('img')!.getAttribute('src')).toBe('https://dezon.vn/thumb/khong-co.jpg');
+    fireEvent.error(tile.querySelector('img')!);
+    expect(tile.querySelector('img')!.getAttribute('src')).toBe(IMAGES[0]!.url);
+    fireEvent.error(tile.querySelector('img')!);
+    expect(within(tile).getByText('Không tải được ảnh')).toBeInTheDocument();
+  });
+
+  it('chú thích hiện "Ảnh k/n" trong công trình khi danh sách có nhiều công trình', () => {
+    renderTiles();
+    fireEvent.click(screen.getByRole('button', { name: 'Xem ảnh 3/5 — Công trình A' }));
+    expect(dialog().querySelector('.dz-lightbox__pos')!.textContent).toBe('Ảnh 3/3');
+    fireEvent.keyDown(dialog(), { key: 'ArrowRight' });
+    expect(dialog().querySelector('figcaption')!.textContent!.replace(/\s+/g, ' ')).toContain('Ảnh 1/2 · Công trình B');
   });
 });

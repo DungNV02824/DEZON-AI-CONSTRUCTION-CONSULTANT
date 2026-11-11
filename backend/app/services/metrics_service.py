@@ -26,6 +26,7 @@ from app.db.models import (
     QuoteRequest,
     RecommendationLog,
 )
+from app.engines.quote_analysis import relative_gap
 
 MAX_RANK = 5
 NO_DATA_NOTE = "Chưa có dữ liệu để tính"
@@ -107,7 +108,7 @@ def estimate_accuracy(db: Session) -> tuple[Metric, Metric]:
     usable = [(float(q), float(lo), float(hi)) for q, lo, hi in rows
               if q is not None and lo is not None and hi is not None and float(lo) + float(hi) > 0]
     within = sum(1 for q, lo, hi in usable if lo <= q <= hi)
-    errors = [(q - (lo + hi) / 2) / ((lo + hi) / 2) for q, lo, hi in usable]
+    errors = [relative_gap(q, lo, hi) for q, lo, hi in usable]
     skipped = total_quotes - len(usable)
     in_range = Metric(key="estimate_accuracy_in_range", label_vi="Độ chính xác khái toán — % báo giá nằm trong khoảng",
                       numerator=within, denominator=len(usable), sample_size=len(usable),

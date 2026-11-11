@@ -43,6 +43,28 @@ Bấm nút `quick_replies` / `question_step` / `summary_confirm` = gửi `value`
 contractor_list | comparison_table | contractor_detail | source_badges | quote_request_form | suggestions` — xem
 `app/schemas/ui_blocks.py`.
 
+### Nguồn của lượt `source_badges` (V2 — sources)
+
+`{type: "source_badges", badges: [{label, status, source: SourceRef}], items: [EvidenceItem]}`.
+
+- `badges` (không đổi): nguồn đã khử trùng lặp theo (label, url, ngày) của mọi EvidenceValue có giá trị trong kết quả
+  tool của lượt (trừ `search_knowledge`, trừ nguồn "Ngân sách do anh/chị cung cấp", bỏ nguồn không có url lẫn ngày,
+  tối đa 8). Frontend KHÔNG hiển thị chip này.
+- `items` (V2, mặc định `[]`; block cũ đã lưu không có trường này):
+  `EvidenceItem = {group: string|null, label: string, evidence: EvidenceValue}` — giá trị đã dùng trong lượt nhưng
+  KHÔNG nằm trong bảng/thẻ nào: `get_reference_rates` → 1 mục "Đơn giá tham chiếu (VND/m²)" (group "Đơn giá tham
+  chiếu — <Loại>, <phạm vi>, <tỉnh>"); `get_contractor_overview` → 8 số tổng hợp (Số nhà thầu phù hợp, Nhà thầu có công
+  trình <loại> thực tế, Công trình <loại> có trang dự án, Công trình ghi nhận trên Dezon (tổng các nhà thầu), Khoảng
+  đơn giá xây thô, Khoảng đơn giá trọn gói (hoàn thiện cơ bản), Nhà thầu có thông tin bảo hành, Hồ sơ đã xác minh),
+  group "Tổng quan nhà thầu — <Loại> tại <tỉnh>". Mục unavailable vẫn được gửi (`display` = "Chưa có dữ liệu").
+- Block được phát khi có `badges` HOẶC `items` (trước V2: chỉ khi có `badges`), nên `badges` có thể là `[]`.
+  Ngoại lệ: khi lượt không có `badges` và không có block dữ liệu nào (bảng/thẻ/form), `items` mà mọi mục đều
+  unavailable thì KHÔNG tạo block (vd đơn giá tham chiếu không có + câu hỏi bằng `quick_replies` → blocks chỉ là
+  `[quick_replies]`, như trước V2). Có `badges` hoặc có block dữ liệu thì mục unavailable vẫn được gửi.
+- Frontend gom `items` cùng mọi EvidenceValue trong các block khác của tin nhắn
+  (`frontend/src/utils/answerSources.ts`) để hiện link "Nguồn dữ liệu (N)" (N = số nguồn) cuối tin nhắn trợ lý và hộp
+  thoại liệt kê theo nguồn. Không có endpoint mới.
+
 ### Gợi ý câu hỏi tiếp theo `suggestions`
 
 `{type: "suggestions", title: "Gợi ý cho anh/chị", options: [{label, value}]}` — tối đa 5 câu hỏi theo ngữ cảnh hội
@@ -154,7 +176,39 @@ Trường cũ giữ nguyên (`items`, `assumptions`, `confirm`, `edit`). Thêm (
 | POST | `/api/estimates` | `EstimateInput & {chat_session_id?}` | `EstimateResult` (đã lưu, có `estimate_session_id`) |
 | GET | `/api/estimates/{id}` | — | `EstimateResult` |
 | POST | `/api/estimates/{id}/budget-adjustments` | `{target_budget_vnd}` | `BudgetAdjustmentResult` |
+| GET | `/api/estimates/{id}/pdf?contractor_ids=&contractor_ids=` | — | `application/pdf` (V2 — PDF, xem dưới) |
 | GET | `/api/rates?building_type=&province=&work_scope=&quality_tier=` | — | `{rate: EvidenceValue, rate_data: RateData \| null}` |
+
+### Xuất PDF `GET /api/estimates/{id}/pdf` (V2 — PDF)
+
+- Query `contractor_ids` lặp lại 0 lần (chỉ khái toán) hoặc 2–5 lần (khái toán + bảng so sánh), mỗi id 1..2⁶³−1,
+  không trùng. Ví dụ `/api/estimates/<uuid>/pdf?contractor_ids=3&contractor_ids=7`.
+- 200: thân là file PDF A4 (`Content-Type: application/pdf`, `Content-Disposition: attachment;
+  filename="khai-toan-vuathau-<yyyymmdd>-<8 ký tự đầu id>[-so-sanh].pdf"`, `Cache-Control: no-store`). Trang so sánh
+  nằm ngang khi có hơn 3 nhà thầu. Ghi sự kiện `estimate_pdf_exported {estimate_session_id, contractor_count}`.
+- Nội dung: đầu trang có logo, "Vua thầu khái toán", pro.vuathau.com.vn, "Ngày xuất dd/mm/yyyy HH:mm" (giờ Việt Nam)
+  và mã khái toán. Phần khái toán lấy nguyên snapshot đã hiển thị (`GET /api/estimates/{id}`): thông tin công trình,
+  diện tích quy đổi, đơn giá + nguồn, chi phí, bảng hệ số (luôn mở), lưu ý/giả định/chưa bao gồm/yếu tố tăng chi phí
+  và ghi chú miễn trừ. Bảng so sánh được tính lại lúc xuất (như `POST /api/contractors/compare` với
+  `estimate_session_id` = id), có dòng "Dữ liệu tại thời điểm xuất …". Mục "Nguồn dữ liệu" liệt kê các nguồn khác
+  nhau (nhãn, link, ngày cập nhật, cờ dữ liệu cũ). File ẩn danh: không có tên/SĐT khách. Ô thiếu = "Chưa có dữ liệu".
+- Lỗi: 404 `Không tìm thấy phiên khái toán.` (id không tồn tại/không phải UUID); 422 `Cần 0 hoặc từ 2 đến 5 mã nhà
+  thầu hợp lệ…` (1 id, > 5 id, id ngoài khoảng) hoặc thông báo của compare (trùng, không tìm thấy nhà thầu); 429
+  (quá `PDF_RATE_LIMIT_PER_MIN`, mặc định 20 lượt/phút/IP, kèm `Retry-After`); 503 chưa có bộ trọng số matching;
+  500 `Em chưa tạo được file PDF cho bảng khái toán này…` (ReportLab không dàn trang được).
+- Dạng lỗi theo header `Accept`: client API (không có `text/html`) nhận JSON `{detail}` như mọi endpoint; trình duyệt
+  điều hướng tới link (Accept có `text/html`) nhận trang lỗi HTML tiếng Việt (`text/html; charset=utf-8`,
+  `Content-Disposition: inline`, `Cache-Control: no-store`, CSP `default-src 'none'`) cùng mã trạng thái, hiện
+  thông báo trên + link "Thử lại" (429/500/503) và "Về Vua thầu khái toán". Áp dụng cho cả lỗi validation 422 và lỗi
+  500 không lường trước.
+- Ô bảng so sánh dài quá 300 ký tự (vd `warranty_text` thô) và tên nhà thầu quá 120 ký tự được rút gọn + "…" trong
+  PDF (một dòng bảng không tách qua trang), kèm chú thích "nội dung đầy đủ xem trên hồ sơ nhà thầu tại Dezon".
+- `ComparisonTableBlock.estimate_session_id` (UUID, tùy chọn, mặc định `null`): phiên khái toán gắn với bảng so sánh
+  từ chat (tool `compare_contractors`) — frontend hiện nút "Tải PDF (khái toán + so sánh)" khi có. Bảng tổng quan
+  (`get_contractor_overview`) không có trường này.
+- Frontend: nút là thẻ `<a href target="_blank">` — không có `download`, để trang lỗi HTML hiện được ("Tải PDF khái toán" cuối `estimate_table`, "Tải PDF (khái
+  toán + so sánh)" cuối bảng so sánh 2–5 nhà thầu không phải bảng tổng quan); ẩn ở chế độ mock và khi không có
+  `estimate_session_id`.
 
 ## Nhà thầu
 
@@ -166,16 +220,25 @@ Trường cũ giữ nguyên (`items`, `assumptions`, `confirm`, `edit`). Thêm (
 | POST | `/api/contractors/compare` | `{contractor_ids: int[2..5], estimate_session_id?, budget_vnd?}` | `ComparisonMatrix` — hàng "Mức phù hợp" chấm cùng tiêu chí với thẻ `contractor_list`: tỉnh/quận/loại/hạng mục/số tầng/ngân sách lấy từ slot phiên chat gắn với khái toán (`budget_vnd` trong body ưu tiên hơn) |
 | POST | `/api/recommendations/{log_id}/click` | `{contractor_id}` | `{ok: true}` |
 
-**Ảnh (slideshow)** — `ImageRef = {url, caption?, project_slug?, project_name?, project_url?}`; `project_name` là tên
-công trình chứa ảnh, `project_url` là trang công trình trên dezon.vn (hai trường mới, tùy chọn, mặc định `null`).
+**Ảnh (slideshow)** — `ImageRef = {url, caption?, project_slug?, project_name?, project_url?, thumb_url?}`;
+`project_name` là tên công trình chứa ảnh, `project_url` là trang công trình trên dezon.vn (tùy chọn, mặc định `null`).
 `caption` rỗng thì backend điền tên công trình.
+`thumb_url` (V2 — gallery, tùy chọn, mặc định `null`): ảnh thu nhỏ của dezon.vn cho ô ảnh. Nguồn: cột
+`project_images.thumb_url` (crawler đọc `data-thumb` của `a.dznt-shot`; migration 0004), thiếu thì backend suy từ `url`
+dạng `https://dezon.vn/wp-content/uploads/dz-data/nt/<slug>/o/<id>.<jpg|jpeg|png|webp>` bằng cách bỏ đoạn `/o/`
+(đúng mẫu đó, không khớp -> `null`). Frontend: ô ảnh dùng `thumb_url ?? url`, lỗi tải thì lùi về `url`; lightbox luôn
+dùng `url` (ảnh gốc).
 
 - `ContractorCard.cover_images`: tối đa 80 ảnh (đủ toàn bộ ảnh thật hiện có), xoay vòng giữa các dự án của nhà thầu (ảnh 1 của mỗi dự án theo id
-  dự án, rồi ảnh 2, …; trong một dự án theo `sort_order`) — thứ tự cố định. Frontend hiển thị vài ô đầu, bấm mở
-  slideshow toàn bộ danh sách.
+  dự án, rồi ảnh 2, …; trong một dự án theo `sort_order`) — thứ tự cố định. Frontend (V2) hiển thị 3 ô là ảnh đầu của
+  3 công trình khác nhau, sắp lại slideshow theo công trình (hết ảnh công trình A rồi sang B, nhóm theo `project_slug`)
+  và nhóm theo `project_slug` ở hộp thoại "Xem tất cả ảnh".
 - `ContractorProfile.projects[].images`: ảnh của từng dự án theo `sort_order`, tối đa 20 ảnh/dự án;
-  `ContractorProfile.images` = nối các danh sách đó; `total_images` = tổng số ảnh dự án thực có (không bị cắt, có thể
-  lớn hơn `images.length`).
+  `ProjectSummary.total_images` (V2, mặc định `0`) = số ảnh thực có của công trình (không bị cắt; `0` ở payload cũ ->
+  frontend dùng `images.length`); `ContractorProfile.images` = nối các danh sách đó; `ContractorProfile.total_images` =
+  tổng số ảnh dự án thực có (không bị cắt, có thể lớn hơn `images.length`).
+- Không có endpoint mới: hộp thoại "Xem tất cả ảnh" của frontend dùng dữ liệu sẵn có (`ContractorProfile.projects` ở hồ
+  sơ mở rộng, `cover_images` ở thẻ nhà thầu).
 - Ảnh không được gửi cho LLM (`compact_for_llm` bỏ `cover_images`/`images`/`total_images`).
 
 ## Yêu cầu báo giá
@@ -240,6 +303,14 @@ Lỗi trả `{detail: string}` tiếng Việt. Trang HTML: `GET /admin` (không 
 | GET | `/api/admin/metrics` | — | `MetricsReport` (mục 12) |
 | GET | `/api/admin/contact-requests?status=new\|contacted\|done&limit=1..500 (50)&offset=` | — | `{items: ContactRequestOut[], total, new_count}` — mới nhất trước; `total` theo bộ lọc; `new_count` = số yêu cầu trạng thái `new` (không phụ thuộc bộ lọc) |
 | PATCH | `/api/admin/contact-requests/{id}` | `{status?: new\|contacted\|done, handled_note?: string\|null (≤ 1000)}` | `ContactRequestOut`; trường không gửi giữ nguyên, `handled_note: null`/rỗng → xóa; không có → 404 |
+| GET | `/api/admin/chat-sessions/{session_id}` | — | `SessionStateOut` (như `GET /api/chat/sessions/{id}`): toàn bộ tin `user`/`assistant` của phiên theo thứ tự (bỏ tin `tool`), kèm `ui_blocks`, `created_at`; không có → 404, mã sai dạng → 422 |
+| GET | `/api/admin/quote-requests?status=new\|sent\|quoted\|won\|lost&code=&limit=1..500 (50)&offset=` | — | `{items: QuoteRequestOut[], total, new_count}` (V2 — quotes) — mới nhất trước; `code` = mã khách nhận `DZ-XXXXXX` (hoặc 6 ký tự hex, không phân biệt hoa thường) → mọi yêu cầu của lượt gửi đó; mã sai dạng/không có → rỗng |
+| GET | `/api/admin/quote-requests/{quote_request_id}` | — | `QuoteRequestDetail` `{request: QuoteRequestOut, estimate: EstimateSummary \| null, quotes: ContractorQuoteOut[], line_template: QuoteLine[]}`; không có → 404, mã sai dạng → 422 |
+| POST | `/api/admin/quote-requests/{quote_request_id}/quotes` | `ContractorQuoteIn` | `ContractorQuoteOut` (201). Nhà thầu = nhà thầu của yêu cầu. Yêu cầu `new`/`sent` → `quoted` (`won`/`lost` giữ nguyên). Ghi `analytics_events` `contractor_quote_recorded` `{quote_request_id, contractor_quote_id, verified, lines}` |
+| POST | `/api/admin/quote-requests/{quote_request_id}/analysis-preview` | `ContractorQuoteIn` | `QuoteAnalysisResult` — xem trước, không lưu; yêu cầu không gắn khái toán → 409 |
+| PUT | `/api/admin/contractor-quotes/{id}` | `ContractorQuoteIn` (thay toàn bộ; không gửi `received_at` → giữ ngày nhận cũ) | `ContractorQuoteOut`; không có → 404 |
+| DELETE | `/api/admin/contractor-quotes/{id}` | — | `{ok: true}`; yêu cầu đang `quoted` mà không còn báo giá nào → về `new` |
+| GET | `/api/admin/contractor-quotes/{id}/analysis` | — | `QuoteAnalysisResult`; yêu cầu không gắn khái toán (hoặc khái toán đã bị xóa) → 409 "Yêu cầu báo giá này chưa gắn khái toán nên chưa phân tích được." |
 | POST | `/api/admin/import/{rates\|rules}` | multipart `file` (.csv/.xlsx) hoặc thân thô + `?filename=`, hoặc JSON `{path}` (file trong `IMPORT_DIR`); tham số `dry_run`, `force` | `ImportReport` `{kind, filename, total_rows, inserted, updated, unchanged, skipped, error_count, errors[{row, field, message}], source_id, status: ok\|partial\|failed\|unchanged, dry_run}`. `dry_run=true`: không ghi DB nhưng báo đúng số dòng **sẽ** thêm/cập nhật/giữ nguyên/bị chặn (`skipped` = bị nguồn ưu tiên cao hơn chặn). File Excel hỏng → `status: failed` |
 | POST | `/api/admin/sync/csv` | như `import`, thêm `kind=rates\|rules` | `{status: "done", source: "csv", report: ImportReport}` |
 | POST | `/api/admin/sync/{api\|crawl\|reindex\|after_sync}` | `?max_pages=1..1000` (api, crawl) | `{status: "queued", source, job, job_id, params, warning?}`; Redis chưa sẵn sàng → 503 |
@@ -248,10 +319,69 @@ Lỗi trả `{detail: string}` tiếng Việt. Trang HTML: `GET /admin` (không 
 `after_sync` = tính lại `profile_completeness` + re-embed toàn bộ; `reindex` = chỉ re-embed.
 
 `ContactRequestOut` = `{id, code, customer_name, customer_phone, note, source, page_url, status, handled_note,
-created_at, contractor: {id, name} | null, project: string | null}`; `project` = tóm tắt công trình khách đã nêu trong
+created_at, contractor: {id, name} | null, project: string | null, chat_session_id: UUID | null}`; `project` = tóm tắt công trình khách đã nêu trong
 phiên chat, vd `"Nhà phố · TP. Hồ Chí Minh · 100 m² · 4 tầng · Xây thô · Ngân sách 2–4 tỷ"` (chỉ gồm mục đã có;
 không có phiên/chưa có thông tin → `null`). Trang `/admin` có tab "Yêu cầu liên hệ" (ngay sau "Chỉ số", huy hiệu số
-yêu cầu mới) để lọc theo trạng thái, gọi khách (link `tel:`) và cập nhật trạng thái + ghi chú xử lý.
+yêu cầu mới) để lọc theo trạng thái, gọi khách (link `tel:`), xem lại hội thoại của khách (nút "Xem hội thoại" khi có `chat_session_id`) và cập nhật trạng thái + ghi chú xử lý.
+
+### Admin — yêu cầu báo giá & phân tích báo giá (V2 — quotes)
+
+Chỉ cho nhân viên (cần `X-Admin-Token`); **không có endpoint, trang hay block nào cho khách** ở vòng này. Nhân viên
+nhập báo giá nhà thầu gửi về (Zalo, PDF, Excel — chỉ lưu link file gốc, không tải file lên) ở tab "Yêu cầu báo giá"
+của `/admin` (ngay sau "Yêu cầu liên hệ") và xem phân tích so với khái toán.
+
+- `QuoteRequestOut` = `{id, code, created_at, status, customer_name, customer_phone, customer_email, note,
+  contractor: {id, name} | null, estimate_session_id, estimate_cost: string | null, project: string | null,
+  chat_session_id: UUID | null, quote_count}`. `code` = mã `DZ-XXXXXX` khách nhận (chung cho các nhà thầu gửi cùng
+  lượt). `estimate_cost` = `"1,740–2,058 tỷ"` / `"Chưa có dữ liệu"`; `null` = không gắn khái toán. `project` = tóm tắt
+  công trình từ phiên chat của khái toán, không có thì từ input khái toán (vd `"Nhà phố · TP. Hồ Chí Minh · 100 m² đất ·
+  4 tầng · Xây thô"`). `chat_session_id` = phiên chat của khái toán (nút "Xem hội thoại").
+- `EstimateSummary` = `{estimate_session_id, project, cost, rate, converted_area (EvidenceValue), items: EstimateItem[],
+  exclusions, warnings, disclaimer}` — snapshot khái toán đã hiển thị cho khách (bản ghi cũ không có snapshot được tính
+  lại và có cảnh báo).
+- `QuoteLine` = `{group: mong|tang|ham|mai|san_thuong|ban_cong|san|khac (mặc định khac), label (≤ 200), rule_code?,
+  area_m2?, coefficient? (0..10), converted_m2? (bỏ trống = area_m2 × coefficient), amount_vnd? (VND)}`.
+  `line_template` = các dòng điền sẵn từ hạng mục khái toán (nhóm, diễn giải, mã hệ số, diện tích, hệ số).
+- `ContractorQuoteIn` = `{total_amount? (VND, > 0), price_per_m2? (VND/m², > 0), converted_area_m2? (diện tích quy đổi
+  theo nhà thầu), scope_text? (≤ 4000), file_url? (http/https, ≤ 1000), received_at? (YYYY-MM-DD, mặc định hôm nay),
+  verified (mặc định false), entered_by? (≤ 200), note? (≤ 2000), lines: QuoteLine[] (≤ 100)}`. Bắt buộc có
+  `total_amount` hoặc `price_per_m2` → 422 "Cần nhập tổng tiền hoặc đơn giá/m² của báo giá.". Chuỗi rỗng → `null`.
+  Dòng không có số nào của nhà thầu (diện tích, hệ số, DT quy đổi, thành tiền) bị bỏ.
+- `ContractorQuoteOut` = `{id, quote_request_id, contractor: {id, name} | null, total_amount, price_per_m2,
+  converted_area_m2, scope_text, file_url, received_at, received_date (ngày theo giờ Việt Nam), verified,
+  status: verified|reference, entered_by, note, lines: QuoteLine[]}`. `verified=true` (nhân viên đã đối chiếu file gốc)
+  → "Đã xác minh", ngược lại "Dữ liệu tham khảo".
+- `QuoteAnalysisResult` = `{estimate_session_id, quote_id (null khi xem trước), contractor_name, quote_status,
+  quote_source: SourceRef ("Báo giá của <nhà thầu> nhận ngày dd/mm/yyyy", url = link file gốc nếu http/https),
+  total, price_per_m2, area: QuoteComparison, breakdown: GapBreakdown | null, lines: QuoteLineAnalysis[],
+  lines_compared, scope_text, exclusions, notable, summary: string[], disclaimer, warnings: string[]}`.
+  - `QuoteComparison` = `{label_vi, estimate, quote, position: below|within|above|not_comparable, gap_pct, outside_pct,
+    notable, note_vi}`. `gap_pct` = (báo giá − điểm giữa khoảng khái toán) / điểm giữa (`"+13,4%"`), luôn có khi hai
+    bên đủ số; `outside_pct` = phần vượt ra ngoài khoảng ((báo giá − cận trên)/cận trên hoặc (cận dưới − báo giá)/cận
+    dưới), trong khoảng → "Chưa có dữ liệu". `notable` = ngoài khoảng [min, max]. Ví dụ `note_vi`: "Cao hơn khoảng khái
+    toán 6,3% (so với mức cao của khoảng); lệch +13,4% so với điểm giữa khoảng khái toán."
+  - Đơn giá/m² của báo giá thiếu → suy ra tổng tiền / diện tích quy đổi của nhà thầu; diện tích thiếu → cộng từ các
+    dòng hạng mục hoặc tổng tiền / đơn giá (mỗi lần suy ra có cảnh báo). Chỉ cộng từ các dòng khi các dòng phủ đủ mọi
+    hạng mục của khái toán (không nhóm nào "Báo giá chưa có", không nhóm nào thiếu hạng mục) và mọi dòng thuộc nhóm của
+    khái toán có diện tích quy đổi; ngược lại diện tích (và đơn giá suy ra) là "Chưa so được", có cảnh báo "Dòng hạng
+    mục chưa phủ đủ mọi hạng mục của khái toán…".
+  - `GapBreakdown` = `{total_gap, area_effect, price_effect, other_effect, note_vi}`: ΔC = báo giá − điểm giữa =
+    (A_q − A_e)·P_mid + A_q·(P_q − P_mid) + phần còn lại (VND, làm tròn triệu, `"+135 triệu"`). Chỉ có khi đủ tổng tiền,
+    chi phí khái toán, đơn giá và diện tích của báo giá.
+  - `QuoteLineAnalysis` = `{group, label_vi, estimate_area, quote_area, estimate_cost, quote_amount, position:
+    below|within|above|missing_in_quote|extra_in_quote|not_comparable, gap_pct, notable, notes: string[],
+    missing_items: string[] (mặc định [])}` — gộp theo
+    nhóm hạng mục; chi phí nhóm = Σ diện tích quy đổi × [P_min, P_max] (làm tròn triệu). Có thành tiền → so tiền; chỉ
+    có diện tích/hệ số → so diện tích quy đổi; khác hệ số → ghi chú "nhà thầu tính hệ số 0,5, khái toán tính 0,4".
+    Báo giá không có dòng nào → mọi nhóm `not_comparable`. Dòng ghép với hạng mục khái toán theo `rule_code` + diễn
+    giải (rồi chỉ `rule_code`); khi mọi dòng của nhóm đều ghép được mà còn hạng mục chưa có dòng → `missing_items` =
+    nhãn các hạng mục đó, `estimate_area`/`estimate_cost` và kết quả so chỉ tính phần của các hạng mục đã có dòng (ghi
+    chú "Báo giá chỉ có dòng cho 1/4 hạng mục của nhóm…"). Dòng không có `rule_code` (nhân viên tự thêm) coi như phủ
+    cả nhóm. Dòng `extra_in_quote` khớp từ khóa của một câu "chưa bao gồm" → ghi chú "Khái toán không có hạng mục này;
+    có thể thuộc phần khái toán chưa bao gồm: <câu>."
+  - Trạng thái kết luận chênh lệch = trạng thái yếu nhất (khái toán, báo giá). Thiếu số → `EvidenceValue.unavailable()`.
+  - Câu chữ trung tính, không dùng "đắt/rẻ/tốt nhất", không xếp hạng nhà thầu; `disclaimer` luôn nêu khái toán không
+    phải báo giá thi công.
 
 ## Lỗi chung (mọi endpoint)
 

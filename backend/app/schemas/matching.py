@@ -49,6 +49,8 @@ class ImageRef(BaseModel):
     project_slug: str | None = None
     project_name: str | None = None  # tên công trình chứa ảnh (chú thích slideshow)
     project_url: str | None = None  # trang công trình trên dezon.vn
+    # Ảnh thu nhỏ trên dezon.vn cho ô ảnh (null -> dùng url). Lightbox luôn dùng url (ảnh gốc).
+    thumb_url: str | None = None
 
 
 class ContractorCard(BaseModel):
@@ -59,8 +61,9 @@ class ContractorCard(BaseModel):
     avatar_url: str | None = None
     profile_url: str  # link hồ sơ gốc trên dezon.vn
     profile_source: SourceRef | None = None
-    # Tối đa 12 ảnh dự án, xoay vòng giữa các dự án (ảnh 1 của mỗi dự án, rồi ảnh 2, ...); frontend
-    # hiển thị vài ô đầu, bấm vào mở slideshow toàn bộ.
+    # Tối đa 80 ảnh dự án (MAX_COVER_IMAGES), xoay vòng giữa các dự án (ảnh 1 của mỗi dự án, rồi ảnh 2, ...)
+    # để khi bị cắt mỗi dự án vẫn có ảnh. Frontend hiện 3 ô của 3 công trình khác nhau; slideshow sắp lại
+    # theo từng công trình (hết ảnh công trình A rồi sang B) và nhóm theo project_slug ở "Xem tất cả ảnh".
     cover_images: list[ImageRef] = []
     # Mọi trường số liệu là EvidenceValue. Khóa chuẩn:
     # province, building_types, years_experience, founded_year, staff, rough_price, finish_price,
@@ -104,8 +107,9 @@ class ProjectSummary(BaseModel):
     project_url: str
     role: str | None = None  # vai trò của nhà thầu đang xem
     contractor_names: list[str] = []
-    images: list[ImageRef] = []
+    images: list[ImageRef] = []  # tối đa MAX_PROJECT_IMAGES (20)
     source: SourceRef | None = None
+    total_images: int = 0  # số ảnh thực có của công trình (không bị cắt); 0 ở payload cũ -> dùng len(images)
 
 
 class ContractorProfile(BaseModel):

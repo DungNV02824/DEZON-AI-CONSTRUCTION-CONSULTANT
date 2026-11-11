@@ -53,6 +53,7 @@ from app.engines.matching.scorer import (
 )
 from app.evidence import EvidenceValue, SourceRef, VerificationStatus, make_evidence, source_ref_from
 from app.formatting import format_m2, format_price_per_m2_range, vi_number
+from app.images import derive_thumb_url
 from app.schemas.common import BUILDING_TYPE_VI, BuildingType
 from app.schemas.matching import (
     FIT_REVIEW,
@@ -216,7 +217,8 @@ def _sorted_images(p: Project):
 
 def _image_ref(p: Project, img) -> ImageRef:
     return ImageRef(url=img.url, caption=img.caption or p.name, project_slug=p.slug,
-                    project_name=p.name, project_url=p.project_url)
+                    project_name=p.name, project_url=p.project_url,
+                    thumb_url=img.thumb_url or derive_thumb_url(img.url))
 
 
 def _image_refs(p: Project, limit: int = MAX_PROJECT_IMAGES) -> list[ImageRef]:
@@ -269,6 +271,7 @@ def _project_summaries(c: Contractor, building_type: str | None = None) -> list[
             district=p.district, floors=p.floors, status=p.status, start_date=p.start_date, end_date=p.end_date,
             project_url=p.project_url, role=", ".join(sorted(roles.get(p.id, set()))) or None,
             contractor_names=names, images=_image_refs(p), source=source_ref_from(p.source),
+            total_images=len(p.images),
         ))
     return out
 

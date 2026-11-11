@@ -1105,6 +1105,8 @@ export function createMockClient(opts: MockOptions = {}): ApiClient {
     async recordClick() {
       return { ok: true };
     },
+    /** Chế độ mock không có backend dựng PDF -> ẩn nút "Tải PDF". */
+    pdfUrl: () => null,
   };
 }
 

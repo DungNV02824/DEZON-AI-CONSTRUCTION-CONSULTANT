@@ -484,6 +484,8 @@ function kpProjectImages(p: (typeof KP_PROJECTS)[number]): ImageRef[] {
     project_slug: p.slug,
     project_name: p.name,
     project_url: p.url,
+    // Ảnh thu nhỏ dezon.vn (bỏ "/o/"), như backend derive_thumb_url.
+    thumb_url: `${SITE}/wp-content/uploads/dz-data/nt/kien-phong/${id}.jpg`,
   }));
 }
 
@@ -870,6 +872,7 @@ function kpProjects() {
     contractor_names: ['Kiến Phong'],
     images: kpProjectImages(p),
     source: { label: `Dự án ${p.name}`, url: p.url, updated_at: OBSERVED },
+    total_images: p.photos.length,
   }));
 }
 

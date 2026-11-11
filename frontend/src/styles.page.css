@@ -609,3 +609,28 @@
 .dz-root--page .dz-blocks + .dz-blocks {
   margin-top: 4px;
 }
+
+/* ----------------------------------------------------------- V2: nguồn dữ liệu của câu trả lời */
+.dz-root--page .dz-srclink {
+  font-size: 13px;
+}
+
+.dz-root--page .dz-srclink:hover,
+.dz-root--page .dz-srclink:focus-visible {
+  color: #1d4ed8;
+}
+
+.dz-root--page .dz-srcdlg__box {
+  max-width: 640px;
+  border-radius: 14px;
+}
+
+.dz-root--page .dz-srcdlg__group {
+  border-color: var(--dz-plan-line);
+}
+
+@media (max-width: 479.98px) {
+  .dz-root--page .dz-srcdlg__box {
+    border-radius: 14px 14px 0 0;
+  }
+}

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Favicon Vua Thầu: chữ "VT" nghiêng trên nền navy, nét gạch vàng như logo (màu: styles.page.css) -->
+  <rect width="64" height="64" rx="14" fill="#001c33"/>
+  <g transform="translate(5 0) skewX(-10)" fill="#ffffff">
+    <polygon points="6,14 13,14 18,30 23,14 30,14 21.5,40 14.5,40"/>
+    <polygon points="32,14 56,14 56,20.5 47.5,20.5 47.5,40 40.5,40 40.5,20.5 32,20.5"/>
+  </g>
+  <path d="M7 54 Q28 44 58 44 L57 48 Q31 48 9 56 Z" fill="#ffb51c"/>
+</svg>

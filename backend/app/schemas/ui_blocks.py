@@ -8,7 +8,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.evidence import SourceRef, VerificationStatus
+from app.evidence import EvidenceValue, SourceRef, VerificationStatus
 from app.schemas.estimate import BudgetAdjustmentResult, EstimateResult
 from app.schemas.matching import ComparisonMatrix, ContractorProfile, MatchResult
 
@@ -81,6 +81,9 @@ class ContractorListBlock(BaseModel):
 class ComparisonTableBlock(BaseModel):
     type: Literal["comparison_table"] = "comparison_table"
     data: ComparisonMatrix
+    # V2 — PDF: phiên khái toán gắn với bảng so sánh (nút "Tải PDF (khái toán + so sánh)"). None = bảng tổng quan
+    # hoặc so sánh chưa có khái toán -> không xuất PDF.
+    estimate_session_id: UUID | None = None
 
 
 class ContractorDetailBlock(BaseModel):
@@ -95,9 +98,22 @@ class SourceBadge(BaseModel):
     source: SourceRef
 
 
+class EvidenceItem(BaseModel):
+    """Một EvidenceValue đã dùng trong lượt nhưng KHÔNG nằm trong bảng/thẻ nào (V2 — Nguồn dữ liệu).
+
+    Vd đơn giá của tool get_reference_rates, số tổng hợp của get_contractor_overview. Frontend gộp các mục này
+    với evidence gom từ các block khác để liệt kê toàn bộ giá trị đã dùng trong hộp thoại "Nguồn dữ liệu".
+    """
+    group: str | None = None  # ngữ cảnh, vd "Tổng quan nhà thầu — Biệt thự tại TP. Hồ Chí Minh"
+    label: str  # tên thông tin, vd "Số nhà thầu phù hợp"
+    evidence: EvidenceValue  # hiển thị nguyên `display`; unavailable -> "Chưa có dữ liệu"
+
+
 class SourceBadgesBlock(BaseModel):
     type: Literal["source_badges"] = "source_badges"
     badges: list[SourceBadge]
+    # Giá trị không có block hiển thị (mặc định rỗng — block cũ đã lưu không có trường này).
+    items: list[EvidenceItem] = []
 
 
 class QuoteFormContractor(BaseModel):
